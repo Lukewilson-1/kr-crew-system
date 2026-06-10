@@ -4,6 +4,7 @@
 # Ignore Composer vendor directory and runtime files
 /vendor
 /storage
+/bootstrap/cache
 /public/hot
 /node_modules/
 

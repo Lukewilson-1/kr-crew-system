@@ -1,0 +1,9 @@
+# Ignore environment variables and local settings
+.env
+
+# Ignore node modules if you add a package.json later
+node_modules/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db

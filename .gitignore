@@ -1,8 +1,11 @@
 # Ignore environment variables and local settings
 .env
 
-# Ignore node modules if you add a package.json later
-node_modules/
+# Ignore Composer vendor directory and runtime files
+/vendor
+/storage
+/public/hot
+/node_modules/
 
 # Ignore OS files
 .DS_Store

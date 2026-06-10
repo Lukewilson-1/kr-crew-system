@@ -42,6 +42,34 @@ This web app manages crew status, daily bookings, monthly position registers, re
    FIREBASE_APP_ID=your_app_id
    ```
 
+### Laravel Setup
+
+This project has been converted to a Laravel scaffold. To install dependencies and run the application, use Composer and PHP:
+
+1. Install Composer dependencies:
+   ```bash
+   composer install
+   ```
+
+2. Copy the environment example and configure the new file:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Generate an application key:
+   ```bash
+   php artisan key:generate
+   ```
+
+4. Start the Laravel development server:
+   ```bash
+   php artisan serve
+   ```
+
+5. Open the application at `http://127.0.0.1:8000`.
+
+If Composer or PHP are not installed yet, the app can still be inspected in the generated Laravel scaffold files, but full execution requires those tools.
+
 3. Serve the project from a local web server and open `KR_Crew_Live_v4.html`.
 
    You can use any static server. For example, if Python is available:

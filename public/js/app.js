@@ -761,17 +761,18 @@ function renderMonthly(){
 
   let html=`<div class="legend">`;
   Object.entries(STATUS_META).forEach(([code,m])=>{html+=`<div class="leg-item"><div class="leg-dot" style="background:${m.bg};border:1px solid ${m.fg}50"></div><b>${code}</b> = ${m.label}</div>`;});
+  const maxDay = CD; // current month monthly review only shows data up to today
   html+=`</div><div class="month-wrap"><table class="month-tbl"><thead><tr>
     <th class="mc-name">Name</th>${showDepot?'<th class="mc-dep">Depot</th>':''}`;
-  for(let d=1;d<=DAYS_IN_MON;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const isTod=d===CD;html+=`<th style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;}
-  html+=`<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3E5F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>`;
+  for(let d=1;d<=maxDay;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const isTod=d===CD;html+=`<th style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;}
+  html+=`<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3F2F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>`;
 
   allCrew.forEach((c,i)=>{
     const rowBg=i%2===0?'background:#F7F9FC':'';
     html+=`<tr style="${rowBg}"><td class="mc-name">${c.name}</td>`;
     if(showDepot)html+=`<td class="mc-dep" style="color:${DEPOT_COLORS[c.depot]};font-weight:700">${c.depot}</td>`;
     const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
-    for(let d=1;d<=DAYS_IN_MON;d++){
+    for(let d=1;d<=maxDay;d++){
       const key=`d${d}`;const code=(c.monthly&&c.monthly[key])||'';
       const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;
       const cls=code?`day-${code}`:(we?'day-we':'');const isTod=d===CD;
@@ -783,7 +784,7 @@ function renderMonthly(){
   });
   // Booked count row
   html+=`<tr style="background:#0F172A"><td class="mc-name" style="color:#E0E0E0;font-weight:700;font-size:10px">BOOKED / DAY</td>${showDepot?'<td style="background:#0F172A"></td>':''}`;
-  for(let d=1;d<=DAYS_IN_MON;d++){const key=`d${d}`;const bk=allCrew.filter(c=>(c.monthly&&c.monthly[key])==='BK').length;html+=`<td style="background:${bk>0?'#1B5E20':'#B71C1C'};color:#fff;font-weight:700;font-size:11px">${bk}</td>`;}
+  for(let d=1;d<=maxDay;d++){const key=`d${d}`;const bk=allCrew.filter(c=>(c.monthly&&c.monthly[key])==='BK').length;html+=`<td style="background:${bk>0?'#1B5E20':'#B71C1C'};color:#fff;font-weight:700;font-size:11px">${bk}</td>`;}
   html+=`<td colspan="7" style="color:rgba(255,255,255,.4);font-size:10px;text-align:left;padding-left:8px">Booked per day</td></tr>`;
   html+=`</tbody></table></div>`;
   document.getElementById('pbody').innerHTML=html;
@@ -908,15 +909,15 @@ async function exportMonthlyCSV(monthKey=MONTH_KEY){
     alert(`No monthly register found for ${formatMonthLabel(monthKey)}.`);
     return;
   }
-  const cols = Math.max(...crew.map(c=>Object.keys(c.monthly||{}).length), 0);
+  const maxDay = monthKey===MONTH_KEY ? CD : Math.max(...crew.map(c=>Object.keys(c.monthly||{}).length), 0);
   let hdr='ID,Name,Designation,Depot';
-  for(let i=1;i<=cols;i++) hdr+=`,${i}`;
+  for(let i=1;i<=maxDay;i++) hdr+=`,${i}`;
   hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
   let csv=hdr;
   crew.sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
     let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;
     const counts={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
-    for(let i=1;i<=cols;i++){
+    for(let i=1;i<=maxDay;i++){
       const code=(c.monthly&&c.monthly[`d${i}`])||'';
       if(counts[code]!==undefined) counts[code]++;
       row+=`,"${code}"`;

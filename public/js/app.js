@@ -1,32 +1,21 @@
 import { initFirebase, loadFirebaseConfig, db, demoMode, setDemoMode } from './firebase.js';
 import { getRestHours, restSecondsLeft, fmtCountdown, cdClass, getAllCrew, cts, initials, fmtTime, todayStr, fmtLastUpd, kpiHtml, dlCSV } from './helpers.js';
-import { DEFAULT_DEPOTS, DEFAULT_DEPOT_META, DEFAULT_DESIGNATION_REGISTRY, getDesignationLabel, getDesignationOptions, isDesignationRestEligible, normalizeDesignation, setDesignationRegistry } from './constants.js';
+import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, isDesignationRestEligible, normalizeDesignation, setDesignationRegistry, setDepotConfig, setStatusConfig } from './constants.js';
 import { collection, query, where, onSnapshot, getDocs, getDoc, doc, setDoc, deleteDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 /* ════════ CONSTANTS ════════════════════════════════════════════════════════ */
-let DEPOTS=[...DEFAULT_DEPOTS];
-let DEPOT_COLORS=Object.fromEntries(Object.values(DEFAULT_DEPOT_META).map(meta=>[meta.id,meta.color]));
-let REST_HOURS=Object.fromEntries(Object.values(DEFAULT_DEPOT_META).map(meta=>[meta.id,meta.restHours]));
 const HOME_REST_HOURS=12;
 const AWAY_REST_HOURS=10;
-const DEFAULT_STATUS_META={
-  BK:{label:'Booked',    bg:'#E8F5E9',fg:'#1B5E20'},
-  SB:{label:'Standby',   bg:'#E3F2FD',fg:'#0D47A1'},
-  R: {label:'Resting',   bg:'#F3E5F5',fg:'#4A148C'},
-  L: {label:'On Leave',  bg:'#FFF3E0',fg:'#E65100'},
-  SK:{label:'Sick',      bg:'#FFEBEE',fg:'#B71C1C'},
-  T: {label:'Training',  bg:'#E0F2F1',fg:'#00695C'},
-  NTB:{label:'NTB',      bg:'#ECEFF1',fg:'#37474F'},
-  TO:{label:'Trip Off',  bg:'#FCE4EC',fg:'#AD1457'},
-};
-let STATUS_META={...DEFAULT_STATUS_META};
 const TRAIN_TYPES=['Freight','Commuter','Passenger','Engineering','Shunting'];
-<<<<<<< HEAD
-=======
-const DRIVER_GRADES=['Locomotive driver'];
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
-const DEFAULT_STATUSES=['BK','SB','R','L','SK','T','NTB','TO'];
-let STATUSES=[...DEFAULT_STATUSES];
+const SHIFT_OPTIONS=['Day (06:00–14:00)','Afternoon (14:00–22:00)','Night (22:00–06:00)','N/A'];
 const AVT_PAL=[['#E8F5E9','#1B5E20'],['#E3F2FD','#0D47A1'],['#FFF3E0','#E65100'],['#F3E5F5','#4A148C'],['#FFEBEE','#B71C1C'],['#E0F2F1','#00695C'],['#FFFDE7','#F57F17']];
+const REPORT_TYPES=[
+  {id:'status',label:'Daily status'},
+  {id:'monthly',label:'Monthly register'},
+  {id:'utilization',label:'Utilization'},
+  {id:'absence',label:'Absence / NTB'},
+  {id:'print',label:'Printable register'},
+];
+let REPORT_TEMPLATES={};
 const USER_ROLE_OPTIONS=[
   {id:'super_admin',label:'Super Admin'},
   {id:'hq_admin',label:'HQ Admin'},
@@ -34,71 +23,15 @@ const USER_ROLE_OPTIONS=[
   {id:'booking_officer',label:'Booking Officer'},
   {id:'crew_admin',label:'Crew Admin'},
 ];
-const ACCOUNTS={
-  super_admin:{pw:'super1234',depot:'HQ',name:'Super Administrator',role:'super_admin'},
-  hq_admin:{pw:'hq1234',depot:'HQ',name:'HQ Administrator',role:'hq_admin'},
-  rsf_officer:{pw:'rsf123',depot:'Makadara',name:'RSF Station Officer',role:'station_officer'},
-  changamwe_officer:{pw:'cga123',depot:'Changamwe',name:'CGA Booking Officer',role:'booking_officer'},
-  mtito_officer:{pw:'mtt123',depot:'Mtito',name:'MTT Booking Officer',role:'booking_officer'},
-  makadara_officer:{pw:'mkd123',depot:'Makadara',name:'MKD Booking Officer',role:'booking_officer'},
-  nakuru_officer:{pw:'nkr123',depot:'Nakuru',name:'NKR Booking Officer',role:'booking_officer'},
-  kisumu_officer:{pw:'ksm123',depot:'Kisumu',name:'KSM Booking Officer',role:'booking_officer'},
-  eldoret_officer:{pw:'eld123',depot:'Eldoret',name:'ELD Booking Officer',role:'booking_officer'},
-};
-
 async function seedUsersIfEmpty(){
-  if(!db) return;
-  const snap = await getDocs(collection(db,'users'));
-  if(!snap.empty) return;
-  const batch = writeBatch(db);
-  Object.entries(ACCOUNTS).forEach(([username,acct])=>{
-    batch.set(doc(db,'users',username),{
-      username,
-      pw:acct.pw,
-      depot:acct.depot,
-      name:acct.name,
-      role:acct.role|| (acct.depot==='HQ' ? 'hq_admin' : 'booking_officer'),
-      isHQ: acct.role==='super_admin' || acct.role==='hq_admin' || acct.depot==='HQ'
-    });
-  });
-  await batch.commit();
+  // No static user account seeding; user records must exist in Firestore.
+  return;
 }
 
 async function ensureCoreAccessUsers(){
-  if(!db) return;
-  const snap = await getDocs(collection(db,'users'));
-  const batch = writeBatch(db);
-  const seen = new Set();
-  snap.forEach(docSnap=>{
-    const data=docSnap.data();
-    seen.add(docSnap.id);
-    const role=data.role || (data.isHQ ? (docSnap.id==='super_admin' ? 'super_admin' : 'hq_admin') : 'booking_officer');
-    const isHQ=data.isHQ || role==='super_admin' || role==='hq_admin' || data.depot==='HQ';
-    if(data.role!==role || data.isHQ!==isHQ){
-      batch.set(doc(db,'users',docSnap.id),{role,isHQ},{merge:true});
-    }
-  });
-  Object.entries(ACCOUNTS).forEach(([username,acct])=>{
-    if(seen.has(username)) return;
-    batch.set(doc(db,'users',username),{
-      username,
-      pw:acct.pw,
-      depot:acct.depot,
-      name:acct.name,
-      role:acct.role|| (acct.depot==='HQ' ? 'hq_admin' : 'booking_officer'),
-      isHQ: acct.role==='super_admin' || acct.role==='hq_admin' || acct.depot==='HQ'
-    });
-  });
-  await batch.commit();
+  // No static user fallback registration when using dynamic Firestore data.
+  return;
 }
-const SEED_CREW={
-  Changamwe:[{id:'CG-001',name:'James Kamau Njoroge',grade:'Locomotive driver',route:'CGA–MTT'},{id:'CG-002',name:'Mary Wanjiku Mwangi',grade:'Locomotive driver',route:'CGA–NBI'},{id:'CG-003',name:'Peter Ochieng Otieno',grade:'Shunter',route:'CGA Yard'},{id:'CG-004',name:'Grace Akinyi Odhiambo',grade:'Guard',route:'CGA–MTT'},{id:'CG-005',name:'Brian Otieno Ouma',grade:'Technician',route:'Workshop'},{id:'CG-006',name:'Christine Atieno Auma',grade:'Station Master',route:'CGA Station'}],
-  Mtito:[{id:'MT-001',name:'Samuel Mwangi Gitau',grade:'Locomotive driver',route:'MTT–NBI'},{id:'MT-002',name:'Alice Chebet Koech',grade:'Guard',route:'MTT–CGA'},{id:'MT-003',name:'Daniel Kipchoge Ruto',grade:'Locomotive driver',route:'MTT–NKR'},{id:'MT-004',name:'Lydia Wambui Kariuki',grade:'Station Master',route:'MTT Station'},{id:'MT-005',name:'Fredrick Mutua Kioko',grade:'Shunter',route:'MTT Yard'}],
-  Makadara:[{id:'MK-001',name:'Esther Muthoni Kariuki',grade:'Station Master',route:'MKD Station'},{id:'MK-002',name:'John Mwangi Njiru',grade:'Locomotive driver',route:'MKD–CGA'},{id:'MK-003',name:'Fatuma Hassan Abdi',grade:'Guard',route:'MKD–MTT'},{id:'MK-004',name:'Kevin Otieno Omondi',grade:'Shunter',route:'MKD Yard'},{id:'MK-005',name:'Rose Njeri Kamau',grade:'Locomotive driver',route:'MKD–NBI'},{id:'MK-006',name:'Charles Kimani Mwangi',grade:'Technician',route:'Workshop'}],
-  Nakuru:[{id:'NK-001',name:'Paul Kimani Waweru',grade:'Locomotive driver',route:'NKR–NBI'},{id:'NK-002',name:'Jane Muthoni Kariuki',grade:'Guard',route:'NKR–ELD'},{id:'NK-003',name:'Moses Otieno Owino',grade:'Locomotive driver',route:'NKR–KSM'},{id:'NK-004',name:"Catherine Wanjiru Ng'ang'a",grade:'Station Master',route:'NKR Station'},{id:'NK-005',name:'Elijah Koech Kipkirui',grade:'Shunter',route:'NKR Yard'}],
-  Kisumu:[{id:'KS-001',name:'George Ouma Oketch',grade:'Locomotive driver',route:'KSM–NKR'},{id:'KS-002',name:'Agnes Achieng Otieno',grade:'Guard',route:'KSM–ELD'},{id:'KS-003',name:'David Odhiambo Onyango',grade:'Locomotive driver',route:'KSM–NBI'},{id:'KS-004',name:'Mercy Adhiambo Ochieng',grade:'Station Master',route:'KSM Station'},{id:'KS-005',name:'Isaac Ogutu Were',grade:'Technician',route:'Workshop'},{id:'KS-006',name:'Beatrice Awuor Oloo',grade:'Shunter',route:'KSM Yard'}],
-  Eldoret:[{id:'EL-001',name:'Joseph Kipkoech Ngetich',grade:'Locomotive driver',route:'ELD–NKR'},{id:'EL-002',name:'Winnie Jepkosgei Kogo',grade:'Guard',route:'ELD–KSM'},{id:'EL-003',name:'Robert Kibet Chirchir',grade:'Locomotive driver',route:'ELD–NBI'},{id:'EL-004',name:'Esther Chelangat Bett',grade:'Station Master',route:'ELD Station'},{id:'EL-005',name:'Leonard Kipyego Biwott',grade:'Shunter',route:'ELD Yard'}],
-};
 
 /* ════════ DATE ════════════════════════════════════════════════════════════ */
 const TODAY=new Date();
@@ -124,7 +57,7 @@ function setHqDepotView(value){
 }
 
 function getActiveDepots(){
-  return DEPOTS.length ? DEPOTS : [...DEFAULT_DEPOTS];
+  return DEPOTS;
 }
 
 function hasGlobalAccess(){
@@ -157,11 +90,7 @@ function updateStatusValidation(){
   if(restOption)restOption.disabled=!allowed;
   if(statusEl.value==='R' && !allowed){
     if(hintEl){
-<<<<<<< HEAD
       hintEl.textContent='Only locomotive driver designations may be placed in Resting. Please select Standby or another status.';
-=======
-      hintEl.textContent='Only Locomotive driver may be placed in Resting. Please select Standby or another status.';
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
       hintEl.style.display='block';
     }
     if(saveBtn)saveBtn.disabled=true;
@@ -249,36 +178,14 @@ async function checkRestExpirations(){
 function useDemoMode(){
   setDemoMode(true);
   state={};
-  for(const depot of getActiveDepots()){
-    state[depot]={};
-    if(!SEED_CREW[depot]) continue;
-    SEED_CREW[depot].forEach((c,i)=>{
-      const monthly={};
-      for(let d=1;d<=DAYS_IN_MON;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const pool=we?['R','R','SB']:['BK','BK','BK','SB','L','SK','T','R','NTB'];monthly[`d${d}`]=pool[(i*7+d*3)%pool.length];}
-      const todaySt=monthly[`d${CD}`]||'SB';
-      state[depot][c.id]={...c,grade:normalizeDesignation(c.grade),depot,status:todaySt,trainType:todaySt==='BK'?TRAIN_TYPES[i%TRAIN_TYPES.length]:'',shift:'Day (06:00–14:00)',notes:'',since:'06:00',monthly,restStarted:todaySt==='R'?new Date(Date.now()-3*3600*1000).toISOString():null,awayDepot:null,updatedBy:'System',lastUpdated:new Date().toISOString()};
-    });
-  }
   document.getElementById('loginPage').classList.add('show');
   setSyncStatus('err','Offline demo mode');
   setLoginHint(true);
 }
 
 async function seedDepotIfEmpty(depot){
-  if(!db)return;
-  const snap=await getDocs(query(collection(db,'crew'), where('depot','==',depot)));
-  if(!snap.empty)return;
-  if(!SEED_CREW[depot]) return; // no default seed data for this depot
-  const batch=writeBatch(db);
-  SEED_CREW[depot].forEach((c,i)=>{
-    const monthly={};
-    for(let d=1;d<=DAYS_IN_MON;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const pool=we?['R','R','SB']:['BK','BK','BK','SB','L','SK','T','R'];monthly[`d${d}`]=pool[(i*7+d*3)%pool.length];}
-    const ts=monthly[`d${CD}`]||'SB';
-    const restStarted = ts==='R' ? new Date().toISOString() : null;
-    const ref=doc(db,'crew',`${depot}_${c.id}`);
-    batch.set(ref,{...c,grade:normalizeDesignation(c.grade),depot,status:ts,trainType:ts==='BK'?TRAIN_TYPES[i%5]:'',shift:'Day (06:00–14:00)',notes:'',since:'06:00',monthly,restStarted,awayDepot:null,updatedBy:'System',lastUpdated:serverTimestamp(),monthKey:MONTH_KEY});
-  });
-  await batch.commit();
+  // No local crew seeding. Crew documents must be supplied from Firestore.
+  return;
 }
 
 function normalizeDepotMetaRecord(docSnap){
@@ -296,14 +203,8 @@ function normalizeDepotMetaRecord(docSnap){
 }
 
 async function seedDepotMetaIfEmpty(){
-  if(!db) return;
-  const snap = await getDocs(collection(db,'depotMeta'));
-  if(!snap.empty) return;
-  const batch = writeBatch(db);
-  Object.values(DEFAULT_DEPOT_META).forEach(meta=>{
-    batch.set(doc(db,'depotMeta',meta.id),meta);
-  });
-  await batch.commit();
+  // No static depot metadata seeding; admin-managed Firestore data is required.
+  return;
 }
 
 async function loadDepotMeta(){
@@ -311,9 +212,7 @@ async function loadDepotMeta(){
   try{
     const snap = await getDocs(collection(db,'depotMeta'));
     if(snap.empty){
-      DEPOTS=[...DEFAULT_DEPOTS];
-      DEPOT_COLORS=Object.fromEntries(Object.values(DEFAULT_DEPOT_META).map(meta=>[meta.id,meta.color]));
-      REST_HOURS=Object.fromEntries(Object.values(DEFAULT_DEPOT_META).map(meta=>[meta.id,meta.restHours]));
+      setDepotConfig([], {}, {});
       return;
     }
     const records=[];
@@ -327,38 +226,26 @@ async function loadDepotMeta(){
       if(meta.active) records.push(meta);
     });
     records.sort((a,b)=>(a.order??999)-(b.order??999)||a.label.localeCompare(b.label));
-    DEPOTS=records.map(meta=>meta.id);
-    DEPOT_COLORS={...Object.fromEntries(Object.values(DEFAULT_DEPOT_META).map(meta=>[meta.id,meta.color])),...colors};
-    REST_HOURS={...Object.fromEntries(Object.values(DEFAULT_DEPOT_META).map(meta=>[meta.id,meta.restHours])),...hours};
+    setDepotConfig(records.map(meta=>meta.id), colors, hours);
   }catch(err){
     console.error('Failed to load depot metadata',err);
-    DEPOTS=[...DEFAULT_DEPOTS];
+    setDepotConfig([], {}, {});
   }
 }
 
 async function seedStatusMetaIfEmpty(){
-  if(!db) return;
-  const snap = await getDocs(collection(db,'statusMeta'));
-  if(!snap.empty) return;
-  const batch = writeBatch(db);
-  DEFAULT_STATUSES.forEach((id,index)=>{
-    const meta = DEFAULT_STATUS_META[id];
-    batch.set(doc(db,'statusMeta',id),{
-      id,
-      label:meta.label,
-      bg:meta.bg,
-      fg:meta.fg,
-      order:index
-    });
-  });
-  await batch.commit();
+  // No static status metadata seeding; admin-managed Firestore data is required.
+  return;
 }
 
 async function loadStatusMeta(){
   if(!db) return;
   try{
     const snap = await getDocs(query(collection(db,'statusMeta')));
-    if(snap.empty) return;
+    if(snap.empty){
+      setStatusConfig([], {});
+      return;
+    }
     const meta={};
     const order=[];
     snap.forEach(docSnap=>{
@@ -368,12 +255,12 @@ async function loadStatusMeta(){
       meta[id]={label:data.label||id,bg:data.bg||'#ECEFF1',fg:data.fg||'#37474F'};
       order.push({id,order:typeof data.order==='number'?data.order:999});
     });
-    if(order.length){
-      order.sort((a,b)=>a.order-b.order);
-      STATUSES=order.map(x=>x.id);
-    }
-    STATUS_META=Object.keys(meta).length?meta:STATUS_META;
-  }catch(err){console.error('Failed to load status metadata',err);}
+    order.sort((a,b)=>a.order-b.order);
+    setStatusConfig(order.map(x=>x.id), meta);
+  }catch(err){
+    console.error('Failed to load status metadata',err);
+    setStatusConfig([], {});
+  }
 }
 
 function normalizeDesignationMetaRecord(docSnap){
@@ -390,17 +277,8 @@ function normalizeDesignationMetaRecord(docSnap){
 }
 
 async function seedDesignationMetaIfEmpty(){
-  if(!db) return;
-  const snap = await getDocs(collection(db,'designationMeta'));
-  if(!snap.empty) return;
-  const batch = writeBatch(db);
-  Object.values(DEFAULT_DESIGNATION_REGISTRY).forEach((meta,index)=>{
-    batch.set(doc(db,'designationMeta',meta.id),{
-      ...meta,
-      order:typeof meta.order==='number'?meta.order:index,
-    });
-  });
-  await batch.commit();
+  // No static designation metadata seeding; admin-managed Firestore data is required.
+  return;
 }
 
 async function loadDesignationMeta(){
@@ -408,7 +286,7 @@ async function loadDesignationMeta(){
   try{
     const snap = await getDocs(collection(db,'designationMeta'));
     if(snap.empty){
-      setDesignationRegistry(DEFAULT_DESIGNATION_REGISTRY);
+      setDesignationRegistry({});
       return;
     }
     const registry={};
@@ -416,10 +294,10 @@ async function loadDesignationMeta(){
       const meta=normalizeDesignationMetaRecord(docSnap);
       if(meta) registry[meta.id]=meta;
     });
-    setDesignationRegistry(Object.keys(registry).length?registry:DEFAULT_DESIGNATION_REGISTRY);
+    setDesignationRegistry(registry);
   }catch(err){
     console.error('Failed to load designation metadata',err);
-    setDesignationRegistry(DEFAULT_DESIGNATION_REGISTRY);
+    setDesignationRegistry({});
   }
 }
 
@@ -437,10 +315,30 @@ function populateStatusSelects(selected='SB'){
   if(addStatusSelect) addStatusSelect.innerHTML = buildStatusOptions('SB');
 }
 
+function buildShiftOptions(selected='Day (06:00–14:00)'){
+  return SHIFT_OPTIONS.map(opt=>`<option value="${opt}"${opt===selected?' selected':''}>${opt}</option>`).join('');
+}
+
+function populateShiftSelects(selected='Day (06:00–14:00)'){
+  const shiftSelect=document.getElementById('mShift');
+  if(shiftSelect) shiftSelect.innerHTML = buildShiftOptions(selected);
+}
+
 function populateDesignationSelect(selected='locomotive_driver'){
   const addGradeSelect=document.getElementById('addGrade');
   if(addGradeSelect) addGradeSelect.innerHTML = getDesignationOptions(selected);
 }
+
+function populateLoginDepotOptions(selected='HQ'){
+  const loginDepotSelect=document.getElementById('lDepot');
+  if(!loginDepotSelect) return;
+  const options=['HQ',...getActiveDepots()].map(depot=>{
+    const label = depot==='HQ' ? 'HQ Headquarters - View all depots' : `${depot} Depot`;
+    return `<option value="${depot}"${depot===selected?' selected':''}>${label}</option>`;
+  }).join('');
+  loginDepotSelect.innerHTML = options;
+}
+
 
 function normalizeCrewGradePayload(payload){
   if(payload && Object.prototype.hasOwnProperty.call(payload,'grade')){
@@ -478,49 +376,56 @@ async function seedFirestoreUsers(){
   await seedUsersIfEmpty();
   await seedStatusMetaIfEmpty();
   await loadStatusMeta();
+  await seedReportMetaIfEmpty();
+  await loadReportMeta();
   populateDesignationSelect();
   populateStatusSelects();
 }
 
-async function ensureRestCountdownSample(){
+async function normalizeReportMetaRecord(docSnap){
+  const data = docSnap.data();
+  if(!data) return null;
+  const id = data.id || docSnap.id;
+  if(!id) return null;
+  return {
+    id,
+    label: String(data.label || id),
+    description: String(data.description || ''),
+    reportType: String(data.reportType || 'status'),
+    buttonText: String(data.buttonText || 'Run'),
+    visible: data.visible !== false,
+    order: Number.isFinite(data.order) ? data.order : 999,
+  };
+}
+
+async function seedReportMetaIfEmpty(){
+  // No default report templates are seeded. Use Firestore reportMeta documents only.
+  return;
+}
+
+async function loadReportMeta(){
   if(!db) return;
-  const samples=[
-    {depot:'Changamwe',id:'CG-RST1',name:'Changamwe Rest 1',grade:'Locomotive driver',route:'CGA–MTT',restAgoHours:2},
-    {depot:'Changamwe',id:'CG-RST2',name:'Changamwe Rest 2',grade:'Locomotive driver',route:'CGA–NBI',restAgoHours:8},
-    {depot:'Eldoret',id:'EL-RST1',name:'Eldoret Rest 1',grade:'Locomotive driver',route:'ELD–NKR',restAgoHours:5},
-    {depot:'Eldoret',id:'EL-RST2',name:'Eldoret Rest 2',grade:'Locomotive driver',route:'ELD–KSM',restAgoHours:9},
-    {depot:'Eldoret',id:'EL-RST3',name:'Eldoret Rest 3',grade:'Locomotive driver',route:'ELD–NBI',restAgoHours:11}
-  ];
-  const batch=writeBatch(db);
-  let added=0;
-  for(const sample of samples){
-    const ref=doc(db,'crew',`${sample.depot}_${sample.id}`);
-    const snap=await getDoc(ref);
-    if(snap.exists()) continue;
-    const restStarted=new Date(Date.now()-sample.restAgoHours*3600*1000).toISOString();
-    batch.set(ref,{
-      id:sample.id,
-      name:sample.name,
-      grade:normalizeDesignation(sample.grade),
-      route:sample.route,
-      depot:sample.depot,
-      shift:'Day (06:00-14:00)',
-      status:'R',
-      trainType:'',
-      bookTime:'',
-      notes:'Rest countdown sample',
-      since:fmtTime(new Date()),
-      monthly:{},
-      restStarted,
-      updatedBy:'System',
-      monthKey:MONTH_KEY
+  try{
+    const snap = await getDocs(collection(db,'reportMeta'));
+    const templates = {};
+    snap.forEach(docSnap=>{
+      const meta = normalizeReportMetaRecord(docSnap);
+      if(meta) templates[meta.id] = meta;
     });
-    added++;
+    REPORT_TEMPLATES = templates;
+  }catch(err){
+    console.error('Failed to load report metadata',err);
+    REPORT_TEMPLATES = {};
   }
-  if(added>0){
-    await batch.commit();
-    setLog(`Rest countdown sample crew added (${added}).`);
-  }
+}
+
+function getReportTemplates(){
+  return Object.values(REPORT_TEMPLATES).filter(meta=>meta.visible).sort((a,b)=>a.order - b.order || String(a.label).localeCompare(String(b.label)));
+}
+
+async function ensureRestCountdownSample(){
+  // Do not seed any static demo crew records. Rest countdown entries must come from Firestore.
+  return;
 }
 
 function attachListeners(depots){
@@ -569,14 +474,7 @@ async function doLogin(){
     }catch(err){console.error('User lookup failed',err);}
   }
   if(!acct){
-    const local = ACCOUNTS[user];
-    if(local){
-      if(local.pw !== pass){err.textContent='Incorrect password.';err.style.display='block';return;}
-      acct = {depot:local.depot,name:local.name,isHQ:local.role==='super_admin'||local.role==='hq_admin'||local.depot==='HQ',isSuperAdmin:local.role==='super_admin',role:local.role||''};
-    }
-  }
-  if(!acct){
-    err.textContent='Account not found. Use a Firestore user account or fall back to local credentials.';
+    err.textContent='Account not found. Use a Firestore user account.';
     err.style.display='block';
     return;
   }
@@ -632,7 +530,7 @@ function setSyncStatus(t,m){
   if(ld)ld.style.background=t==='ok'?'#69F0AE':t==='err'?'#EF5350':'#FFB300';
   if(lt)lt.textContent=t==='ok'?'Live':t==='err'?'Offline':'Syncing…';
 }
-function setLoginHint(demo){document.getElementById('loginHint').innerHTML=demo?'Demo mode - no sync. Use <code>hq_admin / hq1234</code>':'Credentials: <code>hq_admin / hq1234</code> | super admin: <code>super_admin / super1234</code> | depot officer accounts available';}
+function setLoginHint(demo){document.getElementById('loginHint').innerHTML=demo?'Demo mode - no sync.':'Use Firestore user credentials to sign in.';}
 
 /* ════════ NAVIGATION ══════════════════════════════════════════════════════ */
 function goPage(p){
@@ -825,8 +723,10 @@ function renderRest(){
   }
   html+=`<div class="divider"></div><div class="sec-hdr"><span class="sec-title">Rest rules</span></div>`;
   html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px">`;
-  html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Changamwe};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Home depot</div><div style="font-size:11px;color:var(--text2)">${HOME_REST_HOURS}h rest period</div></div></div>`;
-  html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Mtito};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Away depot</div><div style="font-size:11px;color:var(--text2)">${AWAY_REST_HOURS}h rest period</div></div></div>`;
+  const homeHours=getRestHours('Changamwe');
+  const awayHours=getRestHours({depot:'Changamwe',awayDepot:'Mtito'});
+  html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Changamwe};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Home depot</div><div style="font-size:11px;color:var(--text2)">${homeHours}h rest period</div></div></div>`;
+  html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Mtito};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Away depot</div><div style="font-size:11px;color:var(--text2)">${awayHours}h rest period</div></div></div>`;
   html+=`</div>`;
   document.getElementById('pbody').innerHTML=html;
   // Live tick for rest page
@@ -896,36 +796,56 @@ function renderReports(){
   const monthOptions=getRecentMonthOptions(12);
   const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   const all=getAllCrew(state, depots);const c=cts(all);
+  const templates=getReportTemplates();
+  const cards=templates.map(meta=>{
+    let paramRow='';
+    if(meta.reportType==='monthly'){
+      paramRow=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><select id="reportMonth" class="sel-sm no-print">${monthOptions}</select><button class="btn btn-primary btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button></div>`;
+    } else if(meta.reportType==='utilization'){
+      paramRow=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><select id="utilWindow" class="sel-sm no-print" onchange="updateReportSummary()"><option value="month">This month</option><option value="quarter">Last quarter</option><option value="90d">Last 90 days</option><option value="180d">Last 180 days</option><option value="365d">Last 365 days</option></select><button class="btn btn-primary btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button></div><div id="utilSummary" class="rep-note" style="margin-top:12px;color:var(--text2)">Choose a time window to preview utilization metrics.</div>`;
+    } else {
+      paramRow=`<button class="btn ${meta.reportType==='print'?'btn-ghost':'btn-primary'} btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button>`;
+    }
+    return `<div class="rep-card"><h3>${meta.reportType==='print'?'🖨 ':meta.reportType==='status'?'📊 ':meta.reportType==='monthly'?'📅 ':meta.reportType==='utilization'?'📈 ':''}${meta.label}</h3><p>${meta.description}</p>${paramRow}</div>`;
+  }).join('');
   document.getElementById('pbody').innerHTML=`
   <div class="rep-grid">
-    <div class="rep-card"><h3>📊 Daily Status Report</h3><p>Today's crew status - name, designation, depot, status, train type, route, shift, notes.</p><button class="btn btn-primary btn-sm" onclick="exportCSV()">⬇ Export CSV</button></div>
-    <div class="rep-card"><h3>📅 Monthly Position Register</h3><p>Download current or previous month registers from Firestore archive.</p>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <select id="reportMonth" class="sel-sm no-print">${monthOptions}</select>
-        <button class="btn btn-primary btn-sm" onclick="exportMonthlyCSV(document.getElementById('reportMonth').value)">⬇ Export Monthly CSV</button>
-      </div>
-    </div>
-    <div class="rep-card"><h3>📈 Crew Utilization Report</h3><p>Booking frequency across the selected window.</p>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <select id="utilWindow" class="sel-sm no-print" onchange="updateReportSummary()">
-          <option value="month">This month</option>
-          <option value="quarter">Last quarter</option>
-          <option value="90d">Last 90 days</option>
-          <option value="180d">Last 180 days</option>
-          <option value="365d">Last 365 days</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="exportUtilizationCSV(document.getElementById('utilWindow').value)">⬇ Export Utilization CSV</button>
-      </div>
-      <div id="utilSummary" class="rep-note" style="margin-top:12px;color:var(--text2)">Choose a time window to preview utilization metrics.</div>
-    </div>
-    <div class="rep-card"><h3>🖨 Print Register</h3><p>Clean printable monthly position register for notice boards.</p><button class="btn btn-ghost btn-sm" onclick="goPage('monthly');setTimeout(()=>window.print(),500)">🖨 Print</button></div>
-    <div class="rep-card"><h3>⚠ Absence &amp; NTB Report</h3><p>All crew on sick leave, annual leave, or marked Not to be Booked.</p><button class="btn btn-primary btn-sm" onclick="exportAbsenceCSV()">⬇ Export CSV</button></div>
+    ${cards}
   </div>
   <hr class="divider">
   <div class="sec-hdr"><span class="sec-title">${MONTH_NAME} - snapshot</span></div>
   ${kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]])}`;
   updateReportSummary();
 }
+
+function runReport(reportId){
+  const report = REPORT_TEMPLATES[reportId];
+  if(!report){
+    alert('Report template not found.');
+    return;
+  }
+  switch(report.reportType){
+    case 'status':
+      exportCSV();
+      break;
+    case 'monthly':
+      exportMonthlyCSV(document.getElementById('reportMonth')?.value || MONTH_KEY);
+      break;
+    case 'utilization':
+      exportUtilizationCSV(document.getElementById('utilWindow')?.value || 'month');
+      break;
+    case 'absence':
+      exportAbsenceCSV();
+      break;
+    case 'print':
+      goPage('monthly');
+      setTimeout(()=>window.print(),500);
+      break;
+    default:
+      alert(`Unknown report type: ${report.reportType}`);
+  }
+}
+
 function parseMonthKey(monthKey){
   const [y,m]=String(monthKey||'').split('-').map(Number);
   if(!y||!m||m<1||m>12) return null;
@@ -1073,6 +993,10 @@ async function reloadAdminData(){
   await loadDepotMeta();
   await seedDesignationMetaIfEmpty();
   await loadDesignationMeta();
+  await seedStatusMetaIfEmpty();
+  await loadStatusMeta();
+  await seedReportMetaIfEmpty();
+  await loadReportMeta();
   renderAdmin();
 }
 
@@ -1086,6 +1010,7 @@ async function loadAdminUsers(){
 }
 
 async function renderAdmin(){
+  const dbReady = !!db;
   document.getElementById('phSub').textContent='Manage Firestore-backed configuration';
   document.getElementById('phActions').innerHTML=hasGlobalAccess()?'<button class="btn btn-ghost btn-sm no-print" onclick="reloadAdminData()">Reload</button>':'';
   if(!hasGlobalAccess()){
@@ -1106,14 +1031,39 @@ async function renderAdmin(){
     </div>`;
   }).join('');
 
-  const designationRows=Object.values(DEFAULT_DESIGNATION_REGISTRY).map(meta=>{
+  const designationRows=Object.values(getDesignationRegistry()).sort((a,b)=>(a.order||999)-(b.order||999)||a.label.localeCompare(b.label)).map(meta=>{
     const aliases=(meta.aliases||[]).join(', ');
-    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.5fr 90px 70px;gap:8px;align-items:center;margin-bottom:8px">
+    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.3fr 1.2fr 70px 70px 70px;gap:8px;align-items:center;margin-bottom:8px">
       <input value="${meta.id}" data-admin-desig-id="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Designation id">
       <input value="${meta.label}" data-admin-desig-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input value="${aliases}" data-admin-desig-aliases="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Aliases">
+      <input type="number" value="${meta.order||999}" data-admin-desig-order="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" min="0" placeholder="Order">
       <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${meta.restEligible?'checked':''} data-admin-desig-rest="${meta.id}"> Rest</label>
       <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('${meta.id}')">Save</button>
-      <div style="grid-column:1 / -1;font-size:11px;color:var(--text2)">Aliases: ${aliases||'-'}</div>
+    </div>`;
+  }).join('');
+
+  const statusRows=STATUSES.map(statusId=>{
+    const meta=STATUS_META[statusId]||{label:statusId,bg:'#ECEFF1',fg:'#37474F'};
+    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.3fr 90px 90px 70px;gap:8px;align-items:center;margin-bottom:8px">
+      <input value="${statusId}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Status id">
+      <input value="${meta.label}" data-admin-status-label="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input value="${meta.bg||'#ECEFF1'}" data-admin-status-bg="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#bg">
+      <input value="${meta.fg||'#37474F'}" data-admin-status-fg="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#fg">
+      <button class="btn btn-primary btn-sm" onclick="saveStatusMetaRecord('${statusId}')">Save</button>
+    </div>`;
+  }).join('');
+
+  const reportRows=Object.values(REPORT_TEMPLATES).sort((a,b)=>a.order-b.order||a.label.localeCompare(b.label)).map(meta=>{
+    const typeOptions=REPORT_TYPES.map(type=>`<option value="${type.id}"${type.id===meta.reportType?' selected':''}>${type.label}</option>`).join('');
+    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.2fr 1fr 1fr 60px 70px;gap:8px;align-items:center;margin-bottom:8px">
+      <input value="${meta.id}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Report id">
+      <input value="${meta.label}" data-admin-report-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <select data-admin-report-type="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)">${typeOptions}</select>
+      <input value="${meta.order||999}" type="number" min="0" data-admin-report-order="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Order">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${meta.visible?'checked':''} data-admin-report-visible="${meta.id}"> Visible</label>
+      <button class="btn btn-primary btn-sm" onclick="saveReportMetaRecord('${meta.id}')">Save</button>
+      <div style="grid-column:1 / -1;font-size:11px;color:var(--text2);padding:4px 0;">${meta.description||''}</div>
     </div>`;
   }).join('');
 
@@ -1133,6 +1083,7 @@ async function renderAdmin(){
 
   document.getElementById('pbody').innerHTML=`
     <div style="display:grid;gap:14px">
+      ${dbReady? '': '<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:var(--r);padding:12px 14px;font-size:12px;color:#7A4F01">Firestore is unavailable. Admin metadata changes cannot be saved until Firebase is configured and connected.</div>'}
       <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
         <div style="font-size:14px;font-weight:800;margin-bottom:4px">Firestore maintenance</div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Seed or refresh the data collections that drive the crew app.</div>
@@ -1151,11 +1102,25 @@ async function renderAdmin(){
         </div>
         <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
           <div style="font-size:13px;font-weight:800;margin-bottom:8px">Designations</div>
-          <div style="display:grid;grid-template-columns:1fr 1.5fr 90px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
-            <div>ID</div><div>Label</div><div>Rest</div><div></div>
+          <div style="display:grid;grid-template-columns:1fr 1.3fr 1.2fr 70px 70px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
+            <div>ID</div><div>Label</div><div>Aliases</div><div>Order</div><div>Rest</div><div></div>
           </div>
           ${designationRows}
         </div>
+        <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
+          <div style="font-size:13px;font-weight:800;margin-bottom:8px">Status metadata</div>
+          <div style="display:grid;grid-template-columns:1fr 1.3fr 90px 90px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
+            <div>ID</div><div>Label</div><div>Background</div><div>Foreground</div><div></div>
+          </div>
+          ${statusRows}
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px">Report templates</div>
+        <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr 1fr 60px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
+          <div>ID</div><div>Label</div><div>Type</div><div>Order</div><div>Visible</div><div></div>
+        </div>
+        ${reportRows}
       </div>
       <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
         <div style="font-size:13px;font-weight:800;margin-bottom:6px">Crew upload options</div>
@@ -1172,7 +1137,11 @@ async function renderAdmin(){
 }
 
 async function saveDepotMetaRecord(depotId){
-  if(!db) return;
+  if(!db){
+    setSyncStatus('err','Firestore unavailable');
+    alert('Cannot save depot metadata while Firebase is unavailable.');
+    return;
+  }
   const idEl=document.querySelector(`[data-admin-depot-id="${depotId}"]`);
   const labelEl=document.querySelector(`[data-admin-depot-label="${depotId}"]`);
   const colorEl=document.querySelector(`[data-admin-depot-color="${depotId}"]`);
@@ -1193,23 +1162,77 @@ async function saveDepotMetaRecord(depotId){
 }
 
 async function saveDesignationMetaRecord(designationId){
-  if(!db) return;
+  if(!db){
+    setSyncStatus('err','Firestore unavailable');
+    alert('Cannot save designation metadata while Firebase is unavailable.');
+    return;
+  }
   const labelEl=document.querySelector(`[data-admin-desig-label="${designationId}"]`);
+  const aliasesEl=document.querySelector(`[data-admin-desig-aliases="${designationId}"]`);
+  const orderEl=document.querySelector(`[data-admin-desig-order="${designationId}"]`);
   const restEl=document.querySelector(`[data-admin-desig-rest="${designationId}"]`);
+  const aliases = String(aliasesEl?.value||'').split(',').map(a=>a.trim()).filter(Boolean);
   const meta={
     id:designationId,
     label:(labelEl?.value||designationId).trim(),
-    aliases:DEFAULT_DESIGNATION_REGISTRY[designationId]?.aliases||[],
+    aliases,
     restEligible:!!restEl?.checked,
-    order:DEFAULT_DESIGNATION_REGISTRY[designationId]?.order??999,
+    order:Number(orderEl?.value||999),
   };
   await setDoc(doc(db,'designationMeta',designationId),meta,{merge:true});
   await loadDesignationMeta();
   renderAdmin();
 }
 
+async function saveStatusMetaRecord(statusId){
+  if(!db){
+    setSyncStatus('err','Firestore unavailable');
+    alert('Cannot save status metadata while Firebase is unavailable.');
+    return;
+  }
+  const labelEl=document.querySelector(`[data-admin-status-label="${statusId}"]`);
+  const bgEl=document.querySelector(`[data-admin-status-bg="${statusId}"]`);
+  const fgEl=document.querySelector(`[data-admin-status-fg="${statusId}"]`);
+  const meta={
+    id:statusId,
+    label:(labelEl?.value||statusId).trim(),
+    bg:(bgEl?.value||'#ECEFF1').trim(),
+    fg:(fgEl?.value||'#37474F').trim(),
+    order:STATUS_META[statusId]?.order ?? STATUSES.indexOf(statusId) ?? 999,
+  };
+  await setDoc(doc(db,'statusMeta',statusId),meta,{merge:true});
+  await loadStatusMeta();
+  renderAdmin();
+}
+
+async function saveReportMetaRecord(reportId){
+  if(!db){
+    setSyncStatus('err','Firestore unavailable');
+    alert('Cannot save report metadata while Firebase is unavailable.');
+    return;
+  }
+  const labelEl=document.querySelector(`[data-admin-report-label="${reportId}"]`);
+  const typeEl=document.querySelector(`[data-admin-report-type="${reportId}"]`);
+  const orderEl=document.querySelector(`[data-admin-report-order="${reportId}"]`);
+  const visibleEl=document.querySelector(`[data-admin-report-visible="${reportId}"]`);
+  const meta={
+    id:reportId,
+    label:(labelEl?.value||reportId).trim(),
+    reportType:(typeEl?.value||'status').trim(),
+    order:Number(orderEl?.value||999),
+    visible:!!visibleEl?.checked,
+  };
+  await setDoc(doc(db,'reportMeta',reportId),meta,{merge:true});
+  await loadReportMeta();
+  renderAdmin();
+}
+
 async function saveUserAccount(username){
-  if(!db) return;
+  if(!db){
+    setSyncStatus('err','Firestore unavailable');
+    alert('Cannot save user account while Firebase is unavailable.');
+    return;
+  }
   const nameEl=document.querySelector(`[data-admin-user-name="${username}"]`);
   const depotEl=document.querySelector(`[data-admin-user-depot="${username}"]`);
   const roleEl=document.querySelector(`[data-admin-user-role="${username}"]`);
@@ -1259,13 +1282,15 @@ function updateRestLocationHint(){
   const hint=document.getElementById('restLocationHint');
   if(s!=='R'){ if(info) info.textContent=''; if(hint) hint.textContent=''; return; }
   const homeDepot = editKey?.depot || 'Home';
-  if(info) info.textContent=`${homeDepot} depot - ${HOME_REST_HOURS}h rest period when resting at home.`;
+  const homeHours = getRestHours({depot:homeDepot});
+  if(info) info.textContent=`${homeDepot} depot - ${homeHours}h rest period when resting at home.`;
   const loc=document.getElementById('mRestLocation').value;
   if(loc==='away'){
     const away=document.getElementById('mAwayDepot')?.value||'selected away depot';
-    if(hint) hint.textContent=`Away depot rest is ${AWAY_REST_HOURS}h. Current away depot: ${away}.`;
+    const awayHours = getRestHours({depot:homeDepot,awayDepot:away});
+    if(hint) hint.textContent=`Away depot rest is ${awayHours}h. Current away depot: ${away}.`;
   } else {
-    if(hint) hint.textContent=`Home depot rest is ${HOME_REST_HOURS}h.`;
+    if(hint) hint.textContent=`Home depot rest is ${homeHours}h.`;
   }
 }
 
@@ -1286,7 +1311,7 @@ function openUpdate(depot,id){
   document.getElementById('mTrainType').value=c.trainType||'';
   document.getElementById('mBookTime').value=c.bookTime||'';
   document.getElementById('mRoute').value=c.route||'';
-  document.getElementById('mShift').value=c.shift||'Day (06:00–14:00)';
+  populateShiftSelects(c.shift||'Day (06:00–14:00)');
   document.getElementById('mNotes').value=c.notes||'';
   if(c.restStarted){
     const restDate = c.restStarted && c.restStarted.toDate ? c.restStarted.toDate() : new Date(c.restStarted);
@@ -1295,7 +1320,7 @@ function openUpdate(depot,id){
   document.getElementById('mRestLocation').value=c.awayDepot && c.awayDepot!==depot?'away':'home';
   setAwayDepotOptions(depot,c.awayDepot);
   onStatusChange();
-  document.getElementById('mRemoveBtn').style.display=(!hasGlobalAccess())?'inline-flex':'none';
+  document.getElementById('mRemoveBtn').style.display='inline-flex';
   document.getElementById('modal').classList.add('open');
 }
 
@@ -1310,7 +1335,7 @@ function openDayEdit(depot,id,day){
   document.getElementById('mStatus').value=(c.monthly&&c.monthly[`d${day}`])||'SB';
   document.getElementById('mTrainType').value='';document.getElementById('mBookTime').value='';
   document.getElementById('mRoute').value=c.route||'';
-  document.getElementById('mShift').value=c.shift||'Day (06:00–14:00)';document.getElementById('mNotes').value='';
+  populateShiftSelects(c.shift||'Day (06:00–14:00)');document.getElementById('mNotes').value='';
   document.getElementById('mRestStart').value=new Date().toTimeString().substring(0,5);
   document.getElementById('mRestLocation').value='home';
   setAwayDepotOptions(depot,'');
@@ -1331,11 +1356,7 @@ async function saveModal(){
     const bookTime=newStatus==='BK'?document.getElementById('mBookTime').value:'';
     const restStartInput=document.getElementById('mRestStart').value;
     if(newStatus==='R' && !isRestAllowedForGrade(currentModalGrade)){
-<<<<<<< HEAD
       alert('Resting can only be applied to locomotive driver designations. Change the status before saving.');
-=======
-      alert('Resting can only be applied to Locomotive driver designation. Change the status before saving.');
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
       return;
     }
 
@@ -1369,17 +1390,20 @@ async function saveModal(){
 /* ════════ REMOVE CREW ═════════════════════════════════════════════════════ */
 async function confirmRemoveCrew(){
   if(!editKey)return;
-  const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);
+  const depot=editKey.depot;
+  const id=editKey.id;
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);
   if(!c)return;
   if(!confirm(`Remove ${c.name} (${c.id}) from ${c.depot}?\n\nThis cannot be undone.`))return;
   closeModal();
   setSyncStatus('spin','Removing…');
   try{
-    await removeCrewDoc(editKey.depot,editKey.id);
+    await removeCrewDoc(depot,id);
+    if(state[depot]) delete state[depot][id];
     setLog(`${c.name} (${c.id}) removed from ${c.depot}.`);
     setSyncStatus('ok','Removed');
   }catch(err){setSyncStatus('err','Remove failed');setLog('Error: '+err.message);}
-  if(!db)refreshPage();
+  refreshPage();
 }
 
 async function removeCrewDoc(depot,id){
@@ -1422,11 +1446,7 @@ async function saveAddCrew(){
     const grade=document.getElementById('addGrade').value;
     const initStatus=document.getElementById('addStatus').value;
     if(initStatus==='R' && !isRestAllowedForGrade(grade)){
-<<<<<<< HEAD
       alert('Only locomotive driver designations may be added with Resting status. Please choose another status.');
-=======
-      alert('Only Locomotive driver may be added with Resting status. Please choose another status.');
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
       return;
     }
   }
@@ -1438,11 +1458,7 @@ async function saveAddCrew(){
       for(const line of lines){
         const parts=line.split(',').map(p=>p.trim());
         const name=parts[0];if(!name)continue;
-<<<<<<< HEAD
         const grade=parts[1]||'locomotive_driver';const route=parts[2]||'';
-=======
-        const grade=parts[1]||'Locomotive driver';const route=parts[2]||'';
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
         await addSingleCrew(depot,name,grade,route,'SB');added++;
       }
       setLog(`${added} crew member(s) added to ${depot}.`);
@@ -1482,11 +1498,7 @@ function filterSearch(){const q=(document.getElementById('crewSearch')?.value||'
 
 /* ════════ EXPORT ══════════════════════════════════════════════════════════ */
 function exportCSV(){
-<<<<<<< HEAD
   const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d);
-=======
-  const d=currentUser.isHQ?DEPOTS:[currentUser.depot];const all=getAllCrew(state, d);
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
   let csv='ID,Name,Designation,Depot,Route,Shift,Status,Train Type,Booked Time,Rest Remaining,Since,Notes\n';
   all.forEach(c=>{
     const sec=restSecondsLeft(c);const rem=sec!==null&&sec>0?fmtCountdown(sec):(sec===0?'Complete':'-');
@@ -1495,26 +1507,16 @@ function exportCSV(){
   dlCSV(csv,`KR_Status_${todayStr()}.csv`);
 }
 function exportMonthlyCSVLegacy(){
-<<<<<<< HEAD
   const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
-=======
-  const d=currentUser.isHQ?DEPOTS:[currentUser.depot];const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
   let hdr='ID,Name,Designation,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
   let csv=hdr;
   all.forEach(c=>{let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};for(let i=1;i<=DAYS_IN_MON;i++){const code=(c.monthly&&c.monthly[`d${i}`])||'';if(sm[code]!==undefined)sm[code]++;row+=`,"${code}"`;}row+=`,${sm.BK},${sm.SB},${sm.R},${sm.L},${sm.SK},${sm.T},${sm.NTB},${sm.TO}`;csv+=row+'\n';});
   dlCSV(csv,`KR_Monthly_${MONTH_NAME.replace(' ','_')}.csv`);
 }
 function exportAbsenceCSV(){
-<<<<<<< HEAD
   const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).filter(c=>['SK','L','NTB'].includes(c.status));
   let csv='ID,Name,Designation,Depot,Status,NTB Reason/Notes,Last Updated\n';
   all.forEach(c=>{csv+=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${STATUS_META[c.status]?.label}","${(c.notes||'').replace(/"/g,"'")}","${c.lastUpdated||''}"\n`;});
-=======
-  const d=currentUser.isHQ?DEPOTS:[currentUser.depot];const all=getAllCrew(state, d).filter(c=>['SK','L','NTB'].includes(c.status));
-  let csv='ID,Name,Designation,Depot,Status,NTB Reason/Notes,Last Updated\n';
-  all.forEach(c=>{csv+=`"${c.id}","${c.name}","${c.grade}","${c.depot}","${STATUS_META[c.status]?.label}","${(c.notes||'').replace(/"/g,"'")}","${c.lastUpdated||''}"\n`;});
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
   dlCSV(csv,`KR_Absences_${todayStr()}.csv`);
 }
 window.doLogin = doLogin;
@@ -1526,6 +1528,7 @@ window.confirmRemoveCrew = confirmRemoveCrew;
 window.saveModal = saveModal;
 window.switchAddTab = switchAddTab;
 window.closeAddModal = closeAddModal;
+window.openAddModal = openAddModal;
 window.saveAddCrew = saveAddCrew;
 window.openUpdate = openUpdate;
 window.openDayEdit = openDayEdit;
@@ -1542,6 +1545,9 @@ window.reloadAdminData = reloadAdminData;
 window.renderAdmin = renderAdmin;
 window.saveDepotMetaRecord = saveDepotMetaRecord;
 window.saveDesignationMetaRecord = saveDesignationMetaRecord;
+window.saveStatusMetaRecord = saveStatusMetaRecord;
+window.saveReportMetaRecord = saveReportMetaRecord;
+window.runReport = runReport;
 window.saveUserAccount = saveUserAccount;
 window.seedFirestore = async () => {
   if(!db){setLog('Cannot seed Firestore: database not initialized.');return;}
@@ -1553,6 +1559,8 @@ window.seedFirestore = async () => {
   await loadStatusMeta();
   await seedDesignationMetaIfEmpty();
   await loadDesignationMeta();
+  await seedReportMetaIfEmpty();
+  await loadReportMeta();
   await migrateCrewDesignationKeys();
   const depots = getActiveDepots();
   await Promise.all(depots.map(seedDepotIfEmpty));
@@ -1565,6 +1573,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeA
 ['lUser','lPass'].forEach(id=>{document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});});
 
 async function bootApp(){
+  populateLoginDepotOptions();
   const cfg = await loadFirebaseConfig();
   if(cfg && cfg.apiKey && cfg.projectId){
     const ok = initFirebase(cfg);

@@ -82,8 +82,8 @@ If Composer or PHP are not installed yet, the app can still be inspected in the 
 ## Firebase Notes
 
 - The app loads Firestore config from `.env` using `firebase.js`.
-- If no Firebase connection is available, use the offline demo mode from the login screen.
-- The app seeds default user accounts, status metadata, and depot crew data when Firestore is empty.
+- If no Firebase connection is available, use offline demo mode from the login screen.
+- The app relies on Firestore collections for metadata and does not auto-seed default users or crew data.
 
 ## Running
 

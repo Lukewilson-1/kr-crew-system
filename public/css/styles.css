@@ -307,4 +307,69 @@ tr:hover td{background:#FAFBFC}
 .rep-card{background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:15px}
 .rep-card h3{font-size:13px;font-weight:700;margin-bottom:5px}
 .rep-card p{font-size:12px;color:var(--text2);margin-bottom:11px;line-height:1.5}
+@media (max-width:1024px){
+  #sidebar{width:220px}
+}
+
+@media (max-width:900px){
+  #shell{flex-direction:column}
+  #sidebar{width:100%;max-height:none;position:relative;order:0}
+  #main{order:1}
+  #phdr{flex-wrap:wrap;gap:10px;padding:12px 16px}
+  .ph-actions{width:100%;justify-content:flex-start}
+  #pbody{padding:14px 16px}
+  #topBar{padding:8px 12px;gap:8px}
+  .tb-right{margin-left:0;width:100%;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+  .tb-title{font-size:13px}
+}
+
+@media (max-width:768px){
+  #loginPage .lcard{width:100%;padding:22px}
+  .cfg-box{padding:24px 18px}
+  .cfg-fields{grid-template-columns:1fr}
+  #sidebar{max-height:320px}
+  .sb-item,.sb-depot{padding:10px 12px;font-size:11px}
+  .sb-sec{padding:11px 12px}
+  .ph-title{font-size:15px}
+  .ph-sub{font-size:10px}
+  #pbody{padding:12px 14px}
+  .tbl-toolbar{padding:9px 11px}
+  .tt-search{min-width:120px}
+  .tt-search input{font-size:11px}
+}
+
+@media (max-width:640px){
+  #topBar{height:auto;align-items:flex-start}
+  #tb-right{justify-content:flex-start}
+  .tb-live{width:100%;justify-content:space-between}
+  .btn-out{width:100%;justify-content:center}
+  #phdr{padding:12px 14px}
+  .ph-title{font-size:14px}
+  .ph-actions{gap:6px}
+  #pbody{padding:12px}
+  .modal-box{width:min(95vw,560px);padding:18px}
+  .modal-grid{grid-template-columns:1fr}
+  .cfg-fields{grid-template-columns:1fr}
+  .bulk-area{min-height:90px}
+  .rest-grid{grid-template-columns:1fr}
+  .rest-card{flex-direction:column;align-items:flex-start}
+  .rest-cd{width:100%;text-align:left}
+  .depot-grid{grid-template-columns:1fr}
+  .tbl-toolbar{flex-direction:column;align-items:stretch}
+  .tt-search{width:100%;min-width:auto}
+  .pill{font-size:10px;padding:3px 7px}
+  .month-wrap{overflow-x:auto}
+}
+
+@media (max-width:520px){
+  #sidebar{overflow-y:auto;max-height:260px}
+  .sb-item{gap:8px;padding:9px 10px}
+  .sb-bottom{padding:8px 10px;font-size:9px}
+  .lcard{padding:20px}
+  .lh1{font-size:18px}
+  .frow label{font-size:9px}
+  .btn-login{padding:10px}
+  .tbl-toolbar{gap:5px}
+}
+
 @media print{#loginPage,#configBanner,#topBar,#sidebar,#logBar,#syncBadge,.no-print{display:none!important}#main{overflow:visible}#pbody{overflow:visible}}

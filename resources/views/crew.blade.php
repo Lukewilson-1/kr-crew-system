@@ -15,15 +15,7 @@
   <div class="frow"><label>Username</label><input type="text" id="lUser" placeholder="e.g. hq_admin" autocomplete="username"></div>
   <div class="frow"><label>Password</label><input type="password" id="lPass" placeholder="Password" autocomplete="current-password"></div>
   <div class="frow"><label>Depot</label>
-    <select id="lDepot">
-      <option value="HQ">HQ Headquarters - View all depots</option>
-      <option value="Changamwe">Changamwe Depot</option>
-      <option value="Mtito">Mtito Andei Depot</option>
-      <option value="Makadara">Makadara Depot</option>
-      <option value="Nakuru">Nakuru Depot</option>
-      <option value="Kisumu">Kisumu Depot</option>
-      <option value="Eldoret">Eldoret Depot</option>
-    </select>
+    <select id="lDepot"></select>
   </div>
   <button class="btn-login" onclick="doLogin()">Sign in →</button>
   <button class="btn btn-ghost" onclick="useDemoMode()">Use offline demo</button>
@@ -151,12 +143,7 @@
     </div>
     <div>
       <label>Shift</label>
-      <select id="mShift">
-        <option>Day (06:00–14:00)</option>
-        <option>Afternoon (14:00–22:00)</option>
-        <option>Night (22:00–06:00)</option>
-        <option>N/A</option>
-      </select>
+      <select id="mShift"></select>
     </div>
   </div>
   <label>NTB reason / Notes (optional)</label>
@@ -183,32 +170,14 @@
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Full Name *</label>
     <input type="text" id="addName" placeholder="e.g. John Kamau Njoroge" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Designation *</label>
-    <select id="addGrade" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
-<<<<<<< HEAD
-      <option value="locomotive_driver">Locomotive driver</option><option value="train_guard">train Guard</option>
-      <option value="shunter_driver">Shunter driver</option><option value="locomotive_inspecting_officer">Locomotive Inspecting Officer(LIO)</option><option value="station_master">station Master</option>
-=======
-      <option>Locomotive driver</option><option>Shunter driver</option><option>Train guard</option>
-      <option>RSf</option><option>LIO</option><option>Station master</option>
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
-    </select>
+    <select id="addGrade" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px"></select>
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Route / Assignment</label>
     <input type="text" id="addRoute" placeholder="e.g. CGA–MTT" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Initial Status</label>
-    <select id="addStatus" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none">
-      <option value="SB">SB - Standby</option><option value="BK">BK - Booked</option>
-      <option value="R">R - Resting</option><option value="L">L - On Leave</option>
-      <option value="SK">SK - Sick</option><option value="T">T - Training</option>
-      <option value="NTB">NTB - Not to be Booked</option>
-      <option value="TO">TO - Trip Off</option>
-    </select>
+    <select id="addStatus" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none"></select>
   </div>
   <div id="addBulk" style="display:none">
-<<<<<<< HEAD
-    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Designation, Route\n\nExamples:\nJames Kamau, Locomotive driver, CGA-MTT\nMary Wanjiku, train Guard, CGA-NBI\nPeter Ochieng, Shunter driver\n\nDesignation and route are optional. All will be set to Standby initially."></textarea>
-=======
-    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Designation, Route\n\nExamples:\nJames Kamau, Locomotive driver, CGA-MTT\nMary Wanjiku, Train guard, CGA-NBI\nPeter Ochieng, Shunter driver\n\nDesignation and route are optional. All will be set to Standby initially."></textarea>
->>>>>>> e4f6718b4073d665798519b29bb92e2b448f6451
+    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Designation, Route\n\nExamples:\nJames Kamau, Locomotive driver, CGA-MTT\nMary Wanjiku, Train Guard, CGA-NBI\nPeter Ochieng, Shunter driver\n\nDesignation and route are optional. All will be set to Standby initially."></textarea>
     <div class="bulk-hint">Paste one crew member per line. Name is required; designation and route are optional (comma-separated). All will be set to Standby initially.</div>
   </div>
   <div class="modal-btns" style="margin-top:14px">

@@ -22,7 +22,7 @@ const DEFAULT_STATUS_META={
 };
 let STATUS_META={...DEFAULT_STATUS_META};
 const TRAIN_TYPES=['Freight','Commuter','Passenger','Engineering','Shunting'];
-const DRIVER_GRADES=['Driver A','Driver B'];
+const DRIVER_GRADES=['Locomotive driver'];
 const DEFAULT_STATUSES=['BK','SB','R','L','SK','T','NTB','TO'];
 let STATUSES=[...DEFAULT_STATUSES];
 const AVT_PAL=[['#E8F5E9','#1B5E20'],['#E3F2FD','#0D47A1'],['#FFF3E0','#E65100'],['#F3E5F5','#4A148C'],['#FFEBEE','#B71C1C'],['#E0F2F1','#00695C'],['#FFFDE7','#F57F17']];
@@ -53,12 +53,12 @@ async function seedUsersIfEmpty(){
   await batch.commit();
 }
 const SEED_CREW={
-  Changamwe:[{id:'CG-001',name:'James Kamau Njoroge',grade:'Driver A',route:'CGA–MTT'},{id:'CG-002',name:'Mary Wanjiku Mwangi',grade:'Driver B',route:'CGA–NBI'},{id:'CG-003',name:'Peter Ochieng Otieno',grade:'Shunter',route:'CGA Yard'},{id:'CG-004',name:'Grace Akinyi Odhiambo',grade:'Guard',route:'CGA–MTT'},{id:'CG-005',name:'Brian Otieno Ouma',grade:'Technician',route:'Workshop'},{id:'CG-006',name:'Christine Atieno Auma',grade:'Station Master',route:'CGA Station'}],
-  Mtito:[{id:'MT-001',name:'Samuel Mwangi Gitau',grade:'Driver A',route:'MTT–NBI'},{id:'MT-002',name:'Alice Chebet Koech',grade:'Guard',route:'MTT–CGA'},{id:'MT-003',name:'Daniel Kipchoge Ruto',grade:'Driver B',route:'MTT–NKR'},{id:'MT-004',name:'Lydia Wambui Kariuki',grade:'Station Master',route:'MTT Station'},{id:'MT-005',name:'Fredrick Mutua Kioko',grade:'Shunter',route:'MTT Yard'}],
-  Makadara:[{id:'MK-001',name:'Esther Muthoni Kariuki',grade:'Station Master',route:'MKD Station'},{id:'MK-002',name:'John Mwangi Njiru',grade:'Driver A',route:'MKD–CGA'},{id:'MK-003',name:'Fatuma Hassan Abdi',grade:'Guard',route:'MKD–MTT'},{id:'MK-004',name:'Kevin Otieno Omondi',grade:'Shunter',route:'MKD Yard'},{id:'MK-005',name:'Rose Njeri Kamau',grade:'Driver B',route:'MKD–NBI'},{id:'MK-006',name:'Charles Kimani Mwangi',grade:'Technician',route:'Workshop'}],
-  Nakuru:[{id:'NK-001',name:'Paul Kimani Waweru',grade:'Driver A',route:'NKR–NBI'},{id:'NK-002',name:'Jane Muthoni Kariuki',grade:'Guard',route:'NKR–ELD'},{id:'NK-003',name:'Moses Otieno Owino',grade:'Driver B',route:'NKR–KSM'},{id:'NK-004',name:"Catherine Wanjiru Ng'ang'a",grade:'Station Master',route:'NKR Station'},{id:'NK-005',name:'Elijah Koech Kipkirui',grade:'Shunter',route:'NKR Yard'}],
-  Kisumu:[{id:'KS-001',name:'George Ouma Oketch',grade:'Driver A',route:'KSM–NKR'},{id:'KS-002',name:'Agnes Achieng Otieno',grade:'Guard',route:'KSM–ELD'},{id:'KS-003',name:'David Odhiambo Onyango',grade:'Driver B',route:'KSM–NBI'},{id:'KS-004',name:'Mercy Adhiambo Ochieng',grade:'Station Master',route:'KSM Station'},{id:'KS-005',name:'Isaac Ogutu Were',grade:'Technician',route:'Workshop'},{id:'KS-006',name:'Beatrice Awuor Oloo',grade:'Shunter',route:'KSM Yard'}],
-  Eldoret:[{id:'EL-001',name:'Joseph Kipkoech Ngetich',grade:'Driver A',route:'ELD–NKR'},{id:'EL-002',name:'Winnie Jepkosgei Kogo',grade:'Guard',route:'ELD–KSM'},{id:'EL-003',name:'Robert Kibet Chirchir',grade:'Driver B',route:'ELD–NBI'},{id:'EL-004',name:'Esther Chelangat Bett',grade:'Station Master',route:'ELD Station'},{id:'EL-005',name:'Leonard Kipyego Biwott',grade:'Shunter',route:'ELD Yard'}],
+  Changamwe:[{id:'CG-001',name:'James Kamau Njoroge',grade:'Locomotive driver',route:'CGA–MTT'},{id:'CG-002',name:'Mary Wanjiku Mwangi',grade:'Locomotive driver',route:'CGA–NBI'},{id:'CG-003',name:'Peter Ochieng Otieno',grade:'Shunter',route:'CGA Yard'},{id:'CG-004',name:'Grace Akinyi Odhiambo',grade:'Guard',route:'CGA–MTT'},{id:'CG-005',name:'Brian Otieno Ouma',grade:'Technician',route:'Workshop'},{id:'CG-006',name:'Christine Atieno Auma',grade:'Station Master',route:'CGA Station'}],
+  Mtito:[{id:'MT-001',name:'Samuel Mwangi Gitau',grade:'Locomotive driver',route:'MTT–NBI'},{id:'MT-002',name:'Alice Chebet Koech',grade:'Guard',route:'MTT–CGA'},{id:'MT-003',name:'Daniel Kipchoge Ruto',grade:'Locomotive driver',route:'MTT–NKR'},{id:'MT-004',name:'Lydia Wambui Kariuki',grade:'Station Master',route:'MTT Station'},{id:'MT-005',name:'Fredrick Mutua Kioko',grade:'Shunter',route:'MTT Yard'}],
+  Makadara:[{id:'MK-001',name:'Esther Muthoni Kariuki',grade:'Station Master',route:'MKD Station'},{id:'MK-002',name:'John Mwangi Njiru',grade:'Locomotive driver',route:'MKD–CGA'},{id:'MK-003',name:'Fatuma Hassan Abdi',grade:'Guard',route:'MKD–MTT'},{id:'MK-004',name:'Kevin Otieno Omondi',grade:'Shunter',route:'MKD Yard'},{id:'MK-005',name:'Rose Njeri Kamau',grade:'Locomotive driver',route:'MKD–NBI'},{id:'MK-006',name:'Charles Kimani Mwangi',grade:'Technician',route:'Workshop'}],
+  Nakuru:[{id:'NK-001',name:'Paul Kimani Waweru',grade:'Locomotive driver',route:'NKR–NBI'},{id:'NK-002',name:'Jane Muthoni Kariuki',grade:'Guard',route:'NKR–ELD'},{id:'NK-003',name:'Moses Otieno Owino',grade:'Locomotive driver',route:'NKR–KSM'},{id:'NK-004',name:"Catherine Wanjiru Ng'ang'a",grade:'Station Master',route:'NKR Station'},{id:'NK-005',name:'Elijah Koech Kipkirui',grade:'Shunter',route:'NKR Yard'}],
+  Kisumu:[{id:'KS-001',name:'George Ouma Oketch',grade:'Locomotive driver',route:'KSM–NKR'},{id:'KS-002',name:'Agnes Achieng Otieno',grade:'Guard',route:'KSM–ELD'},{id:'KS-003',name:'David Odhiambo Onyango',grade:'Locomotive driver',route:'KSM–NBI'},{id:'KS-004',name:'Mercy Adhiambo Ochieng',grade:'Station Master',route:'KSM Station'},{id:'KS-005',name:'Isaac Ogutu Were',grade:'Technician',route:'Workshop'},{id:'KS-006',name:'Beatrice Awuor Oloo',grade:'Shunter',route:'KSM Yard'}],
+  Eldoret:[{id:'EL-001',name:'Joseph Kipkoech Ngetich',grade:'Locomotive driver',route:'ELD–NKR'},{id:'EL-002',name:'Winnie Jepkosgei Kogo',grade:'Guard',route:'ELD–KSM'},{id:'EL-003',name:'Robert Kibet Chirchir',grade:'Locomotive driver',route:'ELD–NBI'},{id:'EL-004',name:'Esther Chelangat Bett',grade:'Station Master',route:'ELD Station'},{id:'EL-005',name:'Leonard Kipyego Biwott',grade:'Shunter',route:'ELD Yard'}],
 };
 
 /* ════════ DATE ════════════════════════════════════════════════════════════ */
@@ -104,7 +104,7 @@ function updateStatusValidation(){
   if(restOption)restOption.disabled=!allowed;
   if(statusEl.value==='R' && !allowed){
     if(hintEl){
-      hintEl.textContent='Only Driver A/B grades may be placed in Resting. Please select Standby or another status.';
+      hintEl.textContent='Only Locomotive driver may be placed in Resting. Please select Standby or another status.';
       hintEl.style.display='block';
     }
     if(saveBtn)saveBtn.disabled=true;
@@ -282,11 +282,11 @@ async function seedFirestoreUsers(){
 async function ensureRestCountdownSample(){
   if(!db) return;
   const samples=[
-    {depot:'Changamwe',id:'CG-RST1',name:'Changamwe Rest 1',grade:'Driver A',route:'CGA–MTT',restAgoHours:2},
-    {depot:'Changamwe',id:'CG-RST2',name:'Changamwe Rest 2',grade:'Driver B',route:'CGA–NBI',restAgoHours:8},
-    {depot:'Eldoret',id:'EL-RST1',name:'Eldoret Rest 1',grade:'Driver A',route:'ELD–NKR',restAgoHours:5},
-    {depot:'Eldoret',id:'EL-RST2',name:'Eldoret Rest 2',grade:'Driver B',route:'ELD–KSM',restAgoHours:9},
-    {depot:'Eldoret',id:'EL-RST3',name:'Eldoret Rest 3',grade:'Driver A',route:'ELD–NBI',restAgoHours:11}
+    {depot:'Changamwe',id:'CG-RST1',name:'Changamwe Rest 1',grade:'Locomotive driver',route:'CGA–MTT',restAgoHours:2},
+    {depot:'Changamwe',id:'CG-RST2',name:'Changamwe Rest 2',grade:'Locomotive driver',route:'CGA–NBI',restAgoHours:8},
+    {depot:'Eldoret',id:'EL-RST1',name:'Eldoret Rest 1',grade:'Locomotive driver',route:'ELD–NKR',restAgoHours:5},
+    {depot:'Eldoret',id:'EL-RST2',name:'Eldoret Rest 2',grade:'Locomotive driver',route:'ELD–KSM',restAgoHours:9},
+    {depot:'Eldoret',id:'EL-RST3',name:'Eldoret Rest 3',grade:'Locomotive driver',route:'ELD–NBI',restAgoHours:11}
   ];
   const batch=writeBatch(db);
   let added=0;
@@ -512,7 +512,7 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
     </div>
     <div class="tbl-wrap"><table>
       <thead><tr>
-        <th>ID</th><th>Name / Grade</th>
+        <th>ID</th><th>Name / Designation</th>
         ${showDepotCol?'<th>Depot</th>':''}
         <th>Rest location</th>
         <th>Route</th><th>Shift</th><th>Status</th><th>Train Type</th><th>Depart</th>
@@ -778,7 +778,7 @@ async function exportMonthlyCSV(monthKey=MONTH_KEY){
     return;
   }
   const cols = Math.max(...crew.map(c=>Object.keys(c.monthly||{}).length), 0);
-  let hdr='ID,Name,Grade,Depot';
+  let hdr='ID,Name,Designation,Depot';
   for(let i=1;i<=cols;i++) hdr+=`,${i}`;
   hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
   let csv=hdr;
@@ -957,7 +957,7 @@ async function saveModal(){
     const bookTime=newStatus==='BK'?document.getElementById('mBookTime').value:'';
     const restStartInput=document.getElementById('mRestStart').value;
     if(newStatus==='R' && !isRestAllowedForGrade(currentModalGrade)){
-      alert('Resting can only be applied to Driver A or Driver B grades. Change the status before saving.');
+      alert('Resting can only be applied to Locomotive driver designation. Change the status before saving.');
       return;
     }
 
@@ -1038,7 +1038,7 @@ async function saveAddCrew(){
     const grade=document.getElementById('addGrade').value;
     const initStatus=document.getElementById('addStatus').value;
     if(initStatus==='R' && !isRestAllowedForGrade(grade)){
-      alert('Only Driver A/B grades may be added with Resting status. Please choose another status.');
+      alert('Only Locomotive driver may be added with Resting status. Please choose another status.');
       return;
     }
   }
@@ -1050,7 +1050,7 @@ async function saveAddCrew(){
       for(const line of lines){
         const parts=line.split(',').map(p=>p.trim());
         const name=parts[0];if(!name)continue;
-        const grade=parts[1]||'Driver A';const route=parts[2]||'';
+        const grade=parts[1]||'Locomotive driver';const route=parts[2]||'';
         await addSingleCrew(depot,name,grade,route,'SB');added++;
       }
       setLog(`${added} crew member(s) added to ${depot}.`);
@@ -1084,7 +1084,7 @@ function filterSearch(){const q=(document.getElementById('crewSearch')?.value||'
 /* ════════ EXPORT ══════════════════════════════════════════════════════════ */
 function exportCSV(){
   const d=currentUser.isHQ?DEPOTS:[currentUser.depot];const all=getAllCrew(state, d);
-  let csv='ID,Name,Grade,Depot,Route,Shift,Status,Train Type,Booked Time,Rest Remaining,Since,Notes\n';
+  let csv='ID,Name,Designation,Depot,Route,Shift,Status,Train Type,Booked Time,Rest Remaining,Since,Notes\n';
   all.forEach(c=>{
     const sec=restSecondsLeft(c);const rem=sec!==null&&sec>0?fmtCountdown(sec):(sec===0?'Complete':'-');
     csv+=`"${c.id}","${c.name}","${c.grade}","${c.depot}","${c.route||''}","${c.shift||''}","${STATUS_META[c.status]?.label||c.status}","${c.trainType||''}","${c.status==='BK'&&c.bookTime?c.bookTime:''}","${rem}","${c.since||''}","${(c.notes||'').replace(/"/g,"'")}"\n`;
@@ -1093,14 +1093,14 @@ function exportCSV(){
 }
 function exportMonthlyCSVLegacy(){
   const d=currentUser.isHQ?DEPOTS:[currentUser.depot];const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
-  let hdr='ID,Name,Grade,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
+  let hdr='ID,Name,Designation,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
   let csv=hdr;
   all.forEach(c=>{let row=`"${c.id}","${c.name}","${c.grade}","${c.depot}"`;const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};for(let i=1;i<=DAYS_IN_MON;i++){const code=(c.monthly&&c.monthly[`d${i}`])||'';if(sm[code]!==undefined)sm[code]++;row+=`,"${code}"`;}row+=`,${sm.BK},${sm.SB},${sm.R},${sm.L},${sm.SK},${sm.T},${sm.NTB},${sm.TO}`;csv+=row+'\n';});
   dlCSV(csv,`KR_Monthly_${MONTH_NAME.replace(' ','_')}.csv`);
 }
 function exportAbsenceCSV(){
   const d=currentUser.isHQ?DEPOTS:[currentUser.depot];const all=getAllCrew(state, d).filter(c=>['SK','L','NTB'].includes(c.status));
-  let csv='ID,Name,Grade,Depot,Status,NTB Reason/Notes,Last Updated\n';
+  let csv='ID,Name,Designation,Depot,Status,NTB Reason/Notes,Last Updated\n';
   all.forEach(c=>{csv+=`"${c.id}","${c.name}","${c.grade}","${c.depot}","${STATUS_META[c.status]?.label}","${(c.notes||'').replace(/"/g,"'")}","${c.lastUpdated||''}"\n`;});
   dlCSV(csv,`KR_Absences_${todayStr()}.csv`);
 }

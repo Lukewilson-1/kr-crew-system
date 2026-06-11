@@ -155,10 +155,10 @@
   <div id="addSingle">
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Full Name *</label>
     <input type="text" id="addName" placeholder="e.g. John Kamau Njoroge" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
-    <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Grade / Designation *</label>
+    <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Designation *</label>
     <select id="addGrade" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
-      <option>Driver A</option><option>Driver B</option><option>Guard</option>
-      <option>Shunter</option><option>Technician</option><option>Station Master</option><option>Instructor</option>
+      <option>Locomotive driver</option><option>Shunter driver</option><option>Train guard</option>
+      <option>RSf</option><option>LIO</option><option>Station master</option>
     </select>
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Route / Assignment</label>
     <input type="text" id="addRoute" placeholder="e.g. CGA–MTT" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
@@ -172,8 +172,8 @@
     </select>
   </div>
   <div id="addBulk" style="display:none">
-    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Grade, Route\n\nExamples:\nJames Kamau, Driver A, CGA-MTT\nMary Wanjiku, Guard, CGA-NBI\nPeter Ochieng, Shunter\n\nGrade and route are optional. All will be set to Standby initially."></textarea>
-    <div class="bulk-hint">Paste one crew member per line. Name is required; grade and route are optional (comma-separated). All will be set to Standby initially.</div>
+    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Designation, Route\n\nExamples:\nJames Kamau, Locomotive driver, CGA-MTT\nMary Wanjiku, Train guard, CGA-NBI\nPeter Ochieng, Shunter driver\n\nDesignation and route are optional. All will be set to Standby initially."></textarea>
+    <div class="bulk-hint">Paste one crew member per line. Name is required; designation and route are optional (comma-separated). All will be set to Standby initially.</div>
   </div>
   <div class="modal-btns" style="margin-top:14px">
     <button class="btn btn-ghost" onclick="closeAddModal()">Cancel</button>

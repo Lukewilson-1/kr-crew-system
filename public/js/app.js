@@ -1254,7 +1254,7 @@ async function renderAdmin(){
   const depotRecords = activeDepotMeta.length ? activeDepotMeta : getActiveDepots().map(depot=>({id:depot,label:depot,color:DEPOT_COLORS[depot]||'#37474F',restHours:REST_HOURS[depot]||12,active:true,order:getActiveDepots().indexOf(depot)+1}));
   const depotRows = depotRecords.map(meta=>{
     const active = meta.active !== false;
-    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.2fr 100px 80px 80px 70px;gap:8px;align-items:center;margin-bottom:8px">
+    return `<div class="admin-row">
       <input value="${meta.id}" data-admin-depot-id="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot id">
       <input value="${meta.label}" data-admin-depot-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
       <input value="${meta.color}" data-admin-depot-color="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#color">
@@ -1263,6 +1263,15 @@ async function renderAdmin(){
       <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('${meta.id}')">Save</button>
     </div>`;
   }).join('');
+
+  const newDepotRow = `<div class="admin-row">
+      <input value="" data-admin-depot-id="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="New depot id">
+      <input value="" data-admin-depot-label="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input value="#37474F" data-admin-depot-color="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#color">
+      <input type="number" value="12" min="1" data-admin-depot-hours="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Hours">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" data-admin-depot-active="newDepot"> Active</label>
+      <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('newDepot')">Add depot</button>
+    </div>`;
 
   const designationRows=Object.values(getDesignationRegistry()).sort((a,b)=>(a.order||999)-(b.order||999)||a.label.localeCompare(b.label)).map(meta=>{
     const aliases=(meta.aliases||[]).join(', ');
@@ -1275,6 +1284,15 @@ async function renderAdmin(){
       <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('${meta.id}')">Save</button>
     </div>`;
   }).join('');
+
+  const newDesignationRow = `<div class="admin-row">
+      <input value="" data-admin-desig-id="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="New designation id">
+      <input value="" data-admin-desig-label="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input value="" data-admin-desig-aliases="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Aliases">
+      <input type="number" value="999" data-admin-desig-order="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" min="0" placeholder="Order">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" data-admin-desig-rest="newDesignation"> Rest</label>
+      <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('newDesignation')">Add designation</button>
+    </div>`;
 
   const statusRows=STATUSES.map(statusId=>{
     const meta=STATUS_META[statusId]||{label:statusId,bg:'#ECEFF1',fg:'#37474F'};
@@ -1316,53 +1334,67 @@ async function renderAdmin(){
 
   if(pbody) {
     pbody.innerHTML=`
-    <div style="display:grid;gap:14px">
-      ${dbReady? '': '<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:var(--r);padding:12px 14px;font-size:12px;color:#7A4F01">Firebase is unavailable. Admin metadata changes are saved locally via SQLite.</div>'}
-      <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-        <div style="font-size:14px;font-weight:800;margin-bottom:4px">Admin backend</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Seed or refresh the data collections that drive the crew app.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div class="admin-panel">
+      ${dbReady? '': '<div class="admin-warning">Firebase is unavailable. Admin metadata changes are saved locally via SQLite.</div>'}
+      <div class="admin-card">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Admin backend</div>
+        </div>
+        <p>Seed or refresh the configuration collections that drive the app. Use local storage when Firestore is unavailable.</p>
+        <div class="admin-card-actions">
           <button class="btn btn-primary" onclick="seedFirestore()">Seed / refresh Firestore</button>
           <button class="btn btn-ghost" onclick="reloadAdminData()">Reload admin data</button>
         </div>
       </div>
-      <div class="admin-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-        <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-          <div style="font-size:13px;font-weight:800;margin-bottom:8px">Depots</div>
-          <div style="display:grid;grid-template-columns:1fr 1.2fr 100px 80px 80px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
+      <div class="admin-grid">
+        <div class="admin-card">
+          <div class="admin-section-header">
+            <div class="admin-section-title">Depots</div>
+          </div>
+          <div class="admin-row-header">
             <div>ID</div><div>Label</div><div>Color</div><div>Hours</div><div>Active</div><div></div>
           </div>
-          ${depotRows}
+          ${depotRows}${newDepotRow}
         </div>
-        <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-          <div style="font-size:13px;font-weight:800;margin-bottom:8px">Designations</div>
-          <div style="display:grid;grid-template-columns:1fr 1.3fr 1.2fr 70px 70px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
+        <div class="admin-card">
+          <div class="admin-section-header">
+            <div class="admin-section-title">Designations</div>
+          </div>
+          <div class="admin-row-header">
             <div>ID</div><div>Label</div><div>Aliases</div><div>Order</div><div>Rest</div><div></div>
           </div>
-          ${designationRows}
+          ${designationRows}${newDesignationRow}
         </div>
-        <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-          <div style="font-size:13px;font-weight:800;margin-bottom:8px">Status metadata</div>
-          <div style="display:grid;grid-template-columns:1fr 1.3fr 90px 90px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
-            <div>ID</div><div>Label</div><div>Background</div><div>Foreground</div><div></div>
+        <div class="admin-card">
+          <div class="admin-section-header">
+            <div class="admin-section-title">Status metadata</div>
+          </div>
+          <div class="admin-row-header">
+            <div>ID</div><div>Label</div><div>Background</div><div>Foreground</div><div></div><div></div>
           </div>
           ${statusRows}
         </div>
       </div>
-      <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-        <div style="font-size:13px;font-weight:800;margin-bottom:8px">Report templates</div>
-        <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr 1fr 60px 70px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
+      <div class="admin-card">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Report templates</div>
+        </div>
+        <div class="admin-row-header">
           <div>ID</div><div>Label</div><div>Type</div><div>Order</div><div>Visible</div><div></div>
         </div>
         ${reportRows}
       </div>
-      <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-        <div style="font-size:13px;font-weight:800;margin-bottom:6px">Crew upload options</div>
-        <div style="font-size:12px;color:var(--text2)">Use the Add Crew modal for quick bulk paste. A CSV import flow can be added next if you want file-based uploads.</div>
+      <div class="admin-card">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Crew upload options</div>
+        </div>
+        <p>Use the Add Crew modal for quick bulk paste. A CSV import flow can be added next if you want file-based uploads.</p>
       </div>
-      <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-        <div style="font-size:13px;font-weight:800;margin-bottom:8px">Users</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 80px;gap:8px;font-size:11px;color:var(--text2);margin-bottom:8px">
+      <div class="admin-card">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Users</div>
+        </div>
+        <div class="admin-row-header">
           <div>Username</div><div>Name</div><div>Depot</div><div>Role</div><div>Password</div><div></div>
         </div>
         ${userRows}
@@ -1381,7 +1413,11 @@ async function saveDepotMetaRecord(depotId){
   const colorEl = document.querySelector(`[data-admin-depot-color="${depotId}"]`);
   const hoursEl = document.querySelector(`[data-admin-depot-hours="${depotId}"]`);
   const activeEl = document.querySelector(`[data-admin-depot-active="${depotId}"]`);
-  const nextId = (idEl?.value||depotId).trim();
+  const nextId = idEl?.value?.trim() || '';
+  if(!nextId){
+    alert('Depot id cannot be blank');
+    return;
+  }
   const meta = {
     id: nextId,
     label: (labelEl?.value||nextId).trim(),
@@ -1414,17 +1450,23 @@ async function saveDesignationMetaRecord(designationId){
   const aliasesEl=document.querySelector(`[data-admin-desig-aliases="${designationId}"]`);
   const orderEl=document.querySelector(`[data-admin-desig-order="${designationId}"]`);
   const restEl=document.querySelector(`[data-admin-desig-rest="${designationId}"]`);
+  const idEl = document.querySelector(`[data-admin-desig-id="${designationId}"]`);
+  const nextId = idEl?.value?.trim() || '';
+  if(!nextId){
+    alert('Designation id cannot be blank');
+    return;
+  }
   const aliases = String(aliasesEl?.value||'').split(',').map(a=>a.trim()).filter(Boolean);
   const meta={
-    id:designationId,
-    label:(labelEl?.value||designationId).trim(),
+    id: nextId,
+    label:(labelEl?.value||nextId).trim(),
     aliases,
     restEligible:!!restEl?.checked,
     order:Number(orderEl?.value||999),
   };
   if(!db){
     try{
-      await saveLocalAdminRecord('designationMeta',designationId,meta);
+      await saveLocalAdminRecord('designationMeta',nextId,meta);
       await loadDesignationMeta();
       renderAdmin();
       setSyncStatus('ok','Local metadata saved');
@@ -1436,7 +1478,7 @@ async function saveDesignationMetaRecord(designationId){
       return;
     }
   }
-  await setDoc(doc(db,'designationMeta',designationId),meta,{merge:true});
+  await setDoc(doc(db,'designationMeta',nextId),meta,{merge:true});
   await loadDesignationMeta();
   renderAdmin();
 }

@@ -52,6 +52,7 @@
   <div class="sb-item" onclick="goPage('rest')" id="sb-rest"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Rest Countdowns</div>
   <div class="sb-item" onclick="goPage('monthly')" id="sb-monthly"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly View</div>
   <div class="sb-item" onclick="goPage('reports')" id="sb-reports"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>Reports</div>
+  <div class="sb-item" onclick="goPage('admin')" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin</div>
   <div id="depotSection" style="display:none">
     <div class="sb-sec">Depots</div>
     <div id="sbDepots"></div>
@@ -66,6 +67,30 @@
   <div id="pbody"></div>
 </div>
 </div>
+
+<template id="adminPanelTpl">
+  <div style="display:grid;gap:14px">
+    <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
+      <div style="font-size:14px;font-weight:800;margin-bottom:4px">Firestore maintenance</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Seed or refresh the data collections that drive the crew app.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="seedFirestore()">Seed / refresh Firestore</button>
+        <button class="btn btn-ghost" onclick="reloadAdminData()">Reload admin data</button>
+      </div>
+    </div>
+    <div class="admin-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+      <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px">Depots</div>
+        <div id="adminDepotsList"></div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px">Designations</div>
+        <div id="adminDesignationsList"></div>
+      </div>
+    </div>
+  </div>
+</template>
+
 <div id="logBar" style="background:#0F172A;padding:5px 18px;display:flex;align-items:center;gap:7px;flex-shrink:0">
   <div style="width:6px;height:6px;border-radius:50%;background:#69F0AE;animation:blink 2s infinite;flex-shrink:0"></div>
   <span id="logText" style="font-size:11px;color:rgba(255,255,255,.5);font-family:var(--mono)">System ready.</span>
@@ -153,12 +178,14 @@
     <button onclick="switchAddTab('bulk')" id="tab-bulk" style="padding:7px 14px;font-size:12px;font-weight:700;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text2);cursor:pointer">Bulk (paste list)</button>
   </div>
   <div id="addSingle">
+    <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Depot</label>
+    <select id="addDepot" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px"></select>
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Full Name *</label>
     <input type="text" id="addName" placeholder="e.g. John Kamau Njoroge" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
-    <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Grade / Designation *</label>
+    <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Designation *</label>
     <select id="addGrade" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
-      <option>Driver A</option><option>Driver B</option><option>Guard</option>
-      <option>Shunter</option><option>Technician</option><option>Station Master</option><option>Instructor</option>
+      <option value="locomotive_driver">Locomotive driver</option><option value="train_guard">train Guard</option>
+      <option value="shunter_driver">Shunter driver</option><option value="locomotive_inspecting_officer">Locomotive Inspecting Officer(LIO)</option><option value="station_master">station Master</option>
     </select>
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Route / Assignment</label>
     <input type="text" id="addRoute" placeholder="e.g. CGA–MTT" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
@@ -172,8 +199,8 @@
     </select>
   </div>
   <div id="addBulk" style="display:none">
-    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Grade, Route\n\nExamples:\nJames Kamau, Driver A, CGA-MTT\nMary Wanjiku, Guard, CGA-NBI\nPeter Ochieng, Shunter\n\nGrade and route are optional. All will be set to Standby initially."></textarea>
-    <div class="bulk-hint">Paste one crew member per line. Name is required; grade and route are optional (comma-separated). All will be set to Standby initially.</div>
+    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Designation, Route\n\nExamples:\nJames Kamau, Locomotive driver, CGA-MTT\nMary Wanjiku, train Guard, CGA-NBI\nPeter Ochieng, Shunter driver\n\nDesignation and route are optional. All will be set to Standby initially."></textarea>
+    <div class="bulk-hint">Paste one crew member per line. Name is required; designation and route are optional (comma-separated). All will be set to Standby initially.</div>
   </div>
   <div class="modal-btns" style="margin-top:14px">
     <button class="btn btn-ghost" onclick="closeAddModal()">Cancel</button>

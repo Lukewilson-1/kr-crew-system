@@ -1,6 +1,13 @@
 import { REST_HOURS, DRIVER_GRADES, STATUS_META } from './constants.js';
 
-export function getRestHours(depot){return REST_HOURS[depot]||12;}
+export function getRestHours(depotOrCrew){
+  if(!depotOrCrew) return 12;
+  if(typeof depotOrCrew === 'object'){
+    const crew = depotOrCrew;
+    return crew.awayDepot && crew.awayDepot !== crew.depot ? 10 : 12;
+  }
+  return REST_HOURS[depotOrCrew]||12;
+}
 function parseTimestamp(value){
   if(!value) return null;
   if(typeof value === 'string' || value instanceof String){
@@ -16,7 +23,7 @@ function parseTimestamp(value){
 
 export function restSecondsLeft(crew){
   if(crew.status!=='R'||!crew.restStarted) return null;
-  const maxH=getRestHours(crew.depot);
+  const maxH=getRestHours(crew);
   const startDate = parseTimestamp(crew.restStarted);
   if(!startDate) return null;
   const started=startDate.getTime();

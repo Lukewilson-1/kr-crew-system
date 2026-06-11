@@ -73,7 +73,7 @@
 </div>
 
 <div class="modal-ov" id="modal">
-<div class="modal-box">
+<div class="modal-box modal">
   <div class="modal-title" id="mTitle">Update status</div>
   <div class="modal-sub" id="mSub"></div>
   <label>Status</label>
@@ -107,15 +107,33 @@
     <input type="time" id="mRestStart" value="">
     <div style="font-size:11px;color:var(--text2);margin-top:3px" id="restDepotInfo"></div>
   </div>
-  <label>Route / Assignment</label>
-  <input type="text" id="mRoute" placeholder="e.g. Changamwe–Mtito Andei">
-  <label>Shift</label>
-  <select id="mShift">
-    <option>Day (06:00–14:00)</option>
-    <option>Afternoon (14:00–22:00)</option>
-    <option>Night (22:00–06:00)</option>
-    <option>N/A</option>
-  </select>
+  <div id="restLocationRow" style="display:none">
+    <label>Rest location</label>
+    <select id="mRestLocation" onchange="onRestLocationChange()">
+      <option value="home">Home depot</option>
+      <option value="away">Away depot</option>
+    </select>
+    <div id="awayDepotRow" style="margin-top:8px;display:none">
+      <label>Select away depot</label>
+      <select id="mAwayDepot"></select>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:3px" id="restLocationHint"></div>
+  </div>
+  <div class="modal-grid">
+    <div>
+      <label>Route / Assignment</label>
+      <input type="text" id="mRoute" placeholder="e.g. Changamwe–Mtito Andei">
+    </div>
+    <div>
+      <label>Shift</label>
+      <select id="mShift">
+        <option>Day (06:00–14:00)</option>
+        <option>Afternoon (14:00–22:00)</option>
+        <option>Night (22:00–06:00)</option>
+        <option>N/A</option>
+      </select>
+    </div>
+  </div>
   <label>NTB reason / Notes (optional)</label>
   <textarea id="mNotes" placeholder="Reason for NTB, or any other notes…"></textarea>
   <div class="modal-btns">
@@ -127,7 +145,7 @@
 </div>
 
 <div class="modal-ov" id="addModal">
-<div class="modal-box">
+<div class="modal-box modal">
   <div class="modal-title">Add crew members</div>
   <div class="modal-sub" id="addModalSub">Add one crew member or paste a list</div>
   <div id="addTabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px">

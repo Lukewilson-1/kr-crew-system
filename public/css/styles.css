@@ -270,6 +270,9 @@ tr:hover td{background:#FAFBFC}
 .modal-btns{display:flex;justify-content:flex-end;gap:7px;margin-top:14px}
 #trainTypeRow{display:none}
 #restHoursRow{display:none}
+#restLocationRow{display:none}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-grid > div{display:flex;flex-direction:column;}
 /* Bulk add area */
 .bulk-area{width:100%;min-height:100px;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:11px;font-family:var(--mono);color:var(--dark);outline:none;resize:vertical;transition:border-color .15s}
 .bulk-area:focus{border-color:var(--kr-red)}

@@ -8,6 +8,8 @@ const DEPOT_COLORS={Changamwe:'#1B5E20',Mtito:'#0D47A1',Makadara:'#4A148C',Nakur
 // 12h for Changamwe, Makadara, Kisumu, Eldoret
 // 10h for Mtito, Nakuru, Malaba, Sagana
 const REST_HOURS={Changamwe:12,Makadara:12,Kisumu:12,Eldoret:12,Mtito:10,Nakuru:10,Malaba:10,Sagana:10};
+const HOME_REST_HOURS=12;
+const AWAY_REST_HOURS=10;
 const DEFAULT_STATUS_META={
   BK:{label:'Booked',    bg:'#E8F5E9',fg:'#1B5E20'},
   SB:{label:'Standby',   bg:'#E3F2FD',fg:'#0D47A1'},
@@ -170,7 +172,8 @@ async function checkRestExpirations(){
       if(c.status==='R'&&DRIVER_GRADES.includes(c.grade)){
         const sec=restSecondsLeft(c);
         if(sec!==null&&sec<=0){
-          const updates={status:'SB',since:fmtTime(new Date()),restStarted:null,updatedBy:'Auto-system',notes:`Auto-promoted from Resting after ${getRestHours(depot)}h`};
+          const hours = getRestHours(c);
+          const updates={status:'SB',since:fmtTime(new Date()),restStarted:null,updatedBy:'Auto-system',notes:`Auto-promoted from Resting after ${hours}h`};
           await writeCrewDoc(depot,c.id,updates);
           setLog(`${c.name} (${depot}) rest period complete - auto-promoted to Standby`);
         }
@@ -189,7 +192,7 @@ function useDemoMode(){
       const monthly={};
       for(let d=1;d<=DAYS_IN_MON;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const pool=we?['R','R','SB']:['BK','BK','BK','SB','L','SK','T','R','NTB'];monthly[`d${d}`]=pool[(i*7+d*3)%pool.length];}
       const todaySt=monthly[`d${CD}`]||'SB';
-      state[depot][c.id]={...c,depot,status:todaySt,trainType:todaySt==='BK'?TRAIN_TYPES[i%TRAIN_TYPES.length]:'',shift:'Day (06:00–14:00)',notes:'',since:'06:00',monthly,restStarted:todaySt==='R'?new Date(Date.now()-3*3600*1000).toISOString():null,updatedBy:'System',lastUpdated:new Date().toISOString()};
+      state[depot][c.id]={...c,depot,status:todaySt,trainType:todaySt==='BK'?TRAIN_TYPES[i%TRAIN_TYPES.length]:'',shift:'Day (06:00–14:00)',notes:'',since:'06:00',monthly,restStarted:todaySt==='R'?new Date(Date.now()-3*3600*1000).toISOString():null,awayDepot:null,updatedBy:'System',lastUpdated:new Date().toISOString()};
     });
   }
   document.getElementById('loginPage').classList.add('show');
@@ -209,7 +212,7 @@ async function seedDepotIfEmpty(depot){
     const ts=monthly[`d${CD}`]||'SB';
     const restStarted = ts==='R' ? new Date().toISOString() : null;
     const ref=doc(db,'crew',`${depot}_${c.id}`);
-    batch.set(ref,{...c,depot,status:ts,trainType:ts==='BK'?TRAIN_TYPES[i%5]:'',shift:'Day (06:00–14:00)',notes:'',since:'06:00',monthly,restStarted,updatedBy:'System',lastUpdated:serverTimestamp(),monthKey:MONTH_KEY});
+    batch.set(ref,{...c,depot,status:ts,trainType:ts==='BK'?TRAIN_TYPES[i%5]:'',shift:'Day (06:00–14:00)',notes:'',since:'06:00',monthly,restStarted,awayDepot:null,updatedBy:'System',lastUpdated:serverTimestamp(),monthKey:MONTH_KEY});
   });
   await batch.commit();
 }
@@ -511,6 +514,7 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
       <thead><tr>
         <th>ID</th><th>Name / Grade</th>
         ${showDepotCol?'<th>Depot</th>':''}
+        <th>Rest location</th>
         <th>Route</th><th>Shift</th><th>Status</th><th>Train Type</th><th>Depart</th>
         <th>Rest Countdown</th><th>Since</th><th>Notes</th>
         ${editable?'<th class="no-print"></th>':''}
@@ -523,7 +527,7 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
     const m=STATUS_META[c.status]||{label:c.status};
     const dc=DEPOT_COLORS[c.depot]||'#37474F';
     const sec=restSecondsLeft(c);
-    const maxH=getRestHours(c.depot);
+    const maxH=getRestHours(c);
     let cdHtml='<span style="color:var(--text3);font-size:11px">-</span>';
     if(c.status==='R'&&DRIVER_GRADES.includes(c.grade)){
       if(sec===null){cdHtml=`<span style="font-size:10px;color:var(--text2)">No start time</span>`;}
@@ -534,6 +538,7 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
       <td style="font-size:11px;color:var(--text3);font-family:var(--mono)">${c.id}</td>
       <td><div class="nm"><div class="avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div><strong>${c.name}</strong><span>${c.grade}</span></div></div></td>
       ${showDepotCol?`<td><span style="color:${dc};font-weight:700">${c.depot}</span></td>`:''}
+      <td style="font-size:11px;color:${c.awayDepot?'var(--kr-red)':'var(--text3)'}">${c.awayDepot?`${c.awayDepot} (away)`:'Home'}</td>
       <td style="font-size:11px">${c.route||'-'}</td>
       <td style="color:var(--text3);font-size:10px">${c.shift||'-'}</td>
       <td><span class="badge bd-${c.status}">${m.label}</span></td>
@@ -559,8 +564,8 @@ function updateCountdownsInTable(){
     const barEl=document.getElementById(`cdb-${c.depot}-${c.id}`);
     if(!textEl)return;
     if(sec<=0){textEl.parentElement.parentElement.innerHTML=`<span class="cd-done">→ Standby</span>`;return;}
-    const cl=cdClass(sec,getRestHours(c.depot));
-    const pct=Math.round((sec/(getRestHours(c.depot)*3600))*100);
+    const cl=cdClass(sec,getRestHours(c));
+    const pct=Math.round((sec/(getRestHours(c)*3600))*100);
     textEl.textContent=fmtCountdown(sec);
     textEl.className=`cd-text ${cl}`;
     if(barEl){barEl.className=`cd-bar cd-${cl}`;barEl.style.width=pct+'%';}
@@ -585,8 +590,9 @@ function renderRest(){
     html+=`<div class="rest-grid" id="restGrid">`;
     resting.sort((a,b)=>{const sa=restSecondsLeft(a)??999999;const sb=restSecondsLeft(b)??999999;return sa-sb;}).forEach((c,i)=>{
       const [abg,afc]=AVT_PAL[i%AVT_PAL.length];
-      const sec=restSecondsLeft(c);const maxH=getRestHours(c.depot);
-      if(sec===null){html+=`<div class="rest-card ok"><div class="avt rest-avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div class="rest-info"><div class="rest-name">${c.name}</div><div class="rest-depot">${c.depot} · ${c.grade}</div></div><div class="rest-cd"><span style="font-size:11px;color:var(--text2)">No start time set</span></div></div>`;return;}
+      const sec=restSecondsLeft(c);const maxH=getRestHours(c);
+      const restLocation = c.awayDepot && c.awayDepot !== c.depot ? `Away: ${c.awayDepot} (Home: ${c.depot})` : `Home: ${c.depot}`;
+      if(sec===null){html+=`<div class="rest-card ok"><div class="avt rest-avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div class="rest-info"><div class="rest-name">${c.name}</div><div class="rest-depot">${restLocation} · ${c.grade}</div></div><div class="rest-cd"><span style="font-size:11px;color:var(--text2)">No start time set</span></div></div>`;return;}
       const cl=sec<=0?'done':cdClass(sec,maxH);
       const pct=sec<=0?100:Math.round(((maxH*3600-sec)/(maxH*3600))*100);
       const timeStr=sec<=0?'COMPLETE':fmtCountdown(sec);
@@ -595,7 +601,7 @@ function renderRest(){
         <div class="avt rest-avt" style="background:${abg};color:${afc}">${initials(c.name)}</div>
         <div class="rest-info">
           <div class="rest-name">${c.name}</div>
-          <div class="rest-depot">${c.depot} · ${c.grade} · ${maxH}h rest</div>
+          <div class="rest-depot">${restLocation} · ${c.grade} · ${maxH}h rest</div>
           <div style="font-size:10px;color:var(--text2);margin-top:2px">Started: ${c.restStarted?fmtTime(new Date(c.restStarted)):'-'}</div>
         </div>
         <div class="rest-cd">
@@ -607,12 +613,10 @@ function renderRest(){
     });
     html+=`</div>`;
   }
-  html+=`<div class="divider"></div><div class="sec-hdr"><span class="sec-title">Rest rules by depot</span></div>`;
+  html+=`<div class="divider"></div><div class="sec-hdr"><span class="sec-title">Rest rules</span></div>`;
   html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px">`;
-  Object.entries(REST_HOURS).forEach(([depot,hrs])=>{
-    const col=DEPOT_COLORS[depot]||'#455A64';
-    html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${col};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">${depot}</div><div style="font-size:11px;color:var(--text2)">${hrs}h rest period</div></div></div>`;
-  });
+  html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Changamwe};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Home depot</div><div style="font-size:11px;color:var(--text2)">${HOME_REST_HOURS}h rest period</div></div></div>`;
+  html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Mtito};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Away depot</div><div style="font-size:11px;color:var(--text2)">${AWAY_REST_HOURS}h rest period</div></div></div>`;
   html+=`</div>`;
   document.getElementById('pbody').innerHTML=html;
   // Live tick for rest page
@@ -624,7 +628,7 @@ function renderRest(){
       const tel=document.getElementById(`rcd-${c.depot}-${c.id}`);
       const bel=document.getElementById(`rcdbar-${c.depot}-${c.id}`);
       if(!tel)return;
-      const maxH=getRestHours(c.depot);
+      const maxH=getRestHours(c);
       if(sec<=0){tel.textContent='COMPLETE';tel.style.color='var(--standby)';if(bel){bel.style.width='100%';bel.style.background='var(--standby)';}return;}
       const cl=cdClass(sec,maxH);const pct=Math.round(((maxH*3600-sec)/(maxH*3600))*100);
       const colMap={ok:'var(--countdown-ok)',warn:'var(--countdown-warn)',crit:'var(--countdown-crit)'};
@@ -857,11 +861,44 @@ function onStatusChange(){
   const s=document.getElementById('mStatus').value;
   document.getElementById('trainTypeRow').style.display=s==='BK'?'block':'none';
   document.getElementById('restHoursRow').style.display=s==='R'?'block':'none';
-  if(s==='R'&&editKey){
-    const maxH=getRestHours(editKey.depot);
-    document.getElementById('restDepotInfo').textContent=`${editKey.depot} depot - ${maxH}h rest period. Driver auto-promoted to Standby after ${maxH}h.`;
+  document.getElementById('restLocationRow').style.display=s==='R'?'block':'none';
+  if(s==='R'){
+    if(editKey && editKey.depot) setAwayDepotOptions(editKey.depot, document.getElementById('mAwayDepot')?.value||'');
+    onRestLocationChange();
+  } else {
+    document.getElementById('restLocationHint').textContent='';
+    document.getElementById('awayDepotRow').style.display='none';
   }
   updateStatusValidation();
+}
+
+function onRestLocationChange(){
+  const loc=document.getElementById('mRestLocation').value;
+  const awayRow=document.getElementById('awayDepotRow');
+  awayRow.style.display=loc==='away'?'block':'none';
+  updateRestLocationHint();
+}
+
+function updateRestLocationHint(){
+  const s=document.getElementById('mStatus').value;
+  const info=document.getElementById('restDepotInfo');
+  const hint=document.getElementById('restLocationHint');
+  if(s!=='R'){ if(info) info.textContent=''; if(hint) hint.textContent=''; return; }
+  const homeDepot = editKey?.depot || 'Home';
+  if(info) info.textContent=`${homeDepot} depot - ${HOME_REST_HOURS}h rest period when resting at home.`;
+  const loc=document.getElementById('mRestLocation').value;
+  if(loc==='away'){
+    const away=document.getElementById('mAwayDepot')?.value||'selected away depot';
+    if(hint) hint.textContent=`Away depot rest is ${AWAY_REST_HOURS}h. Current away depot: ${away}.`;
+  } else {
+    if(hint) hint.textContent=`Home depot rest is ${HOME_REST_HOURS}h.`;
+  }
+}
+
+function setAwayDepotOptions(homeDepot,selectedAway=''){
+  const awaySelect=document.getElementById('mAwayDepot');
+  if(!awaySelect) return;
+  awaySelect.innerHTML=DEPOTS.filter(d=>d!==homeDepot).map(d=>`<option value="${d}"${d===selectedAway?' selected':''}>${d}</option>`).join('');
 }
 
 function openUpdate(depot,id){
@@ -881,9 +918,10 @@ function openUpdate(depot,id){
     const restDate = c.restStarted && c.restStarted.toDate ? c.restStarted.toDate() : new Date(c.restStarted);
     document.getElementById('mRestStart').value=isNaN(restDate.getTime())?new Date().toTimeString().substring(0,5):restDate.toTimeString().substring(0,5);
   } else document.getElementById('mRestStart').value=new Date().toTimeString().substring(0,5);
-  // Show remove button only for live status edits (not day edits) by depot officers
-  document.getElementById('mRemoveBtn').style.display=(!currentUser.isHQ)?'inline-flex':'none';
+  document.getElementById('mRestLocation').value=c.awayDepot && c.awayDepot!==depot?'away':'home';
+  setAwayDepotOptions(depot,c.awayDepot);
   onStatusChange();
+  document.getElementById('mRemoveBtn').style.display=(!currentUser.isHQ)?'inline-flex':'none';
   document.getElementById('modal').classList.add('open');
 }
 
@@ -900,8 +938,10 @@ function openDayEdit(depot,id,day){
   document.getElementById('mRoute').value=c.route||'';
   document.getElementById('mShift').value=c.shift||'Day (06:00–14:00)';document.getElementById('mNotes').value='';
   document.getElementById('mRestStart').value=new Date().toTimeString().substring(0,5);
-  document.getElementById('mRemoveBtn').style.display='none';
+  document.getElementById('mRestLocation').value='home';
+  setAwayDepotOptions(depot,'');
   onStatusChange();
+  document.getElementById('mRemoveBtn').style.display='none';
   updateStatusValidation();
   document.getElementById('modal').classList.add('open');
 }
@@ -924,7 +964,9 @@ async function saveModal(){
     if(editKey.day){
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
       const monthly={...(c.monthly||{})};monthly[`d${editKey.day}`]=newStatus;
-      const upd={monthly};
+      const restLocation=document.getElementById('mRestLocation').value;
+      const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
+      const upd={monthly,awayDepot};
       if(editKey.day===CD){upd.status=newStatus;upd.trainType=trainType;upd.bookTime=bookTime;upd.since=fmtTime(new Date());upd.updatedBy=currentUser.username;if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);upd.restStarted=rs.toISOString();}else if(newStatus!=='R')upd.restStarted=null;}
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name} Day ${editKey.day} → ${STATUS_META[newStatus]?.label}`);
@@ -934,7 +976,9 @@ async function saveModal(){
       let restStarted=c.restStarted||null;
       if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);restStarted=rs.toISOString();}
       else if(newStatus!=='R')restStarted=null;
-      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly};
+      const restLocation=document.getElementById('mRestLocation').value;
+      const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
+      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,awayDepot: newStatus==='R'?awayDepot:null};
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${trainType?' ('+trainType+')':''}${bookTime?' @ '+bookTime:''}`);
     }
@@ -1028,7 +1072,7 @@ async function addSingleCrew(depot,name,grade,route,initStatus){
   let num=1;while(existing.includes(`${prefix}-${String(num).padStart(3,'0')}`))num++;
   const id=`${prefix}-${String(num).padStart(3,'0')}`;
   const monthly={};for(let d=1;d<=DAYS_IN_MON;d++)monthly[`d${d}`]='';monthly[`d${CD}`]=initStatus;
-  const obj={id,name,grade,depot,route,shift:'Day (06:00-14:00)',status:initStatus,trainType:'',notes:'',since:fmtTime(new Date()),monthly,restStarted:null,updatedBy:currentUser.username,monthKey:MONTH_KEY};
+  const obj={id,name,grade,depot,route,shift:'Day (06:00-14:00)',status:initStatus,trainType:'',notes:'',since:fmtTime(new Date()),monthly,restStarted:null,awayDepot:null,updatedBy:currentUser.username,monthKey:MONTH_KEY};
   await addCrewDoc(depot,obj);
 }
 
@@ -1047,7 +1091,7 @@ function exportCSV(){
   });
   dlCSV(csv,`KR_Status_${todayStr()}.csv`);
 }
-function exportMonthlyCSV(){
+function exportMonthlyCSVLegacy(){
   const d=currentUser.isHQ?DEPOTS:[currentUser.depot];const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
   let hdr='ID,Name,Grade,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
   let csv=hdr;
@@ -1096,7 +1140,7 @@ window.seedFirestore = async () => {
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeAddModal();}});
 ['lUser','lPass'].forEach(id=>{document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});});
 
-window.addEventListener('DOMContentLoaded', async ()=>{
+async function bootApp(){
   const cfg = await loadFirebaseConfig();
   if(cfg && cfg.apiKey && cfg.projectId){
     const ok = initFirebase(cfg);
@@ -1123,4 +1167,11 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     const errEl = document.getElementById('loginErr');
     if(errEl) errEl.textContent = 'Firebase .env config not found. Create a .env file and reload.';
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootApp);
+} else {
+  bootApp();
+}
+

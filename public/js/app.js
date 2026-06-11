@@ -1,6 +1,6 @@
 import { initFirebase, loadFirebaseConfig, db, demoMode, setDemoMode } from './firebase.js';
 import { getRestHours, restSecondsLeft, fmtCountdown, cdClass, getAllCrew, cts, initials, fmtTime, todayStr, fmtLastUpd, kpiHtml, dlCSV } from './helpers.js';
-import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, isDesignationRestEligible, normalizeDesignation, setDesignationRegistry, setDepotConfig, setStatusConfig } from './constants.js';
+import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, getDesignationRegistry, isDesignationRestEligible, normalizeDesignation, setDesignationRegistry, setDepotConfig, setStatusConfig } from './constants.js';
 import { collection, query, where, onSnapshot, getDocs, getDoc, doc, setDoc, deleteDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 /* ════════ CONSTANTS ════════════════════════════════════════════════════════ */
 const HOME_REST_HOURS=12;
@@ -48,6 +48,10 @@ let listeners=[];
 let currentPage='dashboard',activeFilter='all',hqDepotView='all',editKey=null;
 let cdInterval=null; // countdown ticker
 let currentModalGrade=null;
+let depotMetadataCache={};
+let designationMetadataCache={};
+let statusMetadataCache={};
+let userMetadataCache={};
 const SESSION_KEY='KR_Crew_Session';
 
 function setHqDepotView(value){
@@ -58,6 +62,62 @@ function setHqDepotView(value){
 
 function getActiveDepots(){
   return DEPOTS;
+}
+
+function getAllDepotMetadata(){
+  return Object.values(depotMetadataCache).sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+}
+
+function getAllDesignationMetadata(){
+  return Object.values(designationMetadataCache).sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+}
+
+function getAllStatusMetadata(){
+  return Object.values(statusMetadataCache).sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+}
+
+function setDepotMetadata(records){
+  depotMetadataCache={};
+  records.forEach(record=>{ if(record && record.id) depotMetadataCache[record.id] = record; });
+}
+
+function setDesignationMetadata(records){
+  designationMetadataCache={};
+  records.forEach(record=>{ if(record && record.id) designationMetadataCache[record.id] = record; });
+}
+
+function setStatusMetadata(records){
+  statusMetadataCache={};
+  records.forEach(record=>{ if(record && record.id) statusMetadataCache[record.id] = record; });
+}
+
+function setUserMetadata(records){
+  userMetadataCache = records || [];
+}
+
+function getCsrfToken(){
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+async function fetchLocalAdminMeta(){
+  const resp = await fetch('/admin/meta', {cache:'no-store'});
+  if(!resp.ok){
+    throw new Error(`Local admin meta fetch failed (${resp.status})`);
+  }
+  return resp.json();
+}
+
+async function saveLocalAdminRecord(collection,id,payload){
+  const resp = await fetch(`/admin/meta/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRF-TOKEN':getCsrfToken()},
+    body: JSON.stringify(payload),
+  });
+  if(!resp.ok){
+    const text = await resp.text();
+    throw new Error(text || `Local admin save failed (${resp.status})`);
+  }
+  return resp.json();
 }
 
 function hasGlobalAccess(){
@@ -188,14 +248,14 @@ async function seedDepotIfEmpty(depot){
   return;
 }
 
-function normalizeDepotMetaRecord(docSnap){
-  const data=docSnap.data();
-  const id=data.id||docSnap.id;
+function normalizeDepotMetaRecord(docSnapOrData){
+  const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
+  const id = data?.id || (docSnapOrData?.id||docSnapOrData?.record_id);
   if(!id) return null;
   return {
     id,
-    label:data.label||id,
-    color:data.color||DEPOT_COLORS[id]||'#37474F',
+    label:String(data.label||id),
+    color:String(data.color||DEPOT_COLORS[id]||'#37474F'),
     restHours:typeof data.restHours==='number'?data.restHours:(REST_HOURS[id]||12),
     order:typeof data.order==='number'?data.order:999,
     active:data.active!==false,
@@ -208,28 +268,59 @@ async function seedDepotMetaIfEmpty(){
 }
 
 async function loadDepotMeta(){
-  if(!db) return;
+  if(!db){
+    return await loadLocalDepotMeta();
+  }
   try{
     const snap = await getDocs(collection(db,'depotMeta'));
     if(snap.empty){
       setDepotConfig([], {}, {});
+      setDepotMetadata([]);
       return;
     }
-    const records=[];
+    const allRecords=[];
+    const activeRecords=[];
     const colors={};
     const hours={};
     snap.forEach(docSnap=>{
       const meta=normalizeDepotMetaRecord(docSnap);
       if(!meta) return;
+      allRecords.push(meta);
+      if(meta.active) activeRecords.push(meta);
       colors[meta.id]=meta.color;
       hours[meta.id]=meta.restHours;
-      if(meta.active) records.push(meta);
     });
-    records.sort((a,b)=>(a.order??999)-(b.order??999)||a.label.localeCompare(b.label));
-    setDepotConfig(records.map(meta=>meta.id), colors, hours);
+    allRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+    activeRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+    setDepotMetadata(allRecords);
+    setDepotConfig(activeRecords.map(meta=>meta.id), colors, hours);
   }catch(err){
     console.error('Failed to load depot metadata',err);
     setDepotConfig([], {}, {});
+    setDepotMetadata([]);
+  }
+}
+
+async function loadLocalDepotMeta(){
+  try{
+    const data = await fetchLocalAdminMeta();
+    const records = (data.depotMeta||[]).map(normalizeDepotMetaRecord).filter(Boolean);
+    const colors={};
+    const hours={};
+    const activeRecords = [];
+    records.forEach(meta=>{
+      colors[meta.id]=meta.color;
+      hours[meta.id]=meta.restHours;
+      if(meta.active) activeRecords.push(meta);
+    });
+    activeRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+    records.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+    setDepotMetadata(records);
+    setDepotConfig(activeRecords.map(meta=>meta.id), colors, hours);
+  }catch(err){
+    console.error('Failed to load local depot metadata',err);
+    setDepotConfig([], {}, {});
+    setDepotMetadata([]);
   }
 }
 
@@ -239,17 +330,20 @@ async function seedStatusMetaIfEmpty(){
 }
 
 async function loadStatusMeta(){
-  if(!db) return;
+  if(!db){
+    return await loadLocalStatusMeta();
+  }
   try{
     const snap = await getDocs(query(collection(db,'statusMeta')));
     if(snap.empty){
       setStatusConfig([], {});
+      setStatusMetadata([]);
       return;
     }
     const meta={};
     const order=[];
     snap.forEach(docSnap=>{
-      const data=docSnap.data();
+      const data = docSnap.data();
       const id=data.id||docSnap.id;
       if(!id) return;
       meta[id]={label:data.label||id,bg:data.bg||'#ECEFF1',fg:data.fg||'#37474F'};
@@ -257,19 +351,54 @@ async function loadStatusMeta(){
     });
     order.sort((a,b)=>a.order-b.order);
     setStatusConfig(order.map(x=>x.id), meta);
+    setStatusMetadata(order.map(x=>({id:x.id,label:meta[x.id].label,bg:meta[x.id].bg,fg:meta[x.id].fg,order:x.order})));
   }catch(err){
     console.error('Failed to load status metadata',err);
     setStatusConfig([], {});
+    setStatusMetadata([]);
   }
 }
 
-function normalizeDesignationMetaRecord(docSnap){
-  const data=docSnap.data();
-  const id=data.id||docSnap.id;
+function normalizeStatusMetaRecord(docSnapOrData){
+  const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
+  const id = data?.id || docSnapOrData?.id || docSnapOrData?.record_id;
   if(!id) return null;
   return {
     id,
-    label:data.label||id,
+    label:String(data.label||id),
+    bg:String(data.bg||'#ECEFF1'),
+    fg:String(data.fg||'#37474F'),
+    order:typeof data.order==='number'?data.order:999,
+  };
+}
+
+async function loadLocalStatusMeta(){
+  try{
+    const data = await fetchLocalAdminMeta();
+    const records = (data.statusMeta||[]).map(normalizeStatusMetaRecord).filter(Boolean);
+    const meta={};
+    const order=[];
+    records.forEach(rec=>{
+      meta[rec.id] = {label:rec.label,bg:rec.bg,fg:rec.fg};
+      order.push({id:rec.id,order:rec.order||999});
+    });
+    order.sort((a,b)=>a.order-b.order);
+    setStatusConfig(order.map(x=>x.id), meta);
+    setStatusMetadata(records.sort((a,b)=> (a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id))));
+  }catch(err){
+    console.error('Failed to load local status metadata',err);
+    setStatusConfig([], {});
+    setStatusMetadata([]);
+  }
+}
+
+function normalizeDesignationMetaRecord(docSnapOrData){
+  const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
+  const id = data?.id || docSnapOrData?.id || docSnapOrData?.record_id;
+  if(!id) return null;
+  return {
+    id,
+    label:String(data.label||id),
     aliases:Array.isArray(data.aliases)?data.aliases:data.aliases?String(data.aliases).split(',').map(v=>v.trim()).filter(Boolean):[],
     restEligible:data.restEligible!==false,
     order:typeof data.order==='number'?data.order:999,
@@ -282,22 +411,43 @@ async function seedDesignationMetaIfEmpty(){
 }
 
 async function loadDesignationMeta(){
-  if(!db) return;
+  if(!db){
+    return await loadLocalDesignationMeta();
+  }
   try{
     const snap = await getDocs(collection(db,'designationMeta'));
     if(snap.empty){
       setDesignationRegistry({});
+      setDesignationMetadata([]);
       return;
     }
     const registry={};
+    const records=[];
     snap.forEach(docSnap=>{
       const meta=normalizeDesignationMetaRecord(docSnap);
-      if(meta) registry[meta.id]=meta;
+      if(meta){ registry[meta.id]=meta; records.push(meta);}   
     });
     setDesignationRegistry(registry);
+    setDesignationMetadata(records);
   }catch(err){
     console.error('Failed to load designation metadata',err);
     setDesignationRegistry({});
+    setDesignationMetadata([]);
+  }
+}
+
+async function loadLocalDesignationMeta(){
+  try{
+    const data = await fetchLocalAdminMeta();
+    const records = (data.designationMeta||[]).map(normalizeDesignationMetaRecord).filter(Boolean);
+    const registry={};
+    records.forEach(meta => registry[meta.id]=meta);
+    setDesignationRegistry(registry);
+    setDesignationMetadata(records);
+  }catch(err){
+    console.error('Failed to load local designation metadata',err);
+    setDesignationRegistry({});
+    setDesignationMetadata([]);
   }
 }
 
@@ -382,10 +532,9 @@ async function seedFirestoreUsers(){
   populateStatusSelects();
 }
 
-async function normalizeReportMetaRecord(docSnap){
-  const data = docSnap.data();
-  if(!data) return null;
-  const id = data.id || docSnap.id;
+function normalizeReportMetaRecord(docSnapOrData){
+  const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
+  const id = data?.id || docSnapOrData?.id || docSnapOrData?.record_id;
   if(!id) return null;
   return {
     id,
@@ -399,12 +548,38 @@ async function normalizeReportMetaRecord(docSnap){
 }
 
 async function seedReportMetaIfEmpty(){
-  // No default report templates are seeded. Use Firestore reportMeta documents only.
-  return;
+  const defaults = [
+    {id:'daily_status',label:'Daily booking status',description:'Export current crew booking statuses across depots.',reportType:'status',buttonText:'Download',visible:true,order:100},
+    {id:'monthly_register',label:'Monthly register',description:'Download the monthly register for any selected month.',reportType:'monthly',buttonText:'Download',visible:true,order:200},
+    {id:'utilization_summary',label:'Utilization summary',description:'Export crew utilization metrics for a selected time window.',reportType:'utilization',buttonText:'Export',visible:true,order:300},
+    {id:'absence_report',label:'Absence / NTB',description:'Download absence and NTB crew records.',reportType:'absence',buttonText:'Download',visible:true,order:400},
+    {id:'print_register',label:'Printable register',description:'Open the printable register view for the current month.',reportType:'print',buttonText:'Print',visible:true,order:500},
+  ];
+  if(!db){
+    try{
+      const data = await fetchLocalAdminMeta();
+      if((data.reportMeta||[]).length) return;
+      await Promise.all(defaults.map(meta=>saveLocalAdminRecord('reportMeta', meta.id, meta)));
+      console.info('Seeded local report templates.');
+    }catch(err){
+      console.error('Failed to seed local report metadata',err);
+    }
+    return;
+  }
+  try{
+    const snap = await getDocs(collection(db,'reportMeta'));
+    if(!snap.empty) return;
+    await Promise.all(defaults.map(meta=>setDoc(doc(db,'reportMeta',meta.id),meta)));
+    console.info('Seeded default report templates.');
+  }catch(err){
+    console.error('Failed to seed report metadata',err);
+  }
 }
 
 async function loadReportMeta(){
-  if(!db) return;
+  if(!db){
+    return await loadLocalReportMeta();
+  }
   try{
     const snap = await getDocs(collection(db,'reportMeta'));
     const templates = {};
@@ -415,6 +590,21 @@ async function loadReportMeta(){
     REPORT_TEMPLATES = templates;
   }catch(err){
     console.error('Failed to load report metadata',err);
+    REPORT_TEMPLATES = {};
+  }
+}
+
+async function loadLocalReportMeta(){
+  try{
+    const data = await fetchLocalAdminMeta();
+    const templates = {};
+    (data.reportMeta||[]).forEach(item=>{
+      const meta = normalizeReportMetaRecord(item);
+      if(meta) templates[meta.id] = meta;
+    });
+    REPORT_TEMPLATES = templates;
+  }catch(err){
+    console.error('Failed to load local report metadata',err);
     REPORT_TEMPLATES = {};
   }
 }
@@ -798,17 +988,32 @@ function renderReports(){
   const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   const all=getAllCrew(state, depots);const c=cts(all);
   const templates=getReportTemplates();
-  const cards=templates.map(meta=>{
-    let paramRow='';
-    if(meta.reportType==='monthly'){
-      paramRow=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><select id="reportMonth" class="sel-sm no-print">${monthOptions}</select><button class="btn btn-primary btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button></div>`;
-    } else if(meta.reportType==='utilization'){
-      paramRow=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><select id="utilWindow" class="sel-sm no-print" onchange="updateReportSummary()"><option value="month">This month</option><option value="quarter">Last quarter</option><option value="90d">Last 90 days</option><option value="180d">Last 180 days</option><option value="365d">Last 365 days</option></select><button class="btn btn-primary btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button></div><div id="utilSummary" class="rep-note" style="margin-top:12px;color:var(--text2)">Choose a time window to preview utilization metrics.</div>`;
-    } else {
-      paramRow=`<button class="btn ${meta.reportType==='print'?'btn-ghost':'btn-primary'} btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button>`;
-    }
-    return `<div class="rep-card"><h3>${meta.reportType==='print'?'🖨 ':meta.reportType==='status'?'📊 ':meta.reportType==='monthly'?'📅 ':meta.reportType==='utilization'?'📈 ':''}${meta.label}</h3><p>${meta.description}</p>${paramRow}</div>`;
-  }).join('');
+  let cards='';
+  if(templates.length){
+    cards = templates.map(meta=>{
+      let paramRow='';
+      if(meta.reportType==='monthly'){
+        paramRow=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><select id="reportMonth" class="sel-sm no-print">${monthOptions}</select><button class="btn btn-primary btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button></div>`;
+      } else if(meta.reportType==='utilization'){
+        paramRow=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px"><select id="utilWindow" class="sel-sm no-print" onchange="updateReportSummary()"><option value="month">This month</option><option value="quarter">Last quarter</option><option value="90d">Last 90 days</option><option value="180d">Last 180 days</option><option value="365d">Last 365 days</option></select><button class="btn btn-primary btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button></div><div id="utilSummary" class="rep-note" style="margin-top:12px;color:var(--text2)">Choose a time window to preview utilization metrics.</div>`;
+      } else {
+        paramRow=`<button class="btn ${meta.reportType==='print'?'btn-ghost':'btn-primary'} btn-sm" onclick="runReport('${meta.id}')">${meta.buttonText}</button>`;
+      }
+      return `<div class="rep-card"><h3>${meta.reportType==='print'?'🖨 ':meta.reportType==='status'?'📊 ':meta.reportType==='monthly'?'📅 ':meta.reportType==='utilization'?'📈 ':''}${meta.label}</h3><p>${meta.description}</p>${paramRow}</div>`;
+    }).join('');
+  } else {
+    cards = `<div class="rep-empty">
+      <div style="padding:18px;border:1px dashed var(--border);border-radius:var(--r);background:#FFF8E1;color:#7A4F01">
+        No report templates are configured yet. Use the Admin page to add or enable report templates, or use the direct export actions below.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+        <button class="btn btn-primary btn-sm" onclick="exportCSV()">Export current status</button>
+        <button class="btn btn-primary btn-sm" onclick="exportMonthlyCSV()">Download current month</button>
+        <button class="btn btn-primary btn-sm" onclick="exportUtilizationCSV()">Export utilization</button>
+        <button class="btn btn-primary btn-sm" onclick="exportAbsenceCSV()">Export absence</button>
+      </div>
+    </div>`;
+  }
   document.getElementById('pbody').innerHTML=`
   <div class="rep-grid">
     ${cards}
@@ -1002,39 +1207,66 @@ async function reloadAdminData(){
 }
 
 async function loadAdminUsers(){
-  if(!db) return [];
+  if(!db){
+    try{
+      const data = await fetchLocalAdminMeta();
+      const users = (data.users||[]).map(u=>({username:u.username||u.id||'',...u}));
+      users.sort((a,b)=>String(a.username).localeCompare(String(b.username)));
+      setUserMetadata(users);
+      return users;
+    }catch(err){
+      console.error('Failed to load local admin users',err);
+      return [];
+    }
+  }
   const snap=await getDocs(collection(db,'users'));
   const users=[];
   snap.forEach(docSnap=>{users.push({username:docSnap.id,...docSnap.data()});});
   users.sort((a,b)=>String(a.username).localeCompare(String(b.username)));
+  setUserMetadata(users);
   return users;
 }
 
 async function renderAdmin(){
   const dbReady = !!db;
-  document.getElementById('phSub').textContent='Manage Firestore-backed configuration';
+  const pbody = document.getElementById('pbody');
+  const errorPanel = '<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to render admin interface. Check console for details.</div>';
+  document.getElementById('phSub').textContent=dbReady ? 'Manage Firestore-backed configuration' : 'Manage local configuration';
   document.getElementById('phActions').innerHTML=hasGlobalAccess()?'<button class="btn btn-ghost btn-sm no-print" onclick="reloadAdminData()">Reload</button>':'';
   if(!hasGlobalAccess()){
-    document.getElementById('pbody').innerHTML='<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Admin tools are available to HQ users only.</div>';
+    if(pbody) pbody.innerHTML='<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Admin tools are available to HQ users only.</div>';
     return;
   }
-  const users=await loadAdminUsers();
-  const depotRows=getActiveDepots().map(depot=>{
-    const color=DEPOT_COLORS[depot]||'#37474F';
-    const hours=REST_HOURS[depot]||12;
+  if(pbody) pbody.innerHTML='<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Loading admin data…</div>';
+  let users=[];
+  try{
+    users = await loadAdminUsers();
+    if(!db){
+      await reloadAdminData();
+    }
+  }catch(err){
+    console.error('Failed to load admin users',err);
+    if(pbody) pbody.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to load admin data. Check your Firestore connection or local backend.</div>`;
+    return;
+  }
+  try{
+    const activeDepotMeta = getAllDepotMetadata();
+  const depotRecords = activeDepotMeta.length ? activeDepotMeta : getActiveDepots().map(depot=>({id:depot,label:depot,color:DEPOT_COLORS[depot]||'#37474F',restHours:REST_HOURS[depot]||12,active:true,order:getActiveDepots().indexOf(depot)+1}));
+  const depotRows = depotRecords.map(meta=>{
+    const active = meta.active !== false;
     return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.2fr 100px 80px 80px 70px;gap:8px;align-items:center;margin-bottom:8px">
-      <input value="${depot}" data-admin-depot-id="${depot}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot id">
-      <input value="${depot}" data-admin-depot-label="${depot}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
-      <input value="${color}" data-admin-depot-color="${depot}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#color">
-      <input type="number" value="${hours}" min="1" data-admin-depot-hours="${depot}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Hours">
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" checked data-admin-depot-active="${depot}"> Active</label>
-      <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('${depot}')">Save</button>
+      <input value="${meta.id}" data-admin-depot-id="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot id">
+      <input value="${meta.label}" data-admin-depot-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input value="${meta.color}" data-admin-depot-color="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#color">
+      <input type="number" value="${meta.restHours}" min="1" data-admin-depot-hours="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Hours">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${active?' checked':''} data-admin-depot-active="${meta.id}"> Active</label>
+      <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('${meta.id}')">Save</button>
     </div>`;
   }).join('');
 
   const designationRows=Object.values(getDesignationRegistry()).sort((a,b)=>(a.order||999)-(b.order||999)||a.label.localeCompare(b.label)).map(meta=>{
     const aliases=(meta.aliases||[]).join(', ');
-    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.3fr 1.2fr 70px 70px 70px;gap:8px;align-items:center;margin-bottom:8px">
+    return `<div class="admin-row">
       <input value="${meta.id}" data-admin-desig-id="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Designation id">
       <input value="${meta.label}" data-admin-desig-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
       <input value="${aliases}" data-admin-desig-aliases="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Aliases">
@@ -1046,7 +1278,7 @@ async function renderAdmin(){
 
   const statusRows=STATUSES.map(statusId=>{
     const meta=STATUS_META[statusId]||{label:statusId,bg:'#ECEFF1',fg:'#37474F'};
-    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.3fr 90px 90px 70px;gap:8px;align-items:center;margin-bottom:8px">
+    return `<div class="admin-row">
       <input value="${statusId}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Status id">
       <input value="${meta.label}" data-admin-status-label="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
       <input value="${meta.bg||'#ECEFF1'}" data-admin-status-bg="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#bg">
@@ -1057,7 +1289,7 @@ async function renderAdmin(){
 
   const reportRows=Object.values(REPORT_TEMPLATES).sort((a,b)=>a.order-b.order||a.label.localeCompare(b.label)).map(meta=>{
     const typeOptions=REPORT_TYPES.map(type=>`<option value="${type.id}"${type.id===meta.reportType?' selected':''}>${type.label}</option>`).join('');
-    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1.2fr 1fr 1fr 60px 70px;gap:8px;align-items:center;margin-bottom:8px">
+    return `<div class="admin-row">
       <input value="${meta.id}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Report id">
       <input value="${meta.label}" data-admin-report-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
       <select data-admin-report-type="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)">${typeOptions}</select>
@@ -1071,7 +1303,7 @@ async function renderAdmin(){
   const userRows=users.map(user=>{
     const userRole=user.role||'booking_officer';
     const roleOptions=USER_ROLE_OPTIONS.map(role=>`<option value="${role.id}"${role.id===userRole?' selected':''}>${role.label}</option>`).join('');
-    return `<div class="admin-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 80px;gap:8px;align-items:center;margin-bottom:8px">
+    return `<div class="admin-row">
       <input value="${user.username}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Username">
       <input value="${user.name||''}" data-admin-user-name="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Display name">
       <input value="${user.depot||''}" data-admin-user-depot="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot">
@@ -1082,11 +1314,12 @@ async function renderAdmin(){
     </div>`;
   }).join('');
 
-  document.getElementById('pbody').innerHTML=`
+  if(pbody) {
+    pbody.innerHTML=`
     <div style="display:grid;gap:14px">
-      ${dbReady? '': '<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:var(--r);padding:12px 14px;font-size:12px;color:#7A4F01">Firestore is unavailable. Admin metadata changes cannot be saved until Firebase is configured and connected.</div>'}
+      ${dbReady? '': '<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:var(--r);padding:12px 14px;font-size:12px;color:#7A4F01">Firebase is unavailable. Admin metadata changes are saved locally via SQLite.</div>'}
       <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-        <div style="font-size:14px;font-weight:800;margin-bottom:4px">Firestore maintenance</div>
+        <div style="font-size:14px;font-weight:800;margin-bottom:4px">Admin backend</div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Seed or refresh the data collections that drive the crew app.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="seedFirestore()">Seed / refresh Firestore</button>
@@ -1135,39 +1368,48 @@ async function renderAdmin(){
         ${userRows}
       </div>
     </div>`;
+    }
+  } catch(err) {
+    console.error('Failed during admin UI build', err);
+    if(pbody) pbody.innerHTML = errorPanel;
+  }
 }
 
 async function saveDepotMetaRecord(depotId){
-  if(!db){
-    setSyncStatus('err','Firestore unavailable');
-    alert('Cannot save depot metadata while Firebase is unavailable.');
-    return;
-  }
-  const idEl=document.querySelector(`[data-admin-depot-id="${depotId}"]`);
-  const labelEl=document.querySelector(`[data-admin-depot-label="${depotId}"]`);
-  const colorEl=document.querySelector(`[data-admin-depot-color="${depotId}"]`);
-  const hoursEl=document.querySelector(`[data-admin-depot-hours="${depotId}"]`);
-  const activeEl=document.querySelector(`[data-admin-depot-active="${depotId}"]`);
-  const nextId=(idEl?.value||depotId).trim();
-  const meta={
-    id:nextId,
-    label:(labelEl?.value||nextId).trim(),
-    color:(colorEl?.value||'#37474F').trim(),
-    restHours:Number(hoursEl?.value||12),
-    order:getActiveDepots().indexOf(depotId)+1,
-    active:!!activeEl?.checked,
+  const idEl = document.querySelector(`[data-admin-depot-id="${depotId}"]`);
+  const labelEl = document.querySelector(`[data-admin-depot-label="${depotId}"]`);
+  const colorEl = document.querySelector(`[data-admin-depot-color="${depotId}"]`);
+  const hoursEl = document.querySelector(`[data-admin-depot-hours="${depotId}"]`);
+  const activeEl = document.querySelector(`[data-admin-depot-active="${depotId}"]`);
+  const nextId = (idEl?.value||depotId).trim();
+  const meta = {
+    id: nextId,
+    label: (labelEl?.value||nextId).trim(),
+    color: (colorEl?.value||'#37474F').trim(),
+    restHours: Number(hoursEl?.value||12),
+    order: getAllDepotMetadata().findIndex(item=>item.id===depotId) + 1 || getActiveDepots().indexOf(depotId) + 1,
+    active: !!activeEl?.checked,
   };
+  if(!db){
+    try{
+      await saveLocalAdminRecord('depotMeta', nextId, meta);
+      await loadDepotMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local metadata saved');
+      return;
+    }catch(err){
+      console.error('Local save failed',err);
+      setSyncStatus('err','Local save failed');
+      alert('Unable to save depot metadata locally. Check the browser console.');
+      return;
+    }
+  }
   await setDoc(doc(db,'depotMeta',nextId),meta,{merge:true});
   await loadDepotMeta();
   renderAdmin();
 }
 
 async function saveDesignationMetaRecord(designationId){
-  if(!db){
-    setSyncStatus('err','Firestore unavailable');
-    alert('Cannot save designation metadata while Firebase is unavailable.');
-    return;
-  }
   const labelEl=document.querySelector(`[data-admin-desig-label="${designationId}"]`);
   const aliasesEl=document.querySelector(`[data-admin-desig-aliases="${designationId}"]`);
   const orderEl=document.querySelector(`[data-admin-desig-order="${designationId}"]`);
@@ -1180,17 +1422,26 @@ async function saveDesignationMetaRecord(designationId){
     restEligible:!!restEl?.checked,
     order:Number(orderEl?.value||999),
   };
+  if(!db){
+    try{
+      await saveLocalAdminRecord('designationMeta',designationId,meta);
+      await loadDesignationMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local metadata saved');
+      return;
+    }catch(err){
+      console.error('Local save failed',err);
+      setSyncStatus('err','Local save failed');
+      alert('Unable to save designation metadata locally. Check the browser console.');
+      return;
+    }
+  }
   await setDoc(doc(db,'designationMeta',designationId),meta,{merge:true});
   await loadDesignationMeta();
   renderAdmin();
 }
 
 async function saveStatusMetaRecord(statusId){
-  if(!db){
-    setSyncStatus('err','Firestore unavailable');
-    alert('Cannot save status metadata while Firebase is unavailable.');
-    return;
-  }
   const labelEl=document.querySelector(`[data-admin-status-label="${statusId}"]`);
   const bgEl=document.querySelector(`[data-admin-status-bg="${statusId}"]`);
   const fgEl=document.querySelector(`[data-admin-status-fg="${statusId}"]`);
@@ -1201,17 +1452,26 @@ async function saveStatusMetaRecord(statusId){
     fg:(fgEl?.value||'#37474F').trim(),
     order:STATUS_META[statusId]?.order ?? STATUSES.indexOf(statusId) ?? 999,
   };
+  if(!db){
+    try{
+      await saveLocalAdminRecord('statusMeta',statusId,meta);
+      await loadStatusMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local metadata saved');
+      return;
+    }catch(err){
+      console.error('Local save failed',err);
+      setSyncStatus('err','Local save failed');
+      alert('Unable to save status metadata locally. Check the browser console.');
+      return;
+    }
+  }
   await setDoc(doc(db,'statusMeta',statusId),meta,{merge:true});
   await loadStatusMeta();
   renderAdmin();
 }
 
 async function saveReportMetaRecord(reportId){
-  if(!db){
-    setSyncStatus('err','Firestore unavailable');
-    alert('Cannot save report metadata while Firebase is unavailable.');
-    return;
-  }
   const labelEl=document.querySelector(`[data-admin-report-label="${reportId}"]`);
   const typeEl=document.querySelector(`[data-admin-report-type="${reportId}"]`);
   const orderEl=document.querySelector(`[data-admin-report-order="${reportId}"]`);
@@ -1223,17 +1483,26 @@ async function saveReportMetaRecord(reportId){
     order:Number(orderEl?.value||999),
     visible:!!visibleEl?.checked,
   };
+  if(!db){
+    try{
+      await saveLocalAdminRecord('reportMeta',reportId,meta);
+      await loadReportMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local metadata saved');
+      return;
+    }catch(err){
+      console.error('Local save failed',err);
+      setSyncStatus('err','Local save failed');
+      alert('Unable to save report metadata locally. Check the browser console.');
+      return;
+    }
+  }
   await setDoc(doc(db,'reportMeta',reportId),meta,{merge:true});
   await loadReportMeta();
   renderAdmin();
 }
 
 async function saveUserAccount(username){
-  if(!db){
-    setSyncStatus('err','Firestore unavailable');
-    alert('Cannot save user account while Firebase is unavailable.');
-    return;
-  }
   const nameEl=document.querySelector(`[data-admin-user-name="${username}"]`);
   const depotEl=document.querySelector(`[data-admin-user-depot="${username}"]`);
   const roleEl=document.querySelector(`[data-admin-user-role="${username}"]`);
@@ -1250,6 +1519,20 @@ async function saveUserAccount(username){
     isHQ,
     isSuperAdmin:role==='super_admin',
   };
+  if(!db){
+    try{
+      await saveLocalAdminRecord('users',username,payload);
+      await loadAdminUsers();
+      renderAdmin();
+      setSyncStatus('ok','Local user saved');
+      return;
+    }catch(err){
+      console.error('Local save failed',err);
+      setSyncStatus('err','Local save failed');
+      alert('Unable to save user account locally. Check the browser console.');
+      return;
+    }
+  }
   await setDoc(doc(db,'users',username),payload,{merge:true});
   await renderAdmin();
 }
@@ -1574,6 +1857,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeA
 ['lUser','lPass'].forEach(id=>{document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});});
 
 async function bootApp(){
+  document.getElementById('loginPage')?.classList.add('show');
   populateLoginDepotOptions();
   const cfg = await loadFirebaseConfig();
   if(cfg && cfg.apiKey && cfg.projectId){

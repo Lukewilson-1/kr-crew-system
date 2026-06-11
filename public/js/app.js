@@ -1255,42 +1255,42 @@ async function renderAdmin(){
   const depotRows = depotRecords.map(meta=>{
     const active = meta.active !== false;
     return `<div class="admin-row">
-      <input value="${meta.id}" data-admin-depot-id="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot id">
-      <input value="${meta.label}" data-admin-depot-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
-      <input value="${meta.color}" data-admin-depot-color="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#color">
-      <input type="number" value="${meta.restHours}" min="1" data-admin-depot-hours="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Hours">
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${active?' checked':''} data-admin-depot-active="${meta.id}"> Active</label>
+      <input value="${meta.id}" data-admin-depot-id="${meta.id}" class="admin-field" placeholder="Depot id">
+      <input value="${meta.label}" data-admin-depot-label="${meta.id}" class="admin-field" placeholder="Label">
+      <input value="${meta.color}" data-admin-depot-color="${meta.id}" class="admin-field" placeholder="#color">
+      <input type="number" value="${meta.restHours}" min="1" data-admin-depot-hours="${meta.id}" class="admin-field" placeholder="Hours">
+      <label class="admin-checkbox-label"><input type="checkbox" ${active?' checked':''} data-admin-depot-active="${meta.id}"> Active</label>
       <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('${meta.id}')">Save</button>
     </div>`;
   }).join('');
 
-  const newDepotRow = `<div class="admin-row">
-      <input value="" data-admin-depot-id="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="New depot id">
-      <input value="" data-admin-depot-label="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
-      <input value="#37474F" data-admin-depot-color="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#color">
-      <input type="number" value="12" min="1" data-admin-depot-hours="newDepot" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Hours">
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" data-admin-depot-active="newDepot"> Active</label>
+  const newDepotRow = `<div class="admin-row admin-row-add">
+      <input value="" data-admin-depot-id="newDepot" class="admin-field" placeholder="New depot id">
+      <input value="" data-admin-depot-label="newDepot" class="admin-field" placeholder="Label">
+      <input value="#37474F" data-admin-depot-color="newDepot" class="admin-field" placeholder="#color">
+      <input type="number" value="12" min="1" data-admin-depot-hours="newDepot" class="admin-field" placeholder="Hours">
+      <label class="admin-checkbox-label"><input type="checkbox" data-admin-depot-active="newDepot"> Active</label>
       <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('newDepot')">Add depot</button>
     </div>`;
 
   const designationRows=Object.values(getDesignationRegistry()).sort((a,b)=>(a.order||999)-(b.order||999)||a.label.localeCompare(b.label)).map(meta=>{
     const aliases=(meta.aliases||[]).join(', ');
     return `<div class="admin-row">
-      <input value="${meta.id}" data-admin-desig-id="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Designation id">
-      <input value="${meta.label}" data-admin-desig-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
-      <input value="${aliases}" data-admin-desig-aliases="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Aliases">
-      <input type="number" value="${meta.order||999}" data-admin-desig-order="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" min="0" placeholder="Order">
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${meta.restEligible?'checked':''} data-admin-desig-rest="${meta.id}"> Rest</label>
+      <input value="${meta.id}" data-admin-desig-id="${meta.id}" class="admin-field" placeholder="Designation id">
+      <input value="${meta.label}" data-admin-desig-label="${meta.id}" class="admin-field" placeholder="Label">
+      <input value="${aliases}" data-admin-desig-aliases="${meta.id}" class="admin-field" placeholder="Aliases">
+      <input type="number" value="${meta.order||999}" data-admin-desig-order="${meta.id}" class="admin-field" min="0" placeholder="Order">
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.restEligible?'checked':''} data-admin-desig-rest="${meta.id}"> Rest</label>
       <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('${meta.id}')">Save</button>
     </div>`;
   }).join('');
 
-  const newDesignationRow = `<div class="admin-row">
-      <input value="" data-admin-desig-id="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="New designation id">
-      <input value="" data-admin-desig-label="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
-      <input value="" data-admin-desig-aliases="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Aliases">
-      <input type="number" value="999" data-admin-desig-order="newDesignation" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" min="0" placeholder="Order">
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" data-admin-desig-rest="newDesignation"> Rest</label>
+  const newDesignationRow = `<div class="admin-row admin-row-add">
+      <input value="" data-admin-desig-id="newDesignation" class="admin-field" placeholder="New designation id">
+      <input value="" data-admin-desig-label="newDesignation" class="admin-field" placeholder="Label">
+      <input value="" data-admin-desig-aliases="newDesignation" class="admin-field" placeholder="Aliases">
+      <input type="number" value="999" data-admin-desig-order="newDesignation" class="admin-field" min="0" placeholder="Order">
+      <label class="admin-checkbox-label"><input type="checkbox" data-admin-desig-rest="newDesignation"> Rest</label>
       <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('newDesignation')">Add designation</button>
     </div>`;
 
@@ -1349,7 +1349,10 @@ async function renderAdmin(){
       <div class="admin-grid">
         <div class="admin-card">
           <div class="admin-section-header">
-            <div class="admin-section-title">Depots</div>
+            <div>
+              <div class="admin-section-title">Depots</div>
+              <p class="admin-section-note">Edit depot IDs, labels, colors and rest hours here. New depots can be added with the bottom row.</p>
+            </div>
           </div>
           <div class="admin-row-header">
             <div>ID</div><div>Label</div><div>Color</div><div>Hours</div><div>Active</div><div></div>
@@ -1358,7 +1361,10 @@ async function renderAdmin(){
         </div>
         <div class="admin-card">
           <div class="admin-section-header">
-            <div class="admin-section-title">Designations</div>
+            <div>
+              <div class="admin-section-title">Designations</div>
+              <p class="admin-section-note">Change designation labels or alias names. Enter aliases separated by commas for flexible search.</p>
+            </div>
           </div>
           <div class="admin-row-header">
             <div>ID</div><div>Label</div><div>Aliases</div><div>Order</div><div>Rest</div><div></div>
@@ -1744,6 +1750,7 @@ async function removeCrewDoc(depot,id){
 function openAddModal(){
   document.getElementById('addModalSub').textContent='Depot: '+(currentUser.depot==='HQ'?'Select below':currentUser.depot);
   document.getElementById('addName').value='';document.getElementById('addRoute').value='';
+  document.getElementById('bulkText').value='';
   const depotSelect=document.getElementById('addDepot');
   if(depotSelect){
     depotSelect.parentElement.style.display=currentUser.isHQ?'block':'none';
@@ -1751,6 +1758,7 @@ function openAddModal(){
   }
   populateDesignationSelect();
   switchAddTab('single');
+  document.getElementById('addStatus').value='SB';
   document.getElementById('addModal').classList.add('open');
 }
 function closeAddModal(){document.getElementById('addModal').classList.remove('open');}
@@ -1762,6 +1770,28 @@ function switchAddTab(t){
   document.getElementById('tab-bulk').style.borderBottomColor=t==='bulk'?'var(--kr-red)':'transparent';
   document.getElementById('tab-bulk').style.color=t==='bulk'?'var(--kr-red)':'var(--text2)';
   document.getElementById('addSaveBtn').textContent=t==='single'?'Add crew member':'Add all from list';
+}
+
+function parseCsvRow(line){
+  const parts=[]; let current=''; let inQuotes=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){
+      if(inQuotes && line[i+1]==='"'){
+        current+='"'; i++; continue;
+      }
+      inQuotes=!inQuotes;
+      continue;
+    }
+    if(ch===',' && !inQuotes){
+      parts.push(current.trim());
+      current='';
+      continue;
+    }
+    current+=ch;
+  }
+  if(current!==''||line.endsWith(',')) parts.push(current.trim());
+  return parts;
 }
 
 async function saveAddCrew(){
@@ -1779,15 +1809,21 @@ async function saveAddCrew(){
   setSyncStatus('spin','Adding…');
   try{
     if(isBulk){
-      const lines=document.getElementById('bulkText').value.split('\n').map(l=>l.trim()).filter(l=>l);
+      const raw=document.getElementById('bulkText').value||'';
+      const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(l=>l && !/^\s*name\s*,/i.test(l));
+      if(!lines.length){alert('Paste one or more crew rows first.');return;}
       let added=0;
       for(const line of lines){
-        const parts=line.split(',').map(p=>p.trim());
-        const name=parts[0];if(!name)continue;
-        const grade=parts[1]||'locomotive_driver';const route=parts[2]||'';
-        await addSingleCrew(depot,name,grade,route,'SB');added++;
+        const parts=parseCsvRow(line);
+        const name=parts[0]||'';
+        if(!name) continue;
+        const grade=parts[1]||'locomotive_driver';
+        const route=parts[2]||'';
+        await addSingleCrew(depot,name,grade,route,'SB');
+        added++;
       }
-      setLog(`${added} crew member(s) added to ${depot}.`);
+      if(!added){alert('No valid crew rows were found. Each row requires a name.');return;}
+      setLog(`${added} crew member${added===1?'':'s'} added to ${depot}.`);
     } else {
       const name=document.getElementById('addName').value.trim();
       if(!name){alert('Please enter a name.');return;}
@@ -1795,7 +1831,10 @@ async function saveAddCrew(){
       setLog(`${name} added to ${depot}.`);
     }
     setSyncStatus('ok','Saved');
-  }catch(err){setSyncStatus('err','Failed');setLog('Error: '+err.message);}
+  }catch(err){
+    setSyncStatus('err','Failed');
+    setLog('Error: '+(err.message||err));
+  }
   closeAddModal();
   if(!db)refreshPage();
 }

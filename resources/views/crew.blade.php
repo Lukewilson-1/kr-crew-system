@@ -18,7 +18,6 @@
     <select id="lDepot"></select>
   </div>
   <button class="btn-login" onclick="doLogin()">Sign in →</button>
-  <button class="btn btn-ghost" onclick="useDemoMode()">Use offline demo</button>
   <div class="lhint" id="loginHint"></div>
 </div>
 </div>
@@ -38,16 +37,21 @@
 </div>
 <div id="shell">
 <div id="sidebar">
-  <div class="sb-sec">Main</div>
-  <div class="sb-item active" onclick="goPage('dashboard')" id="sb-dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
-  <div class="sb-item" onclick="goPage('roster')" id="sb-roster"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.85"/></svg>Crew Roster</div>
-  <div class="sb-item" onclick="goPage('rest')" id="sb-rest"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Rest Countdowns</div>
-  <div class="sb-item" onclick="goPage('monthly')" id="sb-monthly"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly View</div>
-  <div class="sb-item" onclick="goPage('reports')" id="sb-reports"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>Reports</div>
-  <div class="sb-item" onclick="goPage('admin')" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin</div>
-  <div id="depotSection" style="display:none">
-    <div class="sb-sec">Depots</div>
-    <div id="sbDepots"></div>
+  <div class="sb-group">
+    <div class="sb-sec">Main Depot</div>
+    <div class="sb-item active" onclick="goPage('dashboard')" id="sb-dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+    <div class="sb-item" onclick="goPage('roster')" id="sb-roster"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.85"/></svg>Crew Roster</div>
+    <div class="sb-item" onclick="goPage('rest')" id="sb-rest"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Rest Countdowns</div>
+    <div class="sb-item" onclick="goPage('monthly')" id="sb-monthly"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly View</div>
+    <div class="sb-item" onclick="goPage('reports')" id="sb-reports"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>Reports</div>
+    <div id="depotSection" style="display:none">
+      <div class="sb-sec">Depots</div>
+      <div id="sbDepots"></div>
+    </div>
+  </div>
+  <div class="sb-group" id="adminSection" style="display:none">
+    <div class="sb-sec">Admin</div>
+    <div class="sb-item" onclick="goPage('admin')" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
   </div>
   <div class="sb-bottom">v4.0 Live · Kenya Railways</div>
 </div>
@@ -63,10 +67,10 @@
 <template id="adminPanelTpl">
   <div style="display:grid;gap:14px">
     <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px">
-      <div style="font-size:14px;font-weight:800;margin-bottom:4px">Firestore maintenance</div>
+      <div style="font-size:14px;font-weight:800;margin-bottom:4px">MySQL maintenance</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Seed or refresh the data collections that drive the crew app.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="seedFirestore()">Seed / refresh Firestore</button>
+        <button class="btn btn-primary" onclick="seedBackend()">Bootstrap superadmin</button>
         <button class="btn btn-ghost" onclick="reloadAdminData()">Reload admin data</button>
       </div>
     </div>
@@ -142,6 +146,10 @@
       <input type="text" id="mRoute" placeholder="e.g. Changamwe–Mtito Andei">
     </div>
     <div>
+      <label>Staff Number</label>
+      <input type="text" id="mStaffNumber" placeholder="e.g. STAFF-001">
+    </div>
+    <div>
       <label>Shift</label>
       <select id="mShift"></select>
     </div>
@@ -169,16 +177,21 @@
     <select id="addDepot" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px"></select>
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Full Name *</label>
     <input type="text" id="addName" placeholder="e.g. John Kamau Njoroge" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
+    <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Staff Number</label>
+    <input type="text" id="addStaffNumber" placeholder="e.g. STAFF-001" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Designation *</label>
     <select id="addGrade" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px"></select>
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Route / Assignment</label>
-    <input type="text" id="addRoute" placeholder="e.g. CGA–MTT" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
+    <input type="text" id="addRoute" placeholder="e.g. CGA-MTT" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Initial Status</label>
     <select id="addStatus" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none"></select>
   </div>
   <div id="addBulk" style="display:none">
-    <textarea class="bulk-area" id="bulkText" placeholder="Paste one crew member per line. Format:\nFull Name, Designation, Route\n\nExamples:\nJames Kamau, Locomotive driver, CGA-MTT\nMary Wanjiku, Train Guard, CGA-NBI\nPeter Ochieng, Shunter driver\n\nDesignation and route are optional. All will be set to Standby initially."></textarea>
-    <div class="bulk-hint">Paste one crew member per line. Name is required; designation and route are optional (comma-separated). All will be set to Standby initially.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn btn-ghost btn-sm" onclick="downloadCrewUploadTemplate()">Download CSV template</button>
+    </div>
+    <textarea class="bulk-area" id="bulkText" placeholder="Paste CSV rows here after downloading the template. The first row can be the header row."></textarea>
+    <div class="bulk-hint">Use the CSV template, fill it, then paste the rows here. Name is required; the remaining columns will be imported when present.</div>
   </div>
   <div class="modal-btns" style="margin-top:14px">
     <button class="btn btn-ghost" onclick="closeAddModal()">Cancel</button>

@@ -1,12 +1,10 @@
-import { initFirebase, loadFirebaseConfig, db, demoMode, setDemoMode } from './firebase.js';
+import { initBackend, loadBackendConfig, db, demoMode, setDemoMode } from './mysql.js';
 import { getRestHours, restSecondsLeft, fmtCountdown, cdClass, getAllCrew, cts, initials, fmtTime, todayStr, fmtLastUpd, kpiHtml, dlCSV } from './helpers.js';
-import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, getDesignationRegistry, isDesignationRestEligible, normalizeDesignation, setDesignationRegistry, setDepotConfig, setStatusConfig } from './constants.js';
-import { collection, query, where, onSnapshot, getDocs, getDoc, doc, setDoc, deleteDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, getDesignationRegistry, isDesignationRestEligible, normalizeDesignation, setDesignationRegistry, setDepotConfig, setStatusConfig, setTrainTypeConfig, setShiftConfig } from './constants.js';
+import { collection, query, where, onSnapshot, getDocs, getDoc, doc, setDoc, deleteDoc, writeBatch, serverTimestamp } from './mysql.js';
 /* ════════ CONSTANTS ════════════════════════════════════════════════════════ */
 const HOME_REST_HOURS=12;
 const AWAY_REST_HOURS=10;
-const TRAIN_TYPES=['Freight','Commuter','Passenger','Engineering','Shunting'];
-const SHIFT_OPTIONS=['Day (06:00–14:00)','Afternoon (14:00–22:00)','Night (22:00–06:00)','N/A'];
 const AVT_PAL=[['#E8F5E9','#1B5E20'],['#E3F2FD','#0D47A1'],['#FFF3E0','#E65100'],['#F3E5F5','#4A148C'],['#FFEBEE','#B71C1C'],['#E0F2F1','#00695C'],['#FFFDE7','#F57F17']];
 const REPORT_TYPES=[
   {id:'status',label:'Daily status'},
@@ -23,13 +21,23 @@ const USER_ROLE_OPTIONS=[
   {id:'booking_officer',label:'Booking Officer'},
   {id:'crew_admin',label:'Crew Admin'},
 ];
+
+function getRoleSelectOptions(selectedRole){
+  const roleSource = roleMetadataCache.length ? sortAccessMetaRecords(roleMetadataCache) : USER_ROLE_OPTIONS;
+  return roleSource.map(role=>{
+    const id = role.id || role.value || '';
+    const label = role.label || role.name || id;
+    return `<option value="${id}"${id===selectedRole?' selected':''}>${label}</option>`;
+  }).join('');
+}
+
 async function seedUsersIfEmpty(){
-  // No static user account seeding; user records must exist in Firestore.
+  // No static user account seeding; user records must exist in MySQL.
   return;
 }
 
 async function ensureCoreAccessUsers(){
-  // No static user fallback registration when using dynamic Firestore data.
+  // No static user fallback registration when using dynamic MySQL data.
   return;
 }
 
@@ -40,6 +48,7 @@ const DAYS_IN_MON=new Date(CY,CM+1,0).getDate();
 const MONTH_NAME=TODAY.toLocaleString('en-KE',{month:'long',year:'numeric'});
 const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_KEY=`${CY}-${String(CM+1).padStart(2,'0')}`;
+const DEFAULT_SHIFT_LABEL='Day shift';
 
 /* ════════ STATE ════════════════════════════════════════════════════════════ */
 let currentUser=null;
@@ -52,12 +61,39 @@ let depotMetadataCache={};
 let designationMetadataCache={};
 let statusMetadataCache={};
 let userMetadataCache={};
+let roleMetadataCache=[];
+let permissionMetadataCache=[];
+let trainTypeMetadataCache=[];
+let shiftMetadataCache=[];
+let adminSectionView='overview';
 const SESSION_KEY='KR_Crew_Session';
+
+const SIMPLE_META_CONFIG={
+  trainType:{collection:'trainTypeMeta',title:'Train types',note:'Train types are used in the booking modal and crew table.'},
+  shift:{collection:'shiftMeta',title:'Shifts',note:'Shifts populate the crew modal and crew records.'},
+};
+
+const ACCESS_META_CONFIG={
+  roles:{collection:'roles',title:'Roles',note:'Roles define user access levels for the system.'},
+  permissions:{collection:'permissions',title:'Permissions',note:'Permissions are assigned to users and roles as reusable access flags.'},
+};
 
 function setHqDepotView(value){
   hqDepotView=value;
   if(currentPage==='roster') renderRoster();
   if(currentPage==='monthly') renderMonthly();
+}
+
+function setAdminSectionView(value){
+  adminSectionView=value;
+  if(currentPage==='admin') renderAdmin();
+}
+
+function updateSidebarSections(){
+  const depotSection=document.getElementById('depotSection');
+  const adminSection=document.getElementById('adminSection');
+  if(depotSection) depotSection.style.display=currentUser?.isHQ?'block':'none';
+  if(adminSection) adminSection.style.display=hasGlobalAccess()?'block':'none';
 }
 
 function getActiveDepots(){
@@ -95,6 +131,109 @@ function setUserMetadata(records){
   userMetadataCache = records || [];
 }
 
+function setRoleMetadata(records){
+  roleMetadataCache = records || [];
+}
+
+function setPermissionMetadata(records){
+  permissionMetadataCache = records || [];
+}
+
+function normalizeSimpleMetaRecord(docSnapOrData){
+  const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
+  const id = String(data?.id || docSnapOrData?.id || docSnapOrData?.record_id || '').trim();
+  if(!id) return null;
+  return {
+    id,
+    label:String(data?.label||id).trim()||id,
+    order:Number.isFinite(Number(data?.order)) ? Number(data.order) : 999,
+    active:data?.active !== false,
+  };
+}
+
+function sortSimpleMetaRecords(records){
+  return (records || []).filter(Boolean).sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
+}
+
+function getSimpleMetaConfig(key){
+  return SIMPLE_META_CONFIG[key];
+}
+
+function getAccessMetaConfig(key){
+  return ACCESS_META_CONFIG[key];
+}
+
+function getActiveSimpleMetaRecords(key){
+  const source = key==='trainType' ? trainTypeMetadataCache : shiftMetadataCache;
+  return sortSimpleMetaRecords(source.filter(item=>item.active !== false));
+}
+
+function setSimpleMetaRecords(key, records){
+  const next = sortSimpleMetaRecords(records);
+  if(key==='trainType'){
+    trainTypeMetadataCache = next;
+    setTrainTypeConfig(next.map(item=>item.label));
+  } else if(key==='shift'){
+    shiftMetadataCache = next;
+    setShiftConfig(next.map(item=>item.label));
+  }
+}
+
+function getSimpleMetaCollection(key){
+  return getSimpleMetaConfig(key)?.collection || '';
+}
+
+function getAccessMetaCollection(key){
+  return getAccessMetaConfig(key)?.collection || '';
+}
+
+function buildSimpleMetaOptions(key, selected=''){
+  const records = getActiveSimpleMetaRecords(key);
+  return records.map(record=>`<option value="${record.label}"${record.label===selected?' selected':''}>${record.label}</option>`).join('');
+}
+
+function populateTrainTypeSelect(selected=''){
+  const trainTypeSelect = document.getElementById('mTrainType');
+  if(trainTypeSelect) trainTypeSelect.innerHTML = buildSimpleMetaOptions('trainType', selected || getActiveSimpleMetaRecords('trainType')[0]?.label || '');
+}
+
+function buildShiftOptions(selected=''){
+  const defaultShift = getActiveSimpleMetaRecords('shift')[0]?.label || '';
+  return buildSimpleMetaOptions('shift', selected || defaultShift);
+}
+
+function populateShiftSelects(selected=''){
+  const shiftSelect=document.getElementById('mShift');
+  if(shiftSelect) shiftSelect.innerHTML = buildShiftOptions(selected);
+}
+
+function getTrainTypeBadgeStyle(trainType){
+  const value = String(trainType || '').trim();
+  const styles = {
+    Freight:'background:var(--freight-lt);color:var(--freight);border:1px solid #FFE082;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600',
+    Commuter:'background:var(--commuter-lt);color:var(--commuter);border:1px solid #90CAF9;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600',
+    Passenger:'background:var(--passenger-lt);color:var(--passenger);border:1px solid #A5D6A7;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600',
+    Engineering:'background:var(--engineering-lt);color:var(--engineering);border:1px solid #CE93D8;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600',
+    Shunting:'background:var(--shunting-lt);color:var(--shunting);border:1px solid #BCAAA4;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600',
+  };
+  if(styles[value]) return styles[value];
+  if(!value) return 'color:var(--text3);font-size:11px';
+  return 'background:#ECEFF1;color:#37474F;border:1px solid #CFD8DC;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600';
+}
+
+function getTrainTypeLabel(trainType){
+  return String(trainType || '-');
+}
+
+function getCrewShiftLabel(crew){
+  const shift = String(crew?.shift || '').trim();
+  return shift || DEFAULT_SHIFT_LABEL;
+}
+
+function getCrewStaffNumberLabel(crew){
+  return String(crew?.staff_number || '').trim() || '-';
+}
+
 function getCsrfToken(){
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
@@ -116,6 +255,18 @@ async function saveLocalAdminRecord(collection,id,payload){
   if(!resp.ok){
     const text = await resp.text();
     throw new Error(text || `Local admin save failed (${resp.status})`);
+  }
+  return resp.json();
+}
+
+async function deleteLocalAdminRecord(collection,id){
+  const resp = await fetch(`/admin/meta/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
+    method:'DELETE',
+    headers:{'X-CSRF-TOKEN':getCsrfToken()},
+  });
+  if(!resp.ok){
+    const text = await resp.text();
+    throw new Error(text || `Local admin delete failed (${resp.status})`);
   }
   return resp.json();
 }
@@ -200,7 +351,13 @@ async function restoreSession(){
       await seedUsersIfEmpty();
       await seedStatusMetaIfEmpty();
       await loadStatusMeta();
+      await seedTrainTypeMetaIfEmpty();
+      await loadTrainTypeMeta();
+      await seedShiftMetaIfEmpty();
+      await loadShiftMeta();
       populateDesignationSelect();
+      populateTrainTypeSelect();
+      populateShiftSelects();
       await Promise.all(lds.map(seedDepotIfEmpty));
       await ensureRestCountdownSample();
       attachListeners(lds);
@@ -235,16 +392,8 @@ async function checkRestExpirations(){
   }
 }
 
-function useDemoMode(){
-  setDemoMode(true);
-  state={};
-  document.getElementById('loginPage').classList.add('show');
-  setSyncStatus('err','Offline demo mode');
-  setLoginHint(true);
-}
-
 async function seedDepotIfEmpty(depot){
-  // No local crew seeding. Crew documents must be supplied from Firestore.
+  // No local crew seeding. Crew documents must be supplied from MySQL.
   return;
 }
 
@@ -263,7 +412,7 @@ function normalizeDepotMetaRecord(docSnapOrData){
 }
 
 async function seedDepotMetaIfEmpty(){
-  // No static depot metadata seeding; admin-managed Firestore data is required.
+  // No static depot metadata seeding; admin-managed MySQL data is required.
   return;
 }
 
@@ -325,8 +474,52 @@ async function loadLocalDepotMeta(){
 }
 
 async function seedStatusMetaIfEmpty(){
-  // No static status metadata seeding; admin-managed Firestore data is required.
-  return;
+  const defaults = [
+    { id: 'BK', label: 'Booked', bg: '#E8F5E9', fg: '#1B5E20', order: 100, active: true },
+    { id: 'SB', label: 'Stand By', bg: '#E3F2FD', fg: '#0D47A1', order: 200, active: true },
+    { id: 'R', label: 'Resting', bg: '#F3F5FF', fg: '#4A148C', order: 300, active: true },
+    { id: 'L', label: 'Leave', bg: '#FFF3E0', fg: '#E65100', order: 400, active: true },
+    { id: 'SK', label: 'Sick', bg: '#FFEBEE', fg: '#B71C1C', order: 500, active: true },
+    { id: 'T', label: 'Training', bg: '#E0F2F1', fg: '#00695C', order: 600, active: true },
+    { id: 'NTB', label: 'NTB', bg: '#ECEFF1', fg: '#37474F', order: 700, active: true },
+    { id: 'TO', label: 'Trip Off', bg: '#FCE4EC', fg: '#AD1457', order: 800, active: true },
+  ];
+
+  const seedStatus = async (record) => {
+    if (!db) {
+      await saveLocalAdminRecord('statusMeta', record.id, record);
+      return;
+    }
+    await setDoc(doc(db, 'statusMeta', record.id), record, { merge: true });
+  };
+
+  if (!db) {
+    try {
+      const data = await fetchLocalAdminMeta();
+      const existing = new Set((data.statusMeta || []).map(item => String(item.id || item.record_id || '').trim()).filter(Boolean));
+      const missing = defaults.filter(status => !existing.has(status.id));
+      if (!missing.length) return;
+      await Promise.all(missing.map(seedStatus));
+    } catch (err) {
+      console.error('Failed to seed local status metadata', err);
+    }
+    return;
+  }
+
+  try {
+    const snap = await getDocs(collection(db, 'statusMeta'));
+    const existing = new Set();
+    snap.forEach(docSnap => {
+      const data = docSnap.data();
+      const id = String(data?.id || docSnap.id || data?.record_id || '').trim();
+      if (id) existing.add(id);
+    });
+    const missing = defaults.filter(status => !existing.has(status.id));
+    if (!missing.length) return;
+    await Promise.all(missing.map(seedStatus));
+  } catch (err) {
+    console.error('Failed to seed status metadata', err);
+  }
 }
 
 async function loadStatusMeta(){
@@ -392,6 +585,78 @@ async function loadLocalStatusMeta(){
   }
 }
 
+async function seedSimpleMetaIfEmpty(key, defaults){
+  const collectionName = getSimpleMetaCollection(key);
+  if(!collectionName) return;
+  if(!db){
+    try{
+      const data = await fetchLocalAdminMeta();
+      if((data[collectionName]||[]).length) return;
+      await Promise.all(defaults.map((value, index)=>saveLocalAdminRecord(collectionName, value, {id:value,label:value,order:(index + 1) * 100,active:true})));
+      return;
+    }catch(err){
+      console.error(`Failed to seed local ${collectionName}`, err);
+      return;
+    }
+  }
+  try{
+    const snap = await getDocs(collection(db, collectionName));
+    if(!snap.empty) return;
+    await Promise.all(defaults.map((value, index)=>setDoc(doc(db, collectionName, value), {id:value,label:value,order:(index + 1) * 100,active:true})));
+  }catch(err){
+    console.error(`Failed to seed ${collectionName}`, err);
+  }
+}
+
+async function loadSimpleMeta(key){
+  const collectionName = getSimpleMetaCollection(key);
+  if(!collectionName) return;
+  if(!db){
+    return await loadLocalSimpleMeta(key);
+  }
+  try{
+    const snap = await getDocs(collection(db, collectionName));
+    const records=[];
+    snap.forEach(docSnap=>{
+      const meta = normalizeSimpleMetaRecord(docSnap);
+      if(meta) records.push(meta);
+    });
+    setSimpleMetaRecords(key, records);
+  }catch(err){
+    console.error(`Failed to load ${collectionName}`, err);
+    setSimpleMetaRecords(key, []);
+  }
+}
+
+async function loadLocalSimpleMeta(key){
+  const collectionName = getSimpleMetaCollection(key);
+  if(!collectionName) return;
+  try{
+    const data = await fetchLocalAdminMeta();
+    const records = (data[collectionName]||[]).map(normalizeSimpleMetaRecord).filter(Boolean);
+    setSimpleMetaRecords(key, records);
+  }catch(err){
+    console.error(`Failed to load local ${collectionName}`, err);
+    setSimpleMetaRecords(key, []);
+  }
+}
+
+async function seedTrainTypeMetaIfEmpty(){
+  return;
+}
+
+async function loadTrainTypeMeta(){
+  await loadSimpleMeta('trainType');
+}
+
+async function seedShiftMetaIfEmpty(){
+  return;
+}
+
+async function loadShiftMeta(){
+  await loadSimpleMeta('shift');
+}
+
 function normalizeDesignationMetaRecord(docSnapOrData){
   const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
   const id = data?.id || docSnapOrData?.id || docSnapOrData?.record_id;
@@ -406,7 +671,7 @@ function normalizeDesignationMetaRecord(docSnapOrData){
 }
 
 async function seedDesignationMetaIfEmpty(){
-  // No static designation metadata seeding; admin-managed Firestore data is required.
+  // No static designation metadata seeding; admin-managed MySQL data is required.
   return;
 }
 
@@ -454,7 +719,8 @@ async function loadLocalDesignationMeta(){
 function buildStatusOptions(selected='SB'){
   return STATUSES.map(id=>{
     const meta=STATUS_META[id]||{label:id};
-    return `<option value="${id}"${id===selected?' selected':''}>${id} - ${meta.label}</option>`;
+    const label = id === 'SB' && (!meta.label || meta.label.toLowerCase() === 'standby') ? 'Stand By' : meta.label;
+    return `<option value="${id}"${id===selected?' selected':''}>${id} - ${label}</option>`;
   }).join('');
 }
 
@@ -463,15 +729,6 @@ function populateStatusSelects(selected='SB'){
   const addStatusSelect=document.getElementById('addStatus');
   if(statusSelect) statusSelect.innerHTML = buildStatusOptions(selected);
   if(addStatusSelect) addStatusSelect.innerHTML = buildStatusOptions('SB');
-}
-
-function buildShiftOptions(selected='Day (06:00–14:00)'){
-  return SHIFT_OPTIONS.map(opt=>`<option value="${opt}"${opt===selected?' selected':''}>${opt}</option>`).join('');
-}
-
-function populateShiftSelects(selected='Day (06:00–14:00)'){
-  const shiftSelect=document.getElementById('mShift');
-  if(shiftSelect) shiftSelect.innerHTML = buildShiftOptions(selected);
 }
 
 function populateDesignationSelect(selected='locomotive_driver'){
@@ -516,7 +773,7 @@ async function migrateCrewDesignationKeys(){
   }
 }
 
-async function seedFirestoreUsers(){
+async function seedBackendUsers(){
   if(!db) return;
   await seedDepotMetaIfEmpty();
   await loadDepotMeta();
@@ -528,8 +785,14 @@ async function seedFirestoreUsers(){
   await loadStatusMeta();
   await seedReportMetaIfEmpty();
   await loadReportMeta();
+  await seedTrainTypeMetaIfEmpty();
+  await loadTrainTypeMeta();
+  await seedShiftMetaIfEmpty();
+  await loadShiftMeta();
   populateDesignationSelect();
   populateStatusSelects();
+  populateTrainTypeSelect();
+  populateShiftSelects();
 }
 
 function normalizeReportMetaRecord(docSnapOrData){
@@ -548,32 +811,7 @@ function normalizeReportMetaRecord(docSnapOrData){
 }
 
 async function seedReportMetaIfEmpty(){
-  const defaults = [
-    {id:'daily_status',label:'Daily booking status',description:'Export current crew booking statuses across depots.',reportType:'status',buttonText:'Download',visible:true,order:100},
-    {id:'monthly_register',label:'Monthly register',description:'Download the monthly register for any selected month.',reportType:'monthly',buttonText:'Download',visible:true,order:200},
-    {id:'utilization_summary',label:'Utilization summary',description:'Export crew utilization metrics for a selected time window.',reportType:'utilization',buttonText:'Export',visible:true,order:300},
-    {id:'absence_report',label:'Absence / NTB',description:'Download absence and NTB crew records.',reportType:'absence',buttonText:'Download',visible:true,order:400},
-    {id:'print_register',label:'Printable register',description:'Open the printable register view for the current month.',reportType:'print',buttonText:'Print',visible:true,order:500},
-  ];
-  if(!db){
-    try{
-      const data = await fetchLocalAdminMeta();
-      if((data.reportMeta||[]).length) return;
-      await Promise.all(defaults.map(meta=>saveLocalAdminRecord('reportMeta', meta.id, meta)));
-      console.info('Seeded local report templates.');
-    }catch(err){
-      console.error('Failed to seed local report metadata',err);
-    }
-    return;
-  }
-  try{
-    const snap = await getDocs(collection(db,'reportMeta'));
-    if(!snap.empty) return;
-    await Promise.all(defaults.map(meta=>setDoc(doc(db,'reportMeta',meta.id),meta)));
-    console.info('Seeded default report templates.');
-  }catch(err){
-    console.error('Failed to seed report metadata',err);
-  }
+  return;
 }
 
 async function loadReportMeta(){
@@ -614,7 +852,7 @@ function getReportTemplates(){
 }
 
 async function ensureRestCountdownSample(){
-  // Do not seed any static demo crew records. Rest countdown entries must come from Firestore.
+  // Do not seed any static demo crew records. Rest countdown entries must come from MySQL.
   return;
 }
 
@@ -664,7 +902,7 @@ async function doLogin(){
     }catch(err){console.error('User lookup failed',err);}
   }
   if(!acct){
-    err.textContent='Account not found. Use a Firestore user account.';
+    err.textContent='Account not found.';
     err.style.display='block';
     return;
   }
@@ -673,8 +911,8 @@ async function doLogin(){
   document.getElementById('app').classList.add('show');
   document.getElementById('tbBadge').textContent=getTopAccessLabel();
   document.getElementById('tbUser').textContent=currentUser.name;
+  updateSidebarSections();
   if(currentUser.isHQ){
-    document.getElementById('depotSection').style.display='block';
     document.getElementById('sbDepots').innerHTML=getActiveDepots().map(d=>`<div class="sb-depot" onclick="setHqDepotView('${d}');goPage('roster')" id="sbd-${d}"><div class="sb-depot-dot" style="background:${DEPOT_COLORS[d]}"></div>${d}</div>`).join('');
   }
   const lds=currentUser.isHQ?getActiveDepots():[currentUser.depot];
@@ -703,6 +941,7 @@ function doLogout(){
   listeners.forEach(u=>u());listeners=[];if(cdInterval)clearInterval(cdInterval);
   currentUser=null;hqDepotView='all';
   persistSession();
+  updateSidebarSections();
   document.getElementById('app').classList.remove('show');
   document.getElementById('loginPage').classList.add('show');
   document.getElementById('lUser').value='';document.getElementById('lPass').value='';
@@ -720,7 +959,7 @@ function setSyncStatus(t,m){
   if(ld)ld.style.background=t==='ok'?'#69F0AE':t==='err'?'#EF5350':'#FFB300';
   if(lt)lt.textContent=t==='ok'?'Live':t==='err'?'Offline':'Syncing…';
 }
-function setLoginHint(demo){document.getElementById('loginHint').innerHTML=demo?'Demo mode - no sync.':'Use Firestore user credentials to sign in.';}
+function setLoginHint(demo){document.getElementById('loginHint').innerHTML=demo?'Demo mode - no sync.':'Use MySQL user credentials to sign in.';}
 
 /* ════════ NAVIGATION ══════════════════════════════════════════════════════ */
 function goPage(p){
@@ -738,7 +977,7 @@ function renderDashboard(){
   const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   const all=getAllCrew(state, depots);const c=cts(all);
   document.getElementById('phSub').textContent=`Live booking board · ${MONTH_NAME}`;
-  document.getElementById('phActions').innerHTML=demoMode?`<span style="font-size:11px;background:#FFF8E1;color:#F57F17;padding:3px 8px;border-radius:4px;border:1px solid #FFD54F">Offline demo</span>`:'';
+  document.getElementById('phActions').innerHTML='';
 
   let html=kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]]);
 
@@ -810,7 +1049,7 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
     </div>
     <div class="tbl-wrap"><table>
       <thead><tr>
-        <th>ID</th><th>Name / Designation</th>
+        <th>Staff No.</th><th>Name / Designation</th>
         ${showDepotCol?'<th>Depot</th>':''}
         <th>Rest location</th>
         <th>Route</th><th>Shift</th><th>Status</th><th>Train Type</th><th>Depart</th>
@@ -819,7 +1058,7 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
       </tr></thead>
       <tbody id="crewTbody">`;
 
-  if(allCrew.length===0){html+=`<tr><td colspan="12" class="no-rows">No crew match this filter.</td></tr>`;}
+  if(allCrew.length===0){html+=`<tr><td colspan="${12 + (showDepotCol ? 1 : 0) + (editable ? 1 : 0)}" class="no-rows">No crew match this filter.</td></tr>`;}
   else allCrew.forEach((c,i)=>{
     const [abg,afc]=AVT_PAL[i%AVT_PAL.length];
     const m=STATUS_META[c.status]||{label:c.status};
@@ -833,14 +1072,14 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
       else{const cl=cdClass(sec,maxH);const pct=Math.round((sec/(maxH*3600))*100);cdHtml=`<div class="countdown-cell"><span class="cd-text ${cl}" id="cd-${c.depot}-${c.id}">${fmtCountdown(sec)}</span><div class="cd-bar-wrap"><div class="cd-bar cd-${cl}" style="width:${pct}%" id="cdb-${c.depot}-${c.id}"></div></div></div>`;}
     }
     html+=`<tr>
-      <td style="font-size:11px;color:var(--text3);font-family:var(--mono)">${c.id}</td>
+      <td style="font-size:11px;color:var(--text3);font-family:var(--mono)">${getCrewStaffNumberLabel(c)}</td>
       <td><div class="nm"><div class="avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div><strong>${c.name}</strong><span>${getDesignationLabel(c.grade)}</span></div></div></td>
       ${showDepotCol?`<td><span style="color:${dc};font-weight:700">${c.depot}</span></td>`:''}
       <td style="font-size:11px;color:${c.awayDepot?'var(--kr-red)':'var(--text3)'}">${c.awayDepot?`${c.awayDepot} (away)`:'Home'}</td>
       <td style="font-size:11px">${c.route||'-'}</td>
-      <td style="color:var(--text3);font-size:10px">${c.shift||'-'}</td>
+      <td style="color:var(--text3);font-size:10px">${getCrewShiftLabel(c)}</td>
       <td><span class="badge bd-${c.status}">${m.label}</span></td>
-      <td>${c.status==='BK'&&c.trainType?`<span class="tt-${c.trainType}">${c.trainType}</span>`:'-'}</td>
+      <td>${c.status==='BK'&&c.trainType?`<span style="${getTrainTypeBadgeStyle(c.trainType)}">${getTrainTypeLabel(c.trainType)}</span>`:'-'}</td>
       <td style="font-size:11px;font-family:var(--mono);color:${c.status==='BK'&&c.bookTime?'var(--booked)':'var(--text3)'};font-weight:${c.status==='BK'&&c.bookTime?'700':'400'}">${c.status==='BK'&&c.bookTime?c.bookTime:'-'}</td>
       <td>${cdHtml}</td>
       <td style="color:var(--text3);font-size:11px">${c.since||'-'}</td>
@@ -965,7 +1204,8 @@ function renderMonthly(){
     for(let d=1;d<=maxDay;d++){
       const key=`d${d}`;const code=(c.monthly&&c.monthly[key])||'';
       const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;
-      const cls=code?`day-${code}`:(we?'day-we':'');const isTod=d===CD;
+      const isEngineeringBooking = code==='BK' && String(c.trainType||'')==='Engineering';
+      const cls=code?(code==='BK' ? (isEngineeringBooking ? 'day-BK day-BK-eng' : 'day-BK') : `day-${code}`):(we?'day-we':'');const isTod=d===CD;
       if(sm[code]!==undefined)sm[code]++;
       const edAtt=!currentUser.isHQ?`class="${cls} day-ed${isTod?' today-col':''}" title="Click to edit" onclick="openDayEdit('${c.depot}','${c.id}',${d})"`:`class="${cls}${isTod?' today-col':''}"`;
       html+=`<td ${edAtt}>${code||''}</td>`;
@@ -974,7 +1214,7 @@ function renderMonthly(){
   });
   // Booked count row
   html+=`<tr style="background:#0F172A"><td class="mc-name" style="color:#E0E0E0;font-weight:700;font-size:10px">BOOKED / DAY</td>${showDepot?'<td style="background:#0F172A"></td>':''}`;
-  for(let d=1;d<=maxDay;d++){const key=`d${d}`;const bk=allCrew.filter(c=>(c.monthly&&c.monthly[key])==='BK').length;html+=`<td style="background:${bk>0?'#1B5E20':'#B71C1C'};color:#fff;font-weight:700;font-size:11px">${bk}</td>`;}
+  for(let d=1;d<=maxDay;d++){const key=`d${d}`;const bk=allCrew.filter(c=>(c.monthly&&c.monthly[key])==='BK').length;const engineering=allCrew.filter(c=>(c.monthly&&c.monthly[key])==='BK' && String(c.trainType||'')==='Engineering').length;html+=`<td class="${engineering>0?'mc-sBK-eng':'mc-sBK'}">${bk}</td>`;}
   html+=`<td colspan="7" style="color:rgba(255,255,255,.4);font-size:10px;text-align:left;padding-left:8px">Booked per day</td></tr>`;
   html+=`</tbody></table></div>`;
   document.getElementById('pbody').innerHTML=html;
@@ -1203,6 +1443,11 @@ async function reloadAdminData(){
   await loadStatusMeta();
   await seedReportMetaIfEmpty();
   await loadReportMeta();
+  await seedTrainTypeMetaIfEmpty();
+  await loadTrainTypeMeta();
+  await seedShiftMetaIfEmpty();
+  await loadShiftMeta();
+  await loadAccessMeta();
   renderAdmin();
 }
 
@@ -1227,11 +1472,275 @@ async function loadAdminUsers(){
   return users;
 }
 
+function normalizeAccessMetaRecord(docSnapOrData){
+  const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
+  const id = String(data?.id || docSnapOrData?.id || docSnapOrData?.record_id || '').trim();
+  if(!id) return null;
+  return {
+    id,
+    label:String(data?.label || data?.name || id).trim() || id,
+    description:String(data?.description || '').trim(),
+    active:data?.active !== false,
+    system:!!data?.system,
+  };
+}
+
+function sortAccessMetaRecords(records){
+  return (records || []).filter(Boolean).sort((a,b)=>String(a.label||a.id).localeCompare(String(b.label||b.id)) || String(a.id).localeCompare(String(b.id)));
+}
+
+function getAccessMetaRecords(key){
+  return key==='roles' ? sortAccessMetaRecords(roleMetadataCache) : sortAccessMetaRecords(permissionMetadataCache);
+}
+
+function setAccessMetaRecords(key, records){
+  const next = sortAccessMetaRecords(records);
+  if(key==='roles'){
+    setRoleMetadata(next);
+  } else {
+    setPermissionMetadata(next);
+  }
+}
+
+async function loadAccessMeta(){
+  if(!db){
+    setAccessMetaRecords('roles', []);
+    setAccessMetaRecords('permissions', []);
+    return;
+  }
+  try{
+    const roleSnap = await getDocs(collection(db,'roles'));
+    const roles=[];
+    roleSnap.forEach(docSnap=>{ const meta=normalizeAccessMetaRecord(docSnap); if(meta) roles.push(meta); });
+    setAccessMetaRecords('roles', roles);
+
+    const permissionSnap = await getDocs(collection(db,'permissions'));
+    const permissions=[];
+    permissionSnap.forEach(docSnap=>{ const meta=normalizeAccessMetaRecord(docSnap); if(meta) permissions.push(meta); });
+    setAccessMetaRecords('permissions', permissions);
+  }catch(err){
+    console.error('Failed to load access metadata', err);
+    setAccessMetaRecords('roles', []);
+    setAccessMetaRecords('permissions', []);
+  }
+}
+
+function buildAccessMetaSection(key, records){
+  const config = getAccessMetaConfig(key);
+  const title = config?.title || key;
+  const singular = title.endsWith('s') ? title.slice(0, -1) : title;
+  const rows = sortAccessMetaRecords(records).map(meta=>`
+    <div class="admin-row" style="grid-template-columns:minmax(160px,1fr) minmax(180px,1.2fr) minmax(220px,2fr) 100px 90px 90px;">
+      <input value="${meta.id}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="${singular} code">
+      <input value="${meta.label}" data-admin-${key}-label="${meta.id}" class="admin-field" placeholder="${singular} name">
+      <input value="${meta.description||''}" data-admin-${key}-description="${meta.id}" class="admin-field" placeholder="Description">
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.active!==false?'checked':''} data-admin-${key}-active="${meta.id}"> Active</label>
+      <span style="font-size:12px;color:var(--text2);align-self:center">${meta.system?'System':''}</span>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" onclick="saveAccessMetaRecord('${key}','${meta.id}')">Save</button>
+        <button class="btn btn-danger btn-sm" onclick="removeAccessMetaRecord('${key}','${meta.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  const newRow = `
+    <div class="admin-row admin-row-add" style="grid-template-columns:minmax(160px,1fr) minmax(180px,1.2fr) minmax(220px,2fr) 100px 90px 90px;">
+      <input value="" data-admin-${key}-code="new" class="admin-field" placeholder="New ${singular.toLowerCase()} code">
+      <input value="" data-admin-${key}-label="new" class="admin-field" placeholder="${singular} name">
+      <input value="" data-admin-${key}-description="new" class="admin-field" placeholder="Description">
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-${key}-active="new"> Active</label>
+      <span style="font-size:12px;color:var(--text2);align-self:center">Custom</span>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" onclick="saveAccessMetaRecord('${key}','new')">Add</button>
+        <button class="btn btn-ghost btn-sm" disabled>Delete</button>
+      </div>
+    </div>
+  `;
+  return `
+    <div class="admin-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">${title}</div>
+          <p class="admin-section-note">${config?.note || ''}</p>
+        </div>
+      </div>
+      <div class="admin-row-header" style="grid-template-columns:minmax(160px,1fr) minmax(180px,1.2fr) minmax(220px,2fr) 100px 90px 90px;">
+        <div>Code</div><div>Name</div><div>Description</div><div>Active</div><div>Type</div><div></div>
+      </div>
+      ${rows}${newRow}
+    </div>
+  `;
+}
+
+async function saveAccessMetaRecord(key, recordId){
+  const config = getAccessMetaConfig(key);
+  if(!config) return;
+  const codeSelector = `[data-admin-${key}-code="${recordId}"]`;
+  const labelSelector = `[data-admin-${key}-label="${recordId}"]`;
+  const descSelector = `[data-admin-${key}-description="${recordId}"]`;
+  const activeSelector = `[data-admin-${key}-active="${recordId}"]`;
+  const codeEl = document.querySelector(codeSelector);
+  const labelEl = document.querySelector(labelSelector);
+  const descEl = document.querySelector(descSelector);
+  const activeEl = document.querySelector(activeSelector);
+  const nextId = recordId === 'new' ? (codeEl?.value || '').trim() : recordId;
+  if(!nextId){
+    alert(`${config.title.slice(0, -1)} code cannot be blank`);
+    return;
+  }
+  const payload = {
+    id: nextId,
+    label:(labelEl?.value || nextId).trim(),
+    description:(descEl?.value || '').trim(),
+    active:!!activeEl?.checked,
+    system:false,
+  };
+  try{
+    if(!db){
+      await saveLocalAdminRecord(config.collection, nextId, payload);
+      await loadAccessMeta();
+      setSyncStatus('ok','Local access metadata saved');
+    } else {
+      await setDoc(doc(db, config.collection, nextId), payload, {merge:true});
+      await loadAccessMeta();
+    }
+    renderAdmin();
+  }catch(err){
+    console.error(`Failed to save ${config.collection}`, err);
+    setSyncStatus('err','Save failed');
+    alert(`Unable to save ${config.title.toLowerCase()} right now.`);
+  }
+}
+
+async function removeAccessMetaRecord(key, recordId){
+  const config = getAccessMetaConfig(key);
+  if(!config) return;
+  if(!confirm(`Remove ${recordId} from ${config.title}?`)) return;
+  try{
+    if(!db){
+      await deleteLocalAdminRecord(config.collection, recordId);
+      await loadAccessMeta();
+      setSyncStatus('ok','Local access metadata removed');
+    } else {
+      await deleteDoc(doc(db, config.collection, recordId));
+      await loadAccessMeta();
+    }
+    renderAdmin();
+  }catch(err){
+    console.error(`Failed to delete ${config.collection}`, err);
+    setSyncStatus('err','Delete failed');
+    alert(`Unable to remove ${config.title.toLowerCase()} right now.`);
+  }
+}
+
+function buildSimpleMetaSection(key, records){
+  const config = getSimpleMetaConfig(key);
+  const title = config?.title || key;
+  const singular = title.endsWith('s') ? title.slice(0, -1) : title;
+  const rows = sortSimpleMetaRecords(records).map(meta=>`
+    <div class="admin-row" style="grid-template-columns:minmax(180px,1.4fr) 120px 90px 90px;">
+      <input value="${meta.id}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="${singular} id">
+      <input type="number" value="${meta.order||999}" data-admin-${key}-order="${meta.id}" class="admin-field" min="0" placeholder="Order">
+      <button class="btn btn-primary btn-sm" onclick="saveSimpleMetaRecord('${key}','${meta.id}')">Save</button>
+      <button class="btn btn-danger btn-sm" onclick="removeSimpleMetaRecord('${key}','${meta.id}')">Delete</button>
+    </div>
+  `).join('');
+  const newRow = `
+    <div class="admin-row admin-row-add" style="grid-template-columns:minmax(180px,1.4fr) 120px 90px 90px;">
+      <input value="" data-admin-${key}-id="new" class="admin-field" placeholder="New ${singular.toLowerCase()}">
+      <input type="number" value="999" data-admin-${key}-order="new" class="admin-field" min="0" placeholder="Order">
+      <button class="btn btn-primary btn-sm" onclick="saveSimpleMetaRecord('${key}','new')">Add</button>
+      <button class="btn btn-ghost btn-sm" disabled>Delete</button>
+    </div>
+  `;
+  return `
+    <div class="admin-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">${title}</div>
+          <p class="admin-section-note">${config?.note || ''}</p>
+        </div>
+      </div>
+      <div class="admin-row-header" style="grid-template-columns:minmax(180px,1.4fr) 120px 90px 90px;">
+        <div>ID</div><div>Order</div><div></div><div></div>
+      </div>
+      ${rows}${newRow}
+    </div>
+  `;
+}
+
+async function refreshSimpleMetaUi(key){
+  await loadSimpleMeta(key);
+  if(key==='trainType') populateTrainTypeSelect();
+  if(key==='shift') populateShiftSelects();
+}
+
+async function saveSimpleMetaRecord(key, recordId){
+  const config = getSimpleMetaConfig(key);
+  if(!config) return;
+  const idSelector = `[data-admin-${key}-id="${recordId}"]`;
+  const orderSelector = `[data-admin-${key}-order="${recordId}"]`;
+  const idEl = document.querySelector(idSelector);
+  const orderEl = document.querySelector(orderSelector);
+  const nextId = recordId === 'new' ? (idEl?.value || '').trim() : recordId;
+  if(!nextId){
+    alert(`${config.title.slice(0, -1)} id cannot be blank`);
+    return;
+  }
+  const payload = {
+    id: nextId,
+    label: nextId,
+    order: Number(orderEl?.value || 999),
+    active: true,
+  };
+  try{
+    if(!db){
+      await saveLocalAdminRecord(config.collection, nextId, payload);
+      await refreshSimpleMetaUi(key);
+      setSyncStatus('ok','Local metadata saved');
+    } else {
+      await setDoc(doc(db, config.collection, nextId), payload, {merge:true});
+      await refreshSimpleMetaUi(key);
+    }
+    renderAdmin();
+  }catch(err){
+    console.error(`Failed to save ${config.collection}`, err);
+    setSyncStatus('err','Save failed');
+    alert(`Unable to save ${config.title.toLowerCase()} right now.`);
+  }
+}
+
+async function removeSimpleMetaRecord(key, recordId){
+  const config = getSimpleMetaConfig(key);
+  if(!config) return;
+  if(!confirm(`Remove ${recordId} from ${config.title}?`)) return;
+  try{
+    if(!db){
+      await deleteLocalAdminRecord(config.collection, recordId);
+      await refreshSimpleMetaUi(key);
+      setSyncStatus('ok','Local metadata removed');
+    } else {
+      const resp = await fetch(`/admin/meta/${encodeURIComponent(config.collection)}/${encodeURIComponent(recordId)}`, {
+        method:'DELETE',
+        headers:{'X-CSRF-TOKEN':getCsrfToken()},
+      });
+      if(!resp.ok){
+        throw new Error(await resp.text());
+      }
+      await refreshSimpleMetaUi(key);
+    }
+    renderAdmin();
+  }catch(err){
+    console.error(`Failed to delete ${config.collection}`, err);
+    setSyncStatus('err','Delete failed');
+    alert(`Unable to remove ${config.title.toLowerCase()} right now.`);
+  }
+}
+
 async function renderAdmin(){
   const dbReady = !!db;
   const pbody = document.getElementById('pbody');
   const errorPanel = '<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to render admin interface. Check console for details.</div>';
-  document.getElementById('phSub').textContent=dbReady ? 'Manage Firestore-backed configuration' : 'Manage local configuration';
+  document.getElementById('phSub').textContent='Manage MySQL-backed configuration';
   document.getElementById('phActions').innerHTML=hasGlobalAccess()?'<button class="btn btn-ghost btn-sm no-print" onclick="reloadAdminData()">Reload</button>':'';
   if(!hasGlobalAccess()){
     if(pbody) pbody.innerHTML='<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Admin tools are available to HQ users only.</div>';
@@ -1242,11 +1751,17 @@ async function renderAdmin(){
   try{
     users = await loadAdminUsers();
     if(!db){
-      await reloadAdminData();
+      await loadDepotMeta();
+      await loadDesignationMeta();
+      await loadStatusMeta();
+      await loadReportMeta();
+      await loadTrainTypeMeta();
+      await loadShiftMeta();
+      await loadAccessMeta();
     }
   }catch(err){
     console.error('Failed to load admin users',err);
-    if(pbody) pbody.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to load admin data. Check your Firestore connection or local backend.</div>`;
+    if(pbody) pbody.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to load admin data. Check your MySQL backend connection.</div>`;
     return;
   }
   try{
@@ -1298,10 +1813,10 @@ async function renderAdmin(){
     const meta=STATUS_META[statusId]||{label:statusId,bg:'#ECEFF1',fg:'#37474F'};
     return `<div class="admin-row">
       <input value="${statusId}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Status id">
-      <input value="${meta.label}" data-admin-status-label="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
-      <input value="${meta.bg||'#ECEFF1'}" data-admin-status-bg="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#bg">
-      <input value="${meta.fg||'#37474F'}" data-admin-status-fg="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="#fg">
-      <button class="btn btn-primary btn-sm" onclick="saveStatusMetaRecord('${statusId}')">Save</button>
+      <input value="${meta.label}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Label">
+      <input value="${meta.bg||'#ECEFF1'}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="#bg">
+      <input value="${meta.fg||'#37474F'}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="#fg">
+      <button class="btn btn-ghost btn-sm" disabled>System</button>
     </div>`;
   }).join('');
 
@@ -1320,90 +1835,156 @@ async function renderAdmin(){
 
   const userRows=users.map(user=>{
     const userRole=user.role||'booking_officer';
-    const roleOptions=USER_ROLE_OPTIONS.map(role=>`<option value="${role.id}"${role.id===userRole?' selected':''}>${role.label}</option>`).join('');
+    const roleOptions=getRoleSelectOptions(userRole);
+    const permissionsValue=Array.isArray(user.permissions)?user.permissions.join(', '):String(user.permissions||'');
     return `<div class="admin-row">
       <input value="${user.username}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Username">
       <input value="${user.name||''}" data-admin-user-name="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Display name">
       <input value="${user.depot||''}" data-admin-user-depot="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot">
       <select data-admin-user-role="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)">${roleOptions}</select>
+      <input value="${permissionsValue}" data-admin-user-permissions="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Permissions comma-separated">
       <input type="password" value="${user.pw||''}" data-admin-user-pw="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Password">
       <button class="btn btn-primary btn-sm" onclick="saveUserAccount('${user.username}')">Save</button>
       <label style="grid-column:1 / -1;font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${user.isHQ?'checked':''} data-admin-user-hq="${user.username}"> HQ / global access</label>
     </div>`;
   }).join('');
 
+  const newUserRow = `<div class="admin-row admin-row-add">
+      <input value="" data-admin-user-username="newUser" class="admin-field" placeholder="New username">
+      <input value="" data-admin-user-name="newUser" class="admin-field" placeholder="Display name">
+      <input value="HQ" data-admin-user-depot="newUser" class="admin-field" placeholder="Depot">
+      <select data-admin-user-role="newUser" class="admin-field">${getRoleSelectOptions('booking_officer')}</select>
+      <input value="" data-admin-user-permissions="newUser" class="admin-field" placeholder="Permissions comma-separated">
+      <input type="password" value="" data-admin-user-pw="newUser" class="admin-field" placeholder="Password">
+      <button class="btn btn-primary btn-sm" onclick="saveUserAccount('newUser')">Add user</button>
+      <label style="grid-column:1 / -1;font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" data-admin-user-hq="newUser"> HQ / global access</label>
+    </div>`;
+
+  const adminSections={
+    overview:`<div class="admin-card admin-overview-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Overview</div>
+          <p class="admin-section-note">Pick a category from the dropdown or use a tile below. New items are added from the bottom row inside each section.</p>
+        </div>
+      </div>
+      <div class="admin-overview-grid">
+        <button class="admin-overview-tile" onclick="setAdminSectionView('depots')"><b>Depots</b><span>Labels, colors, rest hours</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('designations')"><b>Designations</b><span>Labels, aliases, rest eligibility</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('trainType')"><b>Train types</b><span>Reusable rolling stock labels</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('shift')"><b>Shifts</b><span>Shift codes and labels</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('status')"><b>Status</b><span>Badge text and colors</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('reports')"><b>Reports</b><span>Visibility, ordering, types</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('roles')"><b>Roles</b><span>Editable access groups</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('permissions')"><b>Permissions</b><span>Reusable access flags</span></button>
+        <button class="admin-overview-tile" onclick="setAdminSectionView('users')"><b>Users</b><span>Accounts and access</span></button>
+        <button class="admin-overview-tile" onclick="openAddModal()"><b>Crew members</b><span>Add single crew or bulk paste</span></button>
+      </div>
+    </div>`,
+    depots:`<div class="admin-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Depots</div>
+          <p class="admin-section-note">Edit depot IDs, labels, colors and rest hours here. Use the bottom row to add a new depot.</p>
+        </div>
+      </div>
+      <div class="admin-row-header">
+        <div>ID</div><div>Label</div><div>Color</div><div>Hours</div><div>Active</div><div></div>
+      </div>
+      ${depotRows}${newDepotRow}
+    </div>`,
+    designations:`<div class="admin-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Designations</div>
+          <p class="admin-section-note">Change designation labels or alias names. Use the bottom row to add a new designation.</p>
+        </div>
+      </div>
+      <div class="admin-row-header">
+        <div>ID</div><div>Label</div><div>Aliases</div><div>Order</div><div>Rest</div><div></div>
+      </div>
+      ${designationRows}${newDesignationRow}
+    </div>`,
+    status:`<div class="admin-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Crew statuses</div>
+          <p class="admin-section-note">These system statuses are prefilled in the database and shown here read-only. SB is shown as Stand By in the crew entry form.</p>
+        </div>
+      </div>
+      <div class="admin-row-header">
+        <div>ID</div><div>Label</div><div>Background</div><div>Foreground</div><div></div><div></div>
+      </div>
+      ${statusRows}
+    </div>`,
+    reports:`<div class="admin-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Report templates</div>
+          <p class="admin-section-note">Control which reports appear and how they are ordered.</p>
+        </div>
+      </div>
+      <div class="admin-row-header">
+        <div>ID</div><div>Label</div><div>Type</div><div>Order</div><div>Visible</div><div></div>
+      </div>
+      ${reportRows}
+    </div>`,
+    trainType:buildSimpleMetaSection('trainType', trainTypeMetadataCache),
+    shift:buildSimpleMetaSection('shift', shiftMetadataCache),
+    roles:buildAccessMetaSection('roles', roleMetadataCache),
+    permissions:buildAccessMetaSection('permissions', permissionMetadataCache),
+    users:`<div class="admin-card">
+      <div class="admin-section-header">
+        <div>
+          <div class="admin-section-title">Users</div>
+          <p class="admin-section-note">Manage usernames, roles, depot access and passwords here.</p>
+        </div>
+      </div>
+      <div class="admin-row-header">
+        <div>Username</div><div>Name</div><div>Depot</div><div>Role</div><div>Permissions</div><div>Password</div><div></div>
+      </div>
+      ${userRows}${newUserRow}
+    </div>`,
+  };
+
+  const adminSectionOptions=[
+    {id:'overview',label:'Overview'},
+    {id:'depots',label:'Depots'},
+    {id:'designations',label:'Designations'},
+    {id:'status',label:'Status'},
+    {id:'reports',label:'Reports'},
+    {id:'roles',label:'Roles'},
+    {id:'permissions',label:'Permissions'},
+    {id:'trainType',label:'Train types'},
+    {id:'shift',label:'Shifts'},
+    {id:'users',label:'Users'},
+  ];
+  const activeAdminSection = adminSections[adminSectionView] ? adminSectionView : 'overview';
+
   if(pbody) {
     pbody.innerHTML=`
-    <div class="admin-panel">
-      ${dbReady? '': '<div class="admin-warning">Firebase is unavailable. Admin metadata changes are saved locally via SQLite.</div>'}
-      <div class="admin-card">
-        <div class="admin-section-header">
-          <div class="admin-section-title">Admin backend</div>
+    <div class="admin-panel admin-shell">
+      <div class="admin-page-header">
+        <div>
+          <div class="admin-page-kicker">Admin center</div>
+          <div class="admin-page-title">Manage one category at a time</div>
+          <div class="admin-page-note">Use the dropdown to switch between editable sections and keep the page focused. Global users can also add crew from here.</div>
         </div>
-        <p>Seed or refresh the configuration collections that drive the app. Use local storage when Firestore is unavailable.</p>
-        <div class="admin-card-actions">
-          <button class="btn btn-primary" onclick="seedFirestore()">Seed / refresh Firestore</button>
-          <button class="btn btn-ghost" onclick="reloadAdminData()">Reload admin data</button>
-        </div>
-      </div>
-      <div class="admin-grid">
-        <div class="admin-card">
-          <div class="admin-section-header">
-            <div>
-              <div class="admin-section-title">Depots</div>
-              <p class="admin-section-note">Edit depot IDs, labels, colors and rest hours here. New depots can be added with the bottom row.</p>
-            </div>
-          </div>
-          <div class="admin-row-header">
-            <div>ID</div><div>Label</div><div>Color</div><div>Hours</div><div>Active</div><div></div>
-          </div>
-          ${depotRows}${newDepotRow}
-        </div>
-        <div class="admin-card">
-          <div class="admin-section-header">
-            <div>
-              <div class="admin-section-title">Designations</div>
-              <p class="admin-section-note">Change designation labels or alias names. Enter aliases separated by commas for flexible search.</p>
-            </div>
-          </div>
-          <div class="admin-row-header">
-            <div>ID</div><div>Label</div><div>Aliases</div><div>Order</div><div>Rest</div><div></div>
-          </div>
-          ${designationRows}${newDesignationRow}
-        </div>
-        <div class="admin-card">
-          <div class="admin-section-header">
-            <div class="admin-section-title">Status metadata</div>
-          </div>
-          <div class="admin-row-header">
-            <div>ID</div><div>Label</div><div>Background</div><div>Foreground</div><div></div><div></div>
-          </div>
-          ${statusRows}
+        <div class="admin-page-actions">
+          <button class="btn btn-green btn-sm no-print" onclick="openAddModal()">+ Add crew</button>
+          <select class="sel-sm admin-section-select" onchange="setAdminSectionView(this.value)">
+            ${adminSectionOptions.map(section=>`<option value="${section.id}"${section.id===activeAdminSection?' selected':''}>${section.label}</option>`).join('')}
+          </select>
+          <button class="btn btn-ghost btn-sm no-print" onclick="reloadAdminData()">Reload</button>
         </div>
       </div>
-      <div class="admin-card">
-        <div class="admin-section-header">
-          <div class="admin-section-title">Report templates</div>
-        </div>
-        <div class="admin-row-header">
-          <div>ID</div><div>Label</div><div>Type</div><div>Order</div><div>Visible</div><div></div>
-        </div>
-        ${reportRows}
-      </div>
+      ${dbReady? '': '<div class="admin-warning">MySQL backend is unavailable.</div>'}
+      <div class="admin-content">${adminSections[activeAdminSection]}</div>
       <div class="admin-card">
         <div class="admin-section-header">
           <div class="admin-section-title">Crew upload options</div>
         </div>
-        <p>Use the Add Crew modal for quick bulk paste. A CSV import flow can be added next if you want file-based uploads.</p>
-      </div>
-      <div class="admin-card">
-        <div class="admin-section-header">
-          <div class="admin-section-title">Users</div>
-        </div>
-        <div class="admin-row-header">
-          <div>Username</div><div>Name</div><div>Depot</div><div>Role</div><div>Password</div><div></div>
-        </div>
-        ${userRows}
+        <p>Use the Add Crew modal for quick single adds or bulk paste, then download the CSV template from the bulk tab when you need a repeatable import format.</p>
       </div>
     </div>`;
     }
@@ -1551,25 +2132,33 @@ async function saveReportMetaRecord(reportId){
 }
 
 async function saveUserAccount(username){
+  const targetUsername = username==='newUser' ? (document.querySelector('[data-admin-user-username="newUser"]')?.value||'').trim() : username;
+  if(!targetUsername){
+    alert('Username cannot be blank');
+    return;
+  }
   const nameEl=document.querySelector(`[data-admin-user-name="${username}"]`);
   const depotEl=document.querySelector(`[data-admin-user-depot="${username}"]`);
   const roleEl=document.querySelector(`[data-admin-user-role="${username}"]`);
+  const permissionsEl=document.querySelector(`[data-admin-user-permissions="${username}"]`);
   const pwEl=document.querySelector(`[data-admin-user-pw="${username}"]`);
   const hqEl=document.querySelector(`[data-admin-user-hq="${username}"]`);
   const role=roleEl?.value||'booking_officer';
+  const permissions=String(permissionsEl?.value||'').split(',').map(item=>item.trim()).filter(Boolean);
   const isHQ=!!hqEl?.checked || role==='super_admin' || role==='hq_admin';
   const payload={
-    username,
-    name:(nameEl?.value||username).trim(),
+    username:targetUsername,
+    name:(nameEl?.value||targetUsername).trim(),
     depot:(depotEl?.value||'HQ').trim(),
     role,
+    permissions,
     pw:(pwEl?.value||'').trim(),
     isHQ,
     isSuperAdmin:role==='super_admin',
   };
   if(!db){
     try{
-      await saveLocalAdminRecord('users',username,payload);
+      await saveLocalAdminRecord('users',targetUsername,payload);
       await loadAdminUsers();
       renderAdmin();
       setSyncStatus('ok','Local user saved');
@@ -1581,7 +2170,7 @@ async function saveUserAccount(username){
       return;
     }
   }
-  await setDoc(doc(db,'users',username),payload,{merge:true});
+  await setDoc(doc(db,'users',targetUsername),payload,{merge:true});
   await renderAdmin();
 }
 
@@ -1637,13 +2226,16 @@ function openUpdate(depot,id){
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   currentModalGrade=c.grade;
   populateStatusSelects(c.status||'SB');
+  populateTrainTypeSelect(c.trainType||'');
   document.getElementById('mTitle').textContent='Update crew status';
   document.getElementById('mSub').textContent=`${c.name} · ${c.id} · ${depot}`;
   document.getElementById('mStatus').value=c.status||'SB';
   document.getElementById('mTrainType').value=c.trainType||'';
   document.getElementById('mBookTime').value=c.bookTime||'';
   document.getElementById('mRoute').value=c.route||'';
-  populateShiftSelects(c.shift||'Day (06:00–14:00)');
+  const staffNumberEl=document.getElementById('mStaffNumber');
+  if(staffNumberEl) staffNumberEl.value=c.staff_number||'';
+  populateShiftSelects(c.shift||'');
   document.getElementById('mNotes').value=c.notes||'';
   if(c.restStarted){
     const restDate = c.restStarted && c.restStarted.toDate ? c.restStarted.toDate() : new Date(c.restStarted);
@@ -1661,13 +2253,16 @@ function openDayEdit(depot,id,day){
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   currentModalGrade=c.grade;
   populateStatusSelects((c.monthly&&c.monthly[`d${day}`])||'SB');
+  populateTrainTypeSelect('');
   const dt=new Date(CY,CM,day);
   document.getElementById('mTitle').textContent='Edit daily position';
   document.getElementById('mSub').textContent=`${c.name} · ${DAY_NAMES[dt.getDay()]} ${day} ${MONTH_NAME.split(' ')[0]}`;
   document.getElementById('mStatus').value=(c.monthly&&c.monthly[`d${day}`])||'SB';
   document.getElementById('mTrainType').value='';document.getElementById('mBookTime').value='';
   document.getElementById('mRoute').value=c.route||'';
-  populateShiftSelects(c.shift||'Day (06:00–14:00)');document.getElementById('mNotes').value='';
+  const staffNumberEl=document.getElementById('mStaffNumber');
+  if(staffNumberEl) staffNumberEl.value=c.staff_number||'';
+  populateShiftSelects(c.shift||'');document.getElementById('mNotes').value='';
   document.getElementById('mRestStart').value=new Date().toTimeString().substring(0,5);
   document.getElementById('mRestLocation').value='home';
   setAwayDepotOptions(depot,'');
@@ -1709,7 +2304,7 @@ async function saveModal(){
       else if(newStatus!=='R')restStarted=null;
       const restLocation=document.getElementById('mRestLocation').value;
       const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
-      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,awayDepot: newStatus==='R'?awayDepot:null};
+      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,awayDepot: newStatus==='R'?awayDepot:null};
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${trainType?' ('+trainType+')':''}${bookTime?' @ '+bookTime:''}`);
     }
@@ -1748,15 +2343,20 @@ async function removeCrewDoc(depot,id){
 
 /* ════════ ADD CREW ════════════════════════════════════════════════════════ */
 function openAddModal(){
-  document.getElementById('addModalSub').textContent='Depot: '+(currentUser.depot==='HQ'?'Select below':currentUser.depot);
+  const canChooseDepot = hasGlobalAccess() || currentUser?.depot === 'HQ';
+  const defaultDepot = hqDepotView !== 'all' ? hqDepotView : (currentUser?.depot || getActiveDepots()[0] || 'HQ');
+  document.getElementById('addModalSub').textContent='Depot: '+(canChooseDepot?'Select below':currentUser.depot);
   document.getElementById('addName').value='';document.getElementById('addRoute').value='';
+  const addStaffNumberEl=document.getElementById('addStaffNumber');
+  if(addStaffNumberEl) addStaffNumberEl.value='';
   document.getElementById('bulkText').value='';
   const depotSelect=document.getElementById('addDepot');
   if(depotSelect){
-    depotSelect.parentElement.style.display=currentUser.isHQ?'block':'none';
-    depotSelect.innerHTML=getActiveDepots().map(d=>`<option value="${d}"${d===(hqDepotView!=='all'?hqDepotView:getActiveDepots()[0])?' selected':''}>${d}</option>`).join('');
+    depotSelect.parentElement.style.display=canChooseDepot?'block':'none';
+    depotSelect.innerHTML=getActiveDepots().map(d=>`<option value="${d}"${d===defaultDepot?' selected':''}>${d}</option>`).join('');
   }
   populateDesignationSelect();
+  populateTrainTypeSelect();
   switchAddTab('single');
   document.getElementById('addStatus').value='SB';
   document.getElementById('addModal').classList.add('open');
@@ -1794,8 +2394,35 @@ function parseCsvRow(line){
   return parts;
 }
 
+function normalizeCsvHeader(value){
+  return String(value||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'');
+}
+
+function downloadCrewUploadTemplate(){
+  const depot = currentUser?.isHQ ? (hqDepotView !== 'all' ? hqDepotView : getActiveDepots()[0] || 'HQ') : currentUser?.depot || 'HQ';
+  const csv = [
+    'Name,Staff Number,Designation,Depot,Route,Status,Train Type,Notes',
+    `"Ali Hassan","STAFF-001","locomotive_driver","${depot}","Mombasa-Nairobi","SB","Freight","Ready for mass upload"`,
+    `"Amina Njeri","STAFF-002","train_guard","${depot}","Nairobi-Kisumu","BK","Passenger","Booked example row"`,
+    `"Peter Ochieng","STAFF-003","shunter_driver","${depot}","Changamwe Yard","R","Shunting","Resting example row"`,
+  ].join('\n');
+  dlCSV(csv, 'KR_Crew_Upload_Template.csv');
+}
+
+function getBulkRowValue(row, headerMap, names, position, fallback=''){
+  for(const name of names){
+    const index = headerMap?.[name];
+    if(index !== undefined && row[index] !== undefined && String(row[index]).trim() !== ''){
+      return String(row[index]).trim();
+    }
+  }
+  const raw = row[position];
+  return raw !== undefined && String(raw).trim() !== '' ? String(raw).trim() : fallback;
+}
+
 async function saveAddCrew(){
-  const depot=currentUser.isHQ?(document.getElementById('addDepot')?.value||hqDepotView):currentUser.depot;
+  const canChooseDepot = hasGlobalAccess() || currentUser?.depot === 'HQ';
+  const depot=canChooseDepot?(document.getElementById('addDepot')?.value||hqDepotView||getActiveDepots()[0]||'HQ'):currentUser.depot;
   if(depot==='all'||depot==='HQ'||!depot){alert('Please select a specific depot first.');return;}
   const isBulk=document.getElementById('addBulk').style.display!=='none';
   if(!isBulk){
@@ -1810,16 +2437,27 @@ async function saveAddCrew(){
   try{
     if(isBulk){
       const raw=document.getElementById('bulkText').value||'';
-      const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(l=>l && !/^\s*name\s*,/i.test(l));
+      const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
       if(!lines.length){alert('Paste one or more crew rows first.');return;}
+      const firstRowParts = parseCsvRow(lines[0]);
+      const firstRowHeaders = firstRowParts.map(normalizeCsvHeader);
+      const headerNames = ['name','fullname','staffnumber','staffno','staffnum','staff_number','designation','grade','depot','route','status','traintype','shift','notes'];
+      const hasHeaderRow = firstRowHeaders.some(header => headerNames.includes(header));
+      const headerMap = hasHeaderRow ? firstRowHeaders.reduce((acc, header, index)=>{ if(header) acc[header] = index; return acc; }, {}) : null;
+      if(hasHeaderRow) lines.shift();
       let added=0;
       for(const line of lines){
         const parts=parseCsvRow(line);
-        const name=parts[0]||'';
+        const name=getBulkRowValue(parts, headerMap, ['name','fullname'], 0, '');
         if(!name) continue;
-        const grade=parts[1]||'locomotive_driver';
-        const route=parts[2]||'';
-        await addSingleCrew(depot,name,grade,route,'SB');
+        const staffNumber=getBulkRowValue(parts, headerMap, ['staffnumber','staffno','staffnum','staff_number'], 1, '');
+        const grade=getBulkRowValue(parts, headerMap, ['designation','grade'], 2, 'locomotive_driver');
+        const rowDepot=getBulkRowValue(parts, headerMap, ['depot'], 3, depot) || depot;
+        const route=getBulkRowValue(parts, headerMap, ['route','assignment'], 4, '');
+        const status=getBulkRowValue(parts, headerMap, ['status'], 5, 'SB') || 'SB';
+        const trainType=getBulkRowValue(parts, headerMap, ['traintype','traintype'], 6, '');
+        const notes=getBulkRowValue(parts, headerMap, ['notes','note'], 7, '');
+        await addSingleCrew(rowDepot,name,grade,route,status,trainType,'',notes,staffNumber);
         added++;
       }
       if(!added){alert('No valid crew rows were found. Each row requires a name.');return;}
@@ -1827,7 +2465,7 @@ async function saveAddCrew(){
     } else {
       const name=document.getElementById('addName').value.trim();
       if(!name){alert('Please enter a name.');return;}
-      await addSingleCrew(depot,name,document.getElementById('addGrade').value,document.getElementById('addRoute').value,document.getElementById('addStatus').value);
+      await addSingleCrew(depot,name,document.getElementById('addGrade').value,document.getElementById('addRoute').value,document.getElementById('addStatus').value,'','',document.getElementById('addNotes')?.value||'',document.getElementById('addStaffNumber')?.value||'');
       setLog(`${name} added to ${depot}.`);
     }
     setSyncStatus('ok','Saved');
@@ -1839,13 +2477,13 @@ async function saveAddCrew(){
   if(!db)refreshPage();
 }
 
-async function addSingleCrew(depot,name,grade,route,initStatus){
+async function addSingleCrew(depot,name,grade,route,initStatus,trainType='',shift='',notes='',staffNumber=''){
   const existing=Object.values(state[depot]||{}).map(c=>c.id);
   const prefix=depot.substring(0,2).toUpperCase();
   let num=1;while(existing.includes(`${prefix}-${String(num).padStart(3,'0')}`))num++;
   const id=`${prefix}-${String(num).padStart(3,'0')}`;
   const monthly={};for(let d=1;d<=DAYS_IN_MON;d++)monthly[`d${d}`]='';monthly[`d${CD}`]=initStatus;
-  const obj={id,name,grade:normalizeDesignation(grade),depot,route,shift:'Day (06:00-14:00)',status:initStatus,trainType:'',notes:'',since:fmtTime(new Date()),monthly,restStarted:null,awayDepot:null,updatedBy:currentUser.username,monthKey:MONTH_KEY};
+  const obj={id,name,staff_number:String(staffNumber||'').trim(),grade:normalizeDesignation(grade),depot,route,shift:String(shift||'').trim(),status:initStatus,trainType,notes,since:fmtTime(new Date()),monthly,restStarted:null,awayDepot:null,updatedBy:currentUser.username,monthKey:MONTH_KEY};
   await addCrewDoc(depot,obj);
 }
 
@@ -1864,10 +2502,10 @@ function filterSearch(){const q=(document.getElementById('crewSearch')?.value||'
 /* ════════ EXPORT ══════════════════════════════════════════════════════════ */
 function exportCSV(){
   const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d);
-  let csv='ID,Name,Designation,Depot,Route,Shift,Status,Train Type,Booked Time,Rest Remaining,Since,Notes\n';
+  let csv='Staff Number,Name,Designation,Depot,Route,Shift,Status,Train Type,Booked Time,Rest Remaining,Since,Notes\n';
   all.forEach(c=>{
     const sec=restSecondsLeft(c);const rem=sec!==null&&sec>0?fmtCountdown(sec):(sec===0?'Complete':'-');
-    csv+=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${c.route||''}","${c.shift||''}","${STATUS_META[c.status]?.label||c.status}","${c.trainType||''}","${c.status==='BK'&&c.bookTime?c.bookTime:''}","${rem}","${c.since||''}","${(c.notes||'').replace(/"/g,"'")}"\n`;
+    csv+=`"${getCrewStaffNumberLabel(c)}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${c.route||''}","${getCrewShiftLabel(c)}","${STATUS_META[c.status]?.label||c.status}","${c.trainType||''}","${c.status==='BK'&&c.bookTime?c.bookTime:''}","${rem}","${c.since||''}","${(c.notes||'').replace(/"/g,"'")}"\n`;
   });
   dlCSV(csv,`KR_Status_${todayStr()}.csv`);
 }
@@ -1885,7 +2523,6 @@ function exportAbsenceCSV(){
   dlCSV(csv,`KR_Absences_${todayStr()}.csv`);
 }
 window.doLogin = doLogin;
-window.useDemoMode = useDemoMode;
 window.doLogout = doLogout;
 window.goPage = goPage;
 window.closeModal = closeModal;
@@ -1906,31 +2543,23 @@ window.exportAbsenceCSV = exportAbsenceCSV;
 window.setFilter = setFilter;
 window.filterSearch = filterSearch;
 window.setHqDepotView = setHqDepotView;
+window.setAdminSectionView = setAdminSectionView;
 window.reloadAdminData = reloadAdminData;
 window.renderAdmin = renderAdmin;
 window.saveDepotMetaRecord = saveDepotMetaRecord;
 window.saveDesignationMetaRecord = saveDesignationMetaRecord;
 window.saveStatusMetaRecord = saveStatusMetaRecord;
 window.saveReportMetaRecord = saveReportMetaRecord;
+window.saveSimpleMetaRecord = saveSimpleMetaRecord;
+window.removeSimpleMetaRecord = removeSimpleMetaRecord;
 window.runReport = runReport;
 window.saveUserAccount = saveUserAccount;
-window.seedFirestore = async () => {
-  if(!db){setLog('Cannot seed Firestore: database not initialized.');return;}
-  await seedDepotMetaIfEmpty();
-  await loadDepotMeta();
-  await seedUsersIfEmpty();
-  await ensureCoreAccessUsers();
-  await seedStatusMetaIfEmpty();
-  await loadStatusMeta();
-  await seedDesignationMetaIfEmpty();
-  await loadDesignationMeta();
-  await seedReportMetaIfEmpty();
-  await loadReportMeta();
-  await migrateCrewDesignationKeys();
-  const depots = getActiveDepots();
-  await Promise.all(depots.map(seedDepotIfEmpty));
-  await ensureRestCountdownSample();
-  setLog('Firestore seed complete.');
+window.downloadCrewUploadTemplate = downloadCrewUploadTemplate;
+window.seedBackend = async () => {
+  if(!db){setLog('Cannot bootstrap superadmin: backend not initialized.');return;}
+  await loadBackendConfig();
+  await loadAdminUsers();
+  setLog('Superadmin bootstrap complete.');
 };
 /* ════════ UI ═══════════════════════════════════════════════════════════════ */
 
@@ -1940,31 +2569,31 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeA
 async function bootApp(){
   document.getElementById('loginPage')?.classList.add('show');
   populateLoginDepotOptions();
-  const cfg = await loadFirebaseConfig();
-  if(cfg && cfg.apiKey && cfg.projectId){
-    const ok = initFirebase(cfg);
+  const cfg = await loadBackendConfig();
+  if(cfg){
+    const ok = initBackend(cfg);
     if(ok){
-      await seedFirestoreUsers();
+      await seedBackendUsers();
       const hasSession = await restoreSession();
       if(!hasSession){
         document.getElementById('loginPage').classList.add('show');
       }
-      setSyncStatus('ok','Firebase connected');
+      setSyncStatus('ok','MySQL connected');
       setLoginHint(false);
-      setLog(hasSession?'Firebase connected - session restored.':'Firebase connected - ready.');
+      setLog(hasSession?'MySQL connected - session restored.':'MySQL connected - ready.');
     } else {
       document.getElementById('loginPage').classList.add('show');
-      setSyncStatus('err','Firebase initialization failed');
+      setSyncStatus('err','Backend initialization failed');
       setLoginHint(false);
       const errEl = document.getElementById('loginErr');
-      if(errEl) errEl.textContent = 'Firebase init failed. Check console for details.';
+      if(errEl) errEl.textContent = 'Backend init failed. Check console for details.';
     }
   } else {
     document.getElementById('loginPage').classList.add('show');
-    setSyncStatus('err','Missing .env Firebase config');
+    setSyncStatus('err','Backend unavailable');
     setLoginHint(false);
     const errEl = document.getElementById('loginErr');
-    if(errEl) errEl.textContent = 'Firebase .env config not found. Create a .env file and reload.';
+    if(errEl) errEl.textContent = 'Backend not reachable. Check the Laravel/MySQL connection and reload.';
   }
 }
 

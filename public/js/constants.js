@@ -1,7 +1,8 @@
 export const DEPOTS=[];
 export let DEPOT_COLORS={};
 export let REST_HOURS={};
-export const TRAIN_TYPES=['Freight','Commuter','Passenger','Engineering','Shunting'];
+export let TRAIN_TYPES=['Freight','Commuter','Passenger','Engineering','Shunting'];
+export let SHIFT_OPTIONS=[];
 export let STATUS_META={};
 export let STATUSES=[];
 export const DRIVER_GRADES=['locomotive_driver'];
@@ -11,6 +12,12 @@ export function setDepotConfig(depots, colors, hours){
   DEPOTS.push(...(Array.isArray(depots)?depots:[]));
   DEPOT_COLORS = colors || {};
   REST_HOURS = hours || {};
+}
+export function setTrainTypeConfig(values){
+  TRAIN_TYPES = Array.isArray(values) ? values : [];
+}
+export function setShiftConfig(values){
+  SHIFT_OPTIONS = Array.isArray(values) ? values : [];
 }
 export function setStatusConfig(statuses, meta){
   STATUSES = Array.isArray(statuses)?statuses:[];

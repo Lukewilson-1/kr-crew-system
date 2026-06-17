@@ -4,7 +4,7 @@ A Kenya Railways crew booking application for depot officers and HQ users.
 
 ## Overview
 
-This web app manages crew status, daily bookings, monthly position registers, rest countdowns, and utilization reporting. It supports live Firestore syncing, demo mode, and archived monthly exports.
+This web app manages crew status, daily bookings, monthly position registers, rest countdowns, and utilization reporting. It uses a Laravel API with MySQL storage and archived monthly exports.
 
 ## Features
 
@@ -12,14 +12,13 @@ This web app manages crew status, daily bookings, monthly position registers, re
 - Depot-specific roster and monthly register
 - Rest countdowns with auto-promote for driver rest completion
 - Reports for daily status, monthly register, absences, and utilization
-- Firebase Firestore backend with `.env` configuration
-- Offline demo mode for local testing
+- Laravel JSON API backed by MySQL
 
 ## Files
 
 - `KR_Crew_Live_v4.html` - main HTML entry point
-- `app.js` - application logic, rendering, Firebase sync, and exports
-- `firebase.js` - Firebase initialization and `.env` loader
+- `app.js` - application logic, rendering, API sync, and exports
+- `mysql.js` - browser data adapter for the Laravel/MySQL backend
 - `helpers.js` - utility functions (CSV download, time formatting, search, etc.)
 - `styles.css` - app styling
 - `.gitignore` - repository ignore rules
@@ -30,16 +29,6 @@ This web app manages crew status, daily bookings, monthly position registers, re
    ```bash
    git clone https://github.com/Lukewilson-1/kr-crew-system.git
    cd kr-crew-system
-   ```
-
-2. Add Firebase configuration in a `.env` file at the project root:
-   ```text
-   FIREBASE_API_KEY=your_api_key
-   FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-   FIREBASE_PROJECT_ID=your_project_id
-   FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-   FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-   FIREBASE_APP_ID=your_app_id
    ```
 
 ### Laravel Setup
@@ -79,11 +68,155 @@ If Composer or PHP are not installed yet, the app can still be inspected in the 
 
 4. Open the browser at `http://localhost:8000/KR_Crew_Live_v4.html`.
 
-## Firebase Notes
+## Backend Notes
 
-- The app loads Firestore config from `.env` using `firebase.js`.
-- If no Firebase connection is available, use offline demo mode from the login screen.
-- The app relies on Firestore collections for metadata and does not auto-seed default users or crew data.
+- The browser talks to Laravel JSON endpoints backed by MySQL.
+- Crew records, users, admin metadata, and crew shift assignments are stored in the database.
+- The superadmin account is bootstrapped from `SUPERADMIN_USERNAME` and `SUPERADMIN_PASSWORD`.
+- Re-run the bootstrap with `php artisan crew:seed-superadmin`.
+
+## Schema
+
+The current normalized layout keeps crew identity separate from shift assignment, and the new schema migration expands that into a durable operational model:
+
+```mermaid
+erDiagram
+   CREW_RECORDS {
+      string record_id PK
+      string depot
+      string crew_id
+      string staff_number
+      longtext payload
+      datetime created_at
+      datetime updated_at
+   }
+
+   CREW_MEMBERS {
+      string record_id PK
+      string crew_id
+      string staff_number
+      string depot_code
+      string display_name
+      datetime created_at
+      datetime updated_at
+   }
+
+   CREW_SHIFT_ASSIGNMENTS {
+      string crew_record_id PK
+      string record_id
+      string crew_id
+      string depot
+      string shift
+      datetime assigned_at
+      datetime created_at
+      datetime updated_at
+   }
+
+   CREW_STATUS_HISTORY {
+      string history_id PK
+      string crew_record_id
+      string status_code
+      string reason_code
+      datetime effective_at
+      datetime created_at
+      datetime updated_at
+   }
+
+   DUTY_ROSTERS {
+      string roster_id PK
+      string depot_code
+      date roster_date
+      string period_label
+      string status
+      datetime created_at
+      datetime updated_at
+   }
+
+   DUTY_ROSTER_ITEMS {
+      string item_id PK
+      string roster_id
+      string crew_record_id
+      string shift_code
+      string train_type_code
+      string route_code
+      string rest_location_code
+      date duty_date
+      datetime created_at
+      datetime updated_at
+   }
+
+   ADMIN_META {
+      string collection PK
+      string record_id PK
+      json payload
+      datetime created_at
+      datetime updated_at
+   }
+
+   DEPOTS {
+      string depot_code PK
+      string depot_name
+      string region
+      boolean is_hq
+      datetime created_at
+      datetime updated_at
+   }
+
+   STATUS_CODES {
+      string status_code PK
+      string status_label
+      integer sort_order
+      boolean is_terminal
+      datetime created_at
+      datetime updated_at
+   }
+
+   SHIFT_TEMPLATES {
+      string shift_code PK
+      string shift_name
+      time starts_at
+      time ends_at
+      boolean is_active
+      datetime created_at
+      datetime updated_at
+   }
+
+   TRAIN_TYPES {
+      string train_type_code PK
+      string train_type_name
+      integer sort_order
+      boolean is_active
+      datetime created_at
+      datetime updated_at
+   }
+
+   ROUTES {
+      string route_code PK
+      string route_name
+      string origin_depot_code
+      string destination_depot_code
+      boolean is_active
+      datetime created_at
+      datetime updated_at
+   }
+
+   REST_LOCATIONS {
+      string rest_location_code PK
+      string rest_location_name
+      string depot_code
+      boolean is_active
+      datetime created_at
+      datetime updated_at
+   }
+
+   CREW_RECORDS ||--o| CREW_SHIFT_ASSIGNMENTS : "one crew row has one active shift assignment"
+   CREW_RECORDS ||--o{ CREW_STATUS_HISTORY : "one crew row can have many status events"
+   DUTY_ROSTERS ||--o{ DUTY_ROSTER_ITEMS : "one roster has many scheduled items"
+```
+
+Crew rows now store staff number directly, while the active shift lives in `crew_shift_assignments`. If a crew member has no assignment yet, the UI shows a default Day shift label until one is assigned.
+
+The new migration adds the normalized lookup and operational tables without removing the existing compatibility tables, so the app can keep serving the current JSON payload flow while you transition controllers to the relational model.
 
 ## Running
 

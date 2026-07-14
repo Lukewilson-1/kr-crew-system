@@ -28,6 +28,10 @@ class Login extends BaseLogin
 
     protected function throwFailureValidationException(): never
     {
+        \Log::error('Filament login failed', [
+            'data' => request()->all(),
+            'user' => auth()->user(),
+        ]);
         throw \Illuminate\Validation\ValidationException::withMessages([
             'data.username' => __('filament-panels::pages/auth/login.messages.failed'),
         ]);

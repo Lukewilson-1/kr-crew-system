@@ -6,6 +6,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
 class AdminMetaController extends Controller
@@ -41,7 +42,7 @@ class AdminMetaController extends Controller
                     'name' => 'Super Admin',
                     'depot' => 'HQ',
                     'role' => 'super_admin',
-                    'pw' => $password,
+                    'pw' => Hash::make($password),
                     'isHQ' => true,
                     'isSuperAdmin' => true,
                 ]),
@@ -58,7 +59,7 @@ class AdminMetaController extends Controller
                     'depot_code' => 'HQ',
                     'role_code' => 'super_admin',
                     'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports']),
-                    'pw' => $password,
+                    'pw' => $this->normalizePassword($password),
                     'is_hq' => true,
                     'is_super_admin' => true,
                     'is_active' => true,
@@ -68,6 +69,19 @@ class AdminMetaController extends Controller
                 ]
             );
         }
+    }
+
+    private function normalizePassword(string $password): string
+    {
+        if ($password === '') {
+            return '';
+        }
+
+        if (str_starts_with($password, '$2y$') || str_starts_with($password, '$argon2i$') || str_starts_with($password, '$argon2id$')) {
+            return $password;
+        }
+
+        return Hash::make($password);
     }
 
     protected function ensureTable(): void
@@ -138,6 +152,9 @@ class AdminMetaController extends Controller
                 'description' => $row->description,
                 'system' => (bool) $row->is_system,
                 'active' => is_null($row->deleted_at),
+                'canLogin' => data_get(json_decode($row->metadata ?? '{}', true), 'canLogin', false),
+                'isCrewMember' => data_get(json_decode($row->metadata ?? '{}', true), 'isCrewMember', false),
+                'isUser' => data_get(json_decode($row->metadata ?? '{}', true), 'isUser', false),
             ],
             'permissions' => [
                 'id' => $row->permission_code,
@@ -145,6 +162,9 @@ class AdminMetaController extends Controller
                 'description' => $row->description,
                 'system' => (bool) $row->is_system,
                 'active' => is_null($row->deleted_at),
+                'canLogin' => data_get(json_decode($row->metadata ?? '{}', true), 'canLogin', false),
+                'isCrewMember' => data_get(json_decode($row->metadata ?? '{}', true), 'isCrewMember', false),
+                'isUser' => data_get(json_decode($row->metadata ?? '{}', true), 'isUser', false),
             ],
             default => [
                 'id' => $row->record_id,
@@ -287,21 +307,26 @@ class AdminMetaController extends Controller
                 $permissions = [];
             }
 
+            $updateData = [
+                'name' => trim((string) ($payload['name'] ?? $id)) ?: $id,
+                'depot_code' => trim((string) ($payload['depot'] ?? 'HQ')) ?: 'HQ',
+                'role_code' => trim((string) ($payload['role'] ?? 'booking_officer')) ?: 'booking_officer',
+                'permissions' => json_encode(array_values($permissions)),
+                'is_hq' => !empty($payload['isHQ']) || !empty($payload['is_hq']),
+                'is_super_admin' => !empty($payload['isSuperAdmin']) || (($payload['role'] ?? '') === 'super_admin'),
+                'is_active' => $active,
+                'metadata' => json_encode($payload),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ];
+
+            if (isset($payload['pw']) && trim((string) $payload['pw']) !== '') {
+                $updateData['pw'] = $this->normalizePassword((string) $payload['pw']);
+            }
+
             DB::table($table)->updateOrInsert(
                 ['username' => $id],
-                [
-                    'name' => trim((string) ($payload['name'] ?? $id)) ?: $id,
-                    'depot_code' => trim((string) ($payload['depot'] ?? 'HQ')) ?: 'HQ',
-                    'role_code' => trim((string) ($payload['role'] ?? 'booking_officer')) ?: 'booking_officer',
-                    'permissions' => json_encode(array_values($permissions)),
-                    'pw' => (string) ($payload['pw'] ?? 'superadmin123'),
-                    'is_hq' => !empty($payload['isHQ']) || !empty($payload['is_hq']),
-                    'is_super_admin' => !empty($payload['isSuperAdmin']) || (($payload['role'] ?? '') === 'super_admin'),
-                    'is_active' => $active,
-                    'metadata' => json_encode($payload),
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
+                $updateData
             );
             $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
@@ -325,6 +350,27 @@ class AdminMetaController extends Controller
             return;
         }
 
+        if ($collection === 'roles') {
+            DB::table($table)->updateOrInsert(
+                ['role_code' => $id],
+                [
+                    'role_name' => trim((string) ($payload['label'] ?? $id)) ?: $id,
+                    'description' => isset($payload['description']) ? trim((string) $payload['description']) : null,
+                    'is_system' => !empty($payload['system']),
+                    'metadata' => json_encode([
+                        'active' => $active,
+                        'canLogin' => !empty($payload['canLogin']),
+                        'isCrewMember' => !empty($payload['isCrewMember']),
+                        'isUser' => !empty($payload['isUser']),
+                    ]),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
+            return;
+        }
+
         if ($collection === 'permissions') {
             DB::table($table)->updateOrInsert(
                 ['permission_code' => $id],
@@ -334,6 +380,9 @@ class AdminMetaController extends Controller
                     'is_system' => !empty($payload['system']),
                     'metadata' => json_encode([
                         'active' => $active,
+                        'canLogin' => !empty($payload['canLogin']),
+                        'isCrewMember' => !empty($payload['isCrewMember']),
+                        'isUser' => !empty($payload['isUser']),
                     ]),
                     'updated_at' => now(),
                     'created_at' => now(),

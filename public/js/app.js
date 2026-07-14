@@ -1063,10 +1063,15 @@ function setLoginHint(demo){document.getElementById('loginHint').innerHTML=demo?
 
 /* ════════ NAVIGATION ══════════════════════════════════════════════════════ */
 function goPage(p){
+  if (p === 'admin') {
+    window.location.href = '/admin';
+    return;
+  }
+
   currentPage=p;if(p!=='roster')activeFilter='all';
   document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
   const el=document.getElementById('sb-'+p);if(el)el.classList.add('active');
-  const titles={dashboard:'Dashboard',roster:'Crew Roster',rest:'Rest Countdowns',monthly:'Monthly View',reports:'Reports',admin:'Admin'};
+  const titles={dashboard:'Dashboard',roster:'Crew Roster',rest:'Rest Countdowns',monthly:'Monthly View',reports:'Reports'};
   document.getElementById('phTitle').textContent=titles[p]||p;
   refreshPage();
   persistSession();
@@ -1574,14 +1579,18 @@ async function loadAdminUsers(){
 
 function normalizeAccessMetaRecord(docSnapOrData){
   const data = docSnapOrData?.data ? docSnapOrData.data() : docSnapOrData;
+  const metadata = data?.metadata || {};
   const id = String(data?.id || docSnapOrData?.id || docSnapOrData?.record_id || '').trim();
   if(!id) return null;
   return {
     id,
     label:String(data?.label || data?.name || id).trim() || id,
     description:String(data?.description || '').trim(),
-    active:data?.active !== false,
-    system:!!data?.system,
+    active:data?.active !== false && metadata?.active !== false,
+    system:!!data?.system || !!data?.is_system || !!data?.isSystem || !!metadata?.system,
+    canLogin: data?.canLogin ?? data?.can_login ?? metadata?.can_login ?? metadata?.canLogin ?? false,
+    isCrewMember: data?.isCrewMember ?? data?.is_crew_member ?? metadata?.is_crew_member ?? metadata?.isCrewMember ?? false,
+    isUser: data?.isUser ?? data?.is_user ?? metadata?.is_user ?? metadata?.isUser ?? false,
   };
 }
 

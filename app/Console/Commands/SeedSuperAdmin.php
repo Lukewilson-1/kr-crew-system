@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
 class SeedSuperAdmin extends Command
@@ -41,7 +42,7 @@ class SeedSuperAdmin extends Command
                     'name' => 'Super Admin',
                     'depot' => 'HQ',
                     'role' => 'super_admin',
-                    'pw' => $password,
+                    'pw' => Hash::make($password),
                     'isHQ' => true,
                     'isSuperAdmin' => true,
                 ]),
@@ -58,7 +59,7 @@ class SeedSuperAdmin extends Command
                     'depot_code' => 'HQ',
                     'role_code' => 'super_admin',
                     'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports']),
-                    'pw' => $password,
+                    'pw' => Hash::make($password),
                     'is_hq' => true,
                     'is_super_admin' => true,
                     'is_active' => true,

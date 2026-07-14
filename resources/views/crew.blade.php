@@ -48,7 +48,7 @@
   </div>
   <div class="sb-group" id="adminSection" style="display:none">
     <div class="sb-sec">Admin</div>
-    <div class="sb-item" onclick="goPage('admin')" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
+    <div class="sb-item" onclick="window.location.href='/admin'" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
   </div>
   <div class="sb-bottom">v4.0 Live · Kenya Railways</div>
 </div>

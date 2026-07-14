@@ -83,6 +83,8 @@ let listeners=[];
 let currentPage='dashboard',activeFilter='all',hqDepotView='all',editKey=null;
 let cdInterval=null; // countdown ticker
 let currentModalGrade=null;
+let lastRefreshTime=0; // prevent rapid refresh spamming
+const MIN_REFRESH_INTERVAL=2000; // minimum milliseconds between refreshes
 let depotMetadataCache={};
 let designationMetadataCache={};
 let statusMetadataCache={};
@@ -892,10 +894,18 @@ function attachListeners(depots){
     const unsub=onSnapshot(query(collection(db,'crew'), where('depot','==',depot)), snap=>{
       snap.docChanges().forEach(ch=>{const d=ch.doc.data();const id=d.id||ch.doc.id;if(ch.type==='removed')delete state[depot][id];else state[depot][id]=d;});
       setSyncStatus('ok','Live');
-      if(currentPage!=='monthly')refreshPage();
+      // Update UI incrementally without full page refresh to preserve form state and user input
+      updateLiveCountdowns();
     },err=>{setSyncStatus('err','Sync error');setLog('Error: '+err.message);});
     listeners.push(unsub);
   });
+}
+
+function updateLiveCountdowns(){
+  // Update only the countdown displays without full page refresh
+  // This keeps modals and forms open while syncing data changes
+  if(currentPage==='rest') renderRest();
+  else if(currentPage==='roster' || currentPage==='dashboard') updateCountdownsInTable();
 }
 
 /* ════════ WRITE ═══════════════════════════════════════════════════════════ */
@@ -985,7 +995,19 @@ function doLogout(){
 /* ════════ HELPERS ═════════════════════════════════════════════════════════ */
 function setLog(m){const el=document.getElementById('logText');if(el)el.textContent=fmtTime(new Date())+' - '+m;}
 function updateClock(){const el=document.getElementById('tbClock');if(el)el.textContent=fmtTime(new Date());}
-function refreshPage(){const p={dashboard:renderDashboard,roster:renderRoster,rest:renderRest,monthly:renderMonthly,reports:renderReports,admin:renderAdmin};if(p[currentPage])p[currentPage]();}
+function refreshPage(){
+  // Skip refresh if a modal is open (user is editing)
+  const modalOpen = document.getElementById('modal')?.classList.contains('open') || document.getElementById('addModal')?.classList.contains('open');
+  if(modalOpen) return;
+  
+  // Debounce rapid refreshes
+  const now = Date.now();
+  if(now - lastRefreshTime < MIN_REFRESH_INTERVAL) return;
+  lastRefreshTime = now;
+  
+  const p={dashboard:renderDashboard,roster:renderRoster,rest:renderRest,monthly:renderMonthly,reports:renderReports,admin:renderAdmin};
+  if(p[currentPage])p[currentPage]();
+}
 function setSyncStatus(t,m){
   const dot=document.getElementById('syncDot');const lbl=document.getElementById('syncLabel');if(!dot)return;
   dot.className='sd sd-'+t;lbl.textContent=m;
@@ -1805,7 +1827,7 @@ async function renderAdmin(){
     return `<div class="admin-row">
       <input value="${meta.id}" data-admin-depot-id="${meta.id}" class="admin-field" placeholder="Depot id">
       <input value="${meta.label}" data-admin-depot-label="${meta.id}" class="admin-field" placeholder="Label">
-      <input value="${meta.color}" data-admin-depot-color="${meta.id}" class="admin-field" placeholder="#color">
+      <input type="color" value="${meta.color}" data-admin-depot-color="${meta.id}" class="admin-field" style="width:60px;height:40px;padding:2px;cursor:pointer;">
       <input type="number" value="${meta.restHours}" min="1" data-admin-depot-hours="${meta.id}" class="admin-field" placeholder="Hours">
       <label class="admin-checkbox-label"><input type="checkbox" ${active?' checked':''} data-admin-depot-active="${meta.id}"> Active</label>
       <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('${meta.id}')">Save</button>
@@ -1815,7 +1837,7 @@ async function renderAdmin(){
   const newDepotRow = `<div class="admin-row admin-row-add">
       <input value="" data-admin-depot-id="newDepot" class="admin-field" placeholder="New depot id">
       <input value="" data-admin-depot-label="newDepot" class="admin-field" placeholder="Label">
-      <input value="#37474F" data-admin-depot-color="newDepot" class="admin-field" placeholder="#color">
+      <input type="color" value="#37474F" data-admin-depot-color="newDepot" class="admin-field" style="width:60px;height:40px;padding:2px;cursor:pointer;">
       <input type="number" value="12" min="1" data-admin-depot-hours="newDepot" class="admin-field" placeholder="Hours">
       <label class="admin-checkbox-label"><input type="checkbox" data-admin-depot-active="newDepot"> Active</label>
       <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('newDepot')">Add depot</button>
@@ -1846,10 +1868,10 @@ async function renderAdmin(){
     const meta=STATUS_META[statusId]||{label:statusId,bg:'#ECEFF1',fg:'#37474F'};
     return `<div class="admin-row">
       <input value="${statusId}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Status id">
-      <input value="${meta.label}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Label">
-      <input value="${meta.bg||'#ECEFF1'}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="#bg">
-      <input value="${meta.fg||'#37474F'}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="#fg">
-      <button class="btn btn-ghost btn-sm" disabled>System</button>
+      <input value="${meta.label}" data-admin-status-label="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input type="color" value="${meta.bg||'#ECEFF1'}" data-admin-status-bg="${statusId}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
+      <input type="color" value="${meta.fg||'#37474F'}" data-admin-status-fg="${statusId}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
+      <button class="btn btn-primary btn-sm" onclick="saveStatusMetaRecord('${statusId}')">Save</button>
     </div>`;
   }).join('');
 

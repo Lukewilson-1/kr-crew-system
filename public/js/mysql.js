@@ -345,7 +345,7 @@ export function onSnapshot(source, callback, errorCallback) {
   };
 
   poll();
-  const timer = setInterval(poll, 10000);
+  const timer = setInterval(poll, 30000); // Poll every 30 seconds instead of 10 to reduce disruptions
 
   return () => {
     active = false;

@@ -167,12 +167,41 @@ class AdminMetaController extends Controller
         return $rows->map(fn (object $row) => $this->mapNormalizedCollectionRecord($collection, $row))->values()->all();
     }
 
+    protected function applySoftDeleteState(string $collection, string $table, string $id, bool $active): void
+    {
+        if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'deleted_at')) {
+            return;
+        }
+
+        $column = match ($collection) {
+            'depotMeta' => 'depot_code',
+            'statusMeta' => 'status_code',
+            'trainTypeMeta' => 'train_type_code',
+            'shiftMeta' => 'shift_code',
+            'users' => 'username',
+            'roles' => 'role_code',
+            'permissions' => 'permission_code',
+            default => null,
+        };
+
+        if ($column === null) {
+            return;
+        }
+
+        DB::table($table)->where($column, $id)->update([
+            'deleted_at' => $active ? null : now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     protected function persistNormalizedCollection(string $collection, string $id, array $payload): void
     {
         $table = $this->normalizedCollections[$collection] ?? null;
         if ($table === null || !Schema::hasTable($table)) {
             return;
         }
+
+        $active = !array_key_exists('active', $payload) || $payload['active'] !== false;
 
         if ($collection === 'depotMeta') {
             DB::table($table)->updateOrInsert(
@@ -185,12 +214,13 @@ class AdminMetaController extends Controller
                         'color' => $payload['color'] ?? null,
                         'restHours' => $payload['restHours'] ?? null,
                         'order' => $payload['order'] ?? null,
-                        'active' => $payload['active'] ?? true,
+                        'active' => $active,
                     ]),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
         }
 
@@ -204,12 +234,13 @@ class AdminMetaController extends Controller
                     'metadata' => json_encode([
                         'bg' => $payload['bg'] ?? null,
                         'fg' => $payload['fg'] ?? null,
-                        'active' => $payload['active'] ?? true,
+                        'active' => $active,
                     ]),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
         }
 
@@ -219,12 +250,13 @@ class AdminMetaController extends Controller
                 [
                     'train_type_name' => trim((string) ($payload['label'] ?? $id)) ?: $id,
                     'sort_order' => (int) ($payload['order'] ?? 999),
-                    'is_active' => !array_key_exists('active', $payload) || $payload['active'] !== false,
+                    'is_active' => $active,
                     'metadata' => json_encode($payload),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
         }
 
@@ -236,12 +268,13 @@ class AdminMetaController extends Controller
                     'starts_at' => !empty($payload['startsAt']) ? $payload['startsAt'] : null,
                     'ends_at' => !empty($payload['endsAt']) ? $payload['endsAt'] : null,
                     'sort_order' => (int) ($payload['order'] ?? 999),
-                    'is_active' => !array_key_exists('active', $payload) || $payload['active'] !== false,
+                    'is_active' => $active,
                     'metadata' => json_encode($payload),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
         }
 
@@ -264,12 +297,13 @@ class AdminMetaController extends Controller
                     'pw' => (string) ($payload['pw'] ?? 'superadmin123'),
                     'is_hq' => !empty($payload['isHQ']) || !empty($payload['is_hq']),
                     'is_super_admin' => !empty($payload['isSuperAdmin']) || (($payload['role'] ?? '') === 'super_admin'),
-                    'is_active' => !array_key_exists('active', $payload) || $payload['active'] !== false,
+                    'is_active' => $active,
                     'metadata' => json_encode($payload),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
         }
 
@@ -281,12 +315,13 @@ class AdminMetaController extends Controller
                     'description' => isset($payload['description']) ? trim((string) $payload['description']) : null,
                     'is_system' => !empty($payload['system']),
                     'metadata' => json_encode([
-                        'active' => $payload['active'] ?? true,
+                        'active' => $active,
                     ]),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
         }
 
@@ -298,12 +333,13 @@ class AdminMetaController extends Controller
                     'description' => isset($payload['description']) ? trim((string) $payload['description']) : null,
                     'is_system' => !empty($payload['system']),
                     'metadata' => json_encode([
-                        'active' => $payload['active'] ?? true,
+                        'active' => $active,
                     ]),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
         }
     }
 
@@ -326,7 +362,14 @@ class AdminMetaController extends Controller
         };
 
         if ($column !== null) {
-            DB::table($table)->where($column, $id)->delete();
+            if (Schema::hasColumn($table, 'deleted_at')) {
+                DB::table($table)->where($column, $id)->update([
+                    'deleted_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                DB::table($table)->where($column, $id)->delete();
+            }
         }
 
         if ($collection === 'users' && Schema::hasTable('admin_meta')) {

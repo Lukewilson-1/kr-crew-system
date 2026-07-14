@@ -13,6 +13,17 @@ const REPORT_TYPES=[
   {id:'absence',label:'Absence / NTB'},
   {id:'print',label:'Printable register'},
 ];
+const DEFAULT_DESIGNATION_DEFINITIONS=[
+  {id:'driver',label:'Driver',aliases:['locomotive_driver','train_driver'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:10},
+  {id:'guard',label:'Guard',aliases:['train_guard'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:20},
+  {id:'conductor',label:'Conductor',aliases:['conductor'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:30},
+  {id:'shunter',label:'Shunter',aliases:['shunting'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:40},
+  {id:'inspector',label:'Inspector',aliases:['inspector'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:50},
+  {id:'station_officer',label:'Station Officer',aliases:['station officer'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:60},
+  {id:'booking_officer',label:'Booking Officer',aliases:['booking officer'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:70},
+  {id:'hq_admin',label:'HQ Admin',aliases:['hq admin'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:80},
+  {id:'super_admin',label:'Super Admin',aliases:['super admin'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:90},
+];
 let REPORT_TEMPLATES={};
 const USER_ROLE_OPTIONS=[
   {id:'super_admin',label:'Super Admin'},
@@ -695,13 +706,45 @@ function normalizeDesignationMetaRecord(docSnapOrData){
     label:String(data.label||id),
     aliases:Array.isArray(data.aliases)?data.aliases:data.aliases?String(data.aliases).split(',').map(v=>v.trim()).filter(Boolean):[],
     restEligible:data.restEligible!==false,
+    canLogin:data.canLogin!==false,
+    isCrewMember:!!data.isCrewMember,
+    isUser:!!data.isUser,
     order:typeof data.order==='number'?data.order:999,
   };
 }
 
 async function seedDesignationMetaIfEmpty(){
-  // No static designation metadata seeding; admin-managed MySQL data is required.
-  return;
+  const seedDesignation = async (record) => {
+    if(!db){
+      await saveLocalAdminRecord('designationMeta', record.id, record);
+      return;
+    }
+    await setDoc(doc(db,'designationMeta',record.id), record, {merge:true});
+  };
+
+  try{
+    if(!db){
+      const data = await fetchLocalAdminMeta();
+      const existing = new Set((data.designationMeta||[]).map(item=>String(item.id||item.record_id||'').trim()).filter(Boolean));
+      const missing = DEFAULT_DESIGNATION_DEFINITIONS.filter(def=>!existing.has(def.id));
+      if(!missing.length) return;
+      await Promise.all(missing.map(seedDesignation));
+      return;
+    }
+
+    const snap = await getDocs(collection(db,'designationMeta'));
+    const existing = new Set();
+    snap.forEach(docSnap=>{
+      const data=docSnap.data();
+      const id=String(data?.id||docSnap.id||data?.record_id||'').trim();
+      if(id) existing.add(id);
+    });
+    const missing = DEFAULT_DESIGNATION_DEFINITIONS.filter(def=>!existing.has(def.id));
+    if(!missing.length) return;
+    await Promise.all(missing.map(seedDesignation));
+  }catch(err){
+    console.error('Failed to seed designation metadata', err);
+  }
 }
 
 async function loadDesignationMeta(){
@@ -1587,12 +1630,14 @@ function buildAccessMetaSection(key, records){
   const title = config?.title || key;
   const singular = title.endsWith('s') ? title.slice(0, -1) : title;
   const rows = sortAccessMetaRecords(records).map(meta=>`
-    <div class="admin-row" style="grid-template-columns:minmax(160px,1fr) minmax(180px,1.2fr) minmax(220px,2fr) 100px 90px 90px;">
+    <div class="admin-row" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 120px 90px;">
       <input value="${meta.id}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="${singular} code">
       <input value="${meta.label}" data-admin-${key}-label="${meta.id}" class="admin-field" placeholder="${singular} name">
-      <input value="${meta.description||''}" data-admin-${key}-description="${meta.id}" class="admin-field" placeholder="Description">
       <label class="admin-checkbox-label"><input type="checkbox" ${meta.active!==false?'checked':''} data-admin-${key}-active="${meta.id}"> Active</label>
-      <span style="font-size:12px;color:var(--text2);align-self:center">${meta.system?'System':''}</span>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.canLogin!==false?'checked':''} data-admin-${key}-login="${meta.id}"> Login</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isCrewMember?'checked':''} data-admin-${key}-crew="${meta.id}"> Crew</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isUser?'checked':''} data-admin-${key}-user="${meta.id}"> User</label>
+      <input value="${meta.description||''}" data-admin-${key}-description="${meta.id}" class="admin-field" placeholder="Description">
       <div style="display:flex;gap:6px;justify-content:flex-end">
         <button class="btn btn-primary btn-sm" onclick="saveAccessMetaRecord('${key}','${meta.id}')">Save</button>
         <button class="btn btn-danger btn-sm" onclick="removeAccessMetaRecord('${key}','${meta.id}')">Delete</button>
@@ -1600,12 +1645,14 @@ function buildAccessMetaSection(key, records){
     </div>
   `).join('');
   const newRow = `
-    <div class="admin-row admin-row-add" style="grid-template-columns:minmax(160px,1fr) minmax(180px,1.2fr) minmax(220px,2fr) 100px 90px 90px;">
+    <div class="admin-row admin-row-add" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 120px 90px;">
       <input value="" data-admin-${key}-code="new" class="admin-field" placeholder="New ${singular.toLowerCase()} code">
       <input value="" data-admin-${key}-label="new" class="admin-field" placeholder="${singular} name">
-      <input value="" data-admin-${key}-description="new" class="admin-field" placeholder="Description">
       <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-${key}-active="new"> Active</label>
-      <span style="font-size:12px;color:var(--text2);align-self:center">Custom</span>
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-${key}-login="new"> Login</label>
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-${key}-crew="new"> Crew</label>
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-${key}-user="new"> User</label>
+      <input value="" data-admin-${key}-description="new" class="admin-field" placeholder="Description">
       <div style="display:flex;gap:6px;justify-content:flex-end">
         <button class="btn btn-primary btn-sm" onclick="saveAccessMetaRecord('${key}','new')">Add</button>
         <button class="btn btn-ghost btn-sm" disabled>Delete</button>
@@ -1620,8 +1667,8 @@ function buildAccessMetaSection(key, records){
           <p class="admin-section-note">${config?.note || ''}</p>
         </div>
       </div>
-      <div class="admin-row-header" style="grid-template-columns:minmax(160px,1fr) minmax(180px,1.2fr) minmax(220px,2fr) 100px 90px 90px;">
-        <div>Code</div><div>Name</div><div>Description</div><div>Active</div><div>Type</div><div></div>
+      <div class="admin-row-header" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 120px 90px;">
+        <div>Code</div><div>Name</div><div>Active</div><div>Login</div><div>Crew</div><div>User</div><div>Description</div><div></div>
       </div>
       ${rows}${newRow}
     </div>
@@ -1635,10 +1682,16 @@ async function saveAccessMetaRecord(key, recordId){
   const labelSelector = `[data-admin-${key}-label="${recordId}"]`;
   const descSelector = `[data-admin-${key}-description="${recordId}"]`;
   const activeSelector = `[data-admin-${key}-active="${recordId}"]`;
+  const loginSelector = `[data-admin-${key}-login="${recordId}"]`;
+  const crewSelector = `[data-admin-${key}-crew="${recordId}"]`;
+  const userSelector = `[data-admin-${key}-user="${recordId}"]`;
   const codeEl = document.querySelector(codeSelector);
   const labelEl = document.querySelector(labelSelector);
   const descEl = document.querySelector(descSelector);
   const activeEl = document.querySelector(activeSelector);
+  const loginEl = document.querySelector(loginSelector);
+  const crewEl = document.querySelector(crewSelector);
+  const userEl = document.querySelector(userSelector);
   const nextId = recordId === 'new' ? (codeEl?.value || '').trim() : recordId;
   if(!nextId){
     alert(`${config.title.slice(0, -1)} code cannot be blank`);
@@ -1649,6 +1702,9 @@ async function saveAccessMetaRecord(key, recordId){
     label:(labelEl?.value || nextId).trim(),
     description:(descEl?.value || '').trim(),
     active:!!activeEl?.checked,
+    canLogin:!!loginEl?.checked,
+    isCrewMember:!!crewEl?.checked,
+    isUser:!!userEl?.checked,
     system:false,
   };
   try{
@@ -1831,6 +1887,7 @@ async function renderAdmin(){
       <input type="number" value="${meta.restHours}" min="1" data-admin-depot-hours="${meta.id}" class="admin-field" placeholder="Hours">
       <label class="admin-checkbox-label"><input type="checkbox" ${active?' checked':''} data-admin-depot-active="${meta.id}"> Active</label>
       <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('${meta.id}')">Save</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteDepotMetaRecord('${meta.id}')">Delete</button>
     </div>`;
   }).join('');
 
@@ -1843,26 +1900,19 @@ async function renderAdmin(){
       <button class="btn btn-primary btn-sm" onclick="saveDepotMetaRecord('newDepot')">Add depot</button>
     </div>`;
 
-  const designationRows=Object.values(getDesignationRegistry()).sort((a,b)=>(a.order||999)-(b.order||999)||a.label.localeCompare(b.label)).map(meta=>{
-    const aliases=(meta.aliases||[]).join(', ');
-    return `<div class="admin-row">
-      <input value="${meta.id}" data-admin-desig-id="${meta.id}" class="admin-field" placeholder="Designation id">
-      <input value="${meta.label}" data-admin-desig-label="${meta.id}" class="admin-field" placeholder="Label">
-      <input value="${aliases}" data-admin-desig-aliases="${meta.id}" class="admin-field" placeholder="Aliases">
+  const designationRecords = getAllDesignationMetadata().length ? getAllDesignationMetadata() : DEFAULT_DESIGNATION_DEFINITIONS;
+  const designationRows=designationRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id))).map(meta=>{
+    return `<div class="admin-row" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 90px 90px 90px 90px 100px 90px;">
+      <input value="${meta.id}" data-admin-desig-id="${meta.id}" class="admin-field" placeholder="Designation id" disabled>
+      <input value="${meta.label}" data-admin-desig-label="${meta.id}" class="admin-field" placeholder="Label" disabled>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.restEligible!==false?'checked':''} data-admin-desig-rest="${meta.id}"> Rest</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.canLogin!==false?'checked':''} data-admin-desig-login="${meta.id}"> Login</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isCrewMember?'checked':''} data-admin-desig-crew="${meta.id}"> Crew</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isUser?'checked':''} data-admin-desig-user="${meta.id}"> User</label>
       <input type="number" value="${meta.order||999}" data-admin-desig-order="${meta.id}" class="admin-field" min="0" placeholder="Order">
-      <label class="admin-checkbox-label"><input type="checkbox" ${meta.restEligible?'checked':''} data-admin-desig-rest="${meta.id}"> Rest</label>
       <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('${meta.id}')">Save</button>
     </div>`;
   }).join('');
-
-  const newDesignationRow = `<div class="admin-row admin-row-add">
-      <input value="" data-admin-desig-id="newDesignation" class="admin-field" placeholder="New designation id">
-      <input value="" data-admin-desig-label="newDesignation" class="admin-field" placeholder="Label">
-      <input value="" data-admin-desig-aliases="newDesignation" class="admin-field" placeholder="Aliases">
-      <input type="number" value="999" data-admin-desig-order="newDesignation" class="admin-field" min="0" placeholder="Order">
-      <label class="admin-checkbox-label"><input type="checkbox" data-admin-desig-rest="newDesignation"> Rest</label>
-      <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('newDesignation')">Add designation</button>
-    </div>`;
 
   const statusRows=STATUSES.map(statusId=>{
     const meta=STATUS_META[statusId]||{label:statusId,bg:'#ECEFF1',fg:'#37474F'};
@@ -1952,13 +2002,13 @@ async function renderAdmin(){
       <div class="admin-section-header">
         <div>
           <div class="admin-section-title">Designations</div>
-          <p class="admin-section-note">Change designation labels or alias names. Use the bottom row to add a new designation.</p>
+          <p class="admin-section-note">Use the predefined designation catalog and toggle the access flags for rest, login, crew, and user roles.</p>
         </div>
       </div>
-      <div class="admin-row-header">
-        <div>ID</div><div>Label</div><div>Aliases</div><div>Order</div><div>Rest</div><div></div>
+      <div class="admin-row-header" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 90px 90px 90px 90px 100px 90px;">
+        <div>ID</div><div>Label</div><div>Rest</div><div>Login</div><div>Crew</div><div>User</div><div>Order</div><div></div>
       </div>
-      ${designationRows}${newDesignationRow}
+      ${designationRows}
     </div>`,
     status:`<div class="admin-card">
       <div class="admin-section-header">
@@ -2049,6 +2099,33 @@ async function renderAdmin(){
   }
 }
 
+async function deleteDepotMetaRecord(depotId){
+  if(!confirm(`Delete ${depotId} from depots?`)) return;
+  try{
+    if(!db){
+      await deleteLocalAdminRecord('depotMeta', depotId);
+      await loadDepotMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local depot removed');
+      return;
+    }
+    const resp = await fetch(`/mysql/meta/${encodeURIComponent('depotMeta')}/${encodeURIComponent(depotId)}`, {
+      method:'DELETE',
+      headers:{'X-CSRF-TOKEN':getCsrfToken()},
+    });
+    if(!resp.ok){
+      throw new Error(await resp.text());
+    }
+    await loadDepotMeta();
+    renderAdmin();
+    setSyncStatus('ok','Depot removed');
+  }catch(err){
+    console.error('Failed to delete depot', err);
+    setSyncStatus('err','Delete failed');
+    alert('Unable to remove the depot right now.');
+  }
+}
+
 async function saveDepotMetaRecord(depotId){
   const idEl = document.querySelector(`[data-admin-depot-id="${depotId}"]`);
   const labelEl = document.querySelector(`[data-admin-depot-label="${depotId}"]`);
@@ -2088,27 +2165,25 @@ async function saveDepotMetaRecord(depotId){
 }
 
 async function saveDesignationMetaRecord(designationId){
-  const labelEl=document.querySelector(`[data-admin-desig-label="${designationId}"]`);
-  const aliasesEl=document.querySelector(`[data-admin-desig-aliases="${designationId}"]`);
+  const currentMeta = getAllDesignationMetadata().find(item=>item.id===designationId) || DEFAULT_DESIGNATION_DEFINITIONS.find(item=>item.id===designationId) || {id:designationId,label:designationId,aliases:[]};
   const orderEl=document.querySelector(`[data-admin-desig-order="${designationId}"]`);
   const restEl=document.querySelector(`[data-admin-desig-rest="${designationId}"]`);
-  const idEl = document.querySelector(`[data-admin-desig-id="${designationId}"]`);
-  const nextId = idEl?.value?.trim() || '';
-  if(!nextId){
-    alert('Designation id cannot be blank');
-    return;
-  }
-  const aliases = String(aliasesEl?.value||'').split(',').map(a=>a.trim()).filter(Boolean);
+  const loginEl=document.querySelector(`[data-admin-desig-login="${designationId}"]`);
+  const crewEl=document.querySelector(`[data-admin-desig-crew="${designationId}"]`);
+  const userEl=document.querySelector(`[data-admin-desig-user="${designationId}"]`);
   const meta={
-    id: nextId,
-    label:(labelEl?.value||nextId).trim(),
-    aliases,
+    id: designationId,
+    label: currentMeta.label || designationId,
+    aliases: Array.isArray(currentMeta.aliases) ? currentMeta.aliases : [],
     restEligible:!!restEl?.checked,
+    canLogin:!!loginEl?.checked,
+    isCrewMember:!!crewEl?.checked,
+    isUser:!!userEl?.checked,
     order:Number(orderEl?.value||999),
   };
   if(!db){
     try{
-      await saveLocalAdminRecord('designationMeta',nextId,meta);
+      await saveLocalAdminRecord('designationMeta',designationId,meta);
       await loadDesignationMeta();
       renderAdmin();
       setSyncStatus('ok','Local metadata saved');
@@ -2117,11 +2192,10 @@ async function saveDesignationMetaRecord(designationId){
       console.error('Local save failed',err);
       setSyncStatus('err','Local save failed');
       alert('Unable to save designation metadata locally. Check the browser console.');
-      return;
+      return; 
     }
   }
-  await setDoc(doc(db,'designationMeta',nextId),meta,{merge:true});
-  await loadDesignationMeta();
+  await setDoc(doc(db,'designationMeta',designationId),meta,{merge:true});
   renderAdmin();
 }
 

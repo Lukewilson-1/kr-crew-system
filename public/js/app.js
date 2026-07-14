@@ -31,6 +31,32 @@ function getRoleSelectOptions(selectedRole){
   }).join('');
 }
 
+function getDepotSelectOptions(selectedDepot='HQ'){
+  const depotSource = getAllDepotMetadata().length
+    ? getAllDepotMetadata().filter(depot => depot.active !== false)
+    : [{id:'HQ',label:'HQ'}, ...getActiveDepots().map(depot=>({id:depot,label:depot}))];
+  const seen = new Set();
+  return depotSource.filter(depot=>{
+    const id = String(depot.id || '').trim();
+    if(!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  }).map(depot=>{
+    const id = String(depot.id || '').trim();
+    const label = String(depot.label || id).trim();
+    return `<option value="${id}"${id===selectedDepot?' selected':''}>${label}</option>`;
+  }).join('');
+}
+
+function getPermissionSelectOptions(selectedPermissions=[]){
+  const selected = new Set((Array.isArray(selectedPermissions) ? selectedPermissions : String(selectedPermissions||'').split(',')).map(item=>String(item).trim()).filter(Boolean));
+  return sortAccessMetaRecords(permissionMetadataCache).map(permission=>{
+    const id = permission.id || '';
+    const label = permission.label || id;
+    return `<option value="${id}"${selected.has(id)?' selected':''}>${label}</option>`;
+  }).join('');
+}
+
 async function seedUsersIfEmpty(){
   // No static user account seeding; user records must exist in MySQL.
   return;
@@ -355,6 +381,7 @@ async function restoreSession(){
       await loadTrainTypeMeta();
       await seedShiftMetaIfEmpty();
       await loadShiftMeta();
+      await loadAccessMeta();
       populateDesignationSelect();
       populateTrainTypeSelect();
       populateShiftSelects();
@@ -789,6 +816,7 @@ async function seedBackendUsers(){
   await loadTrainTypeMeta();
   await seedShiftMetaIfEmpty();
   await loadShiftMeta();
+  await loadAccessMeta();
   populateDesignationSelect();
   populateStatusSelects();
   populateTrainTypeSelect();
@@ -886,7 +914,6 @@ async function addCrewDoc(depot,obj){
 async function doLogin(){
   const user=document.getElementById('lUser').value.trim().toLowerCase();
   const pass=document.getElementById('lPass').value;
-  const depot=document.getElementById('lDepot').value;
   const err=document.getElementById('loginErr');err.style.display='none';
   if(!user||!pass){err.textContent='Enter username and password.';err.style.display='block';return;}
   let acct=null;
@@ -897,7 +924,15 @@ async function doLogin(){
       if(userSnap.exists()){
         const data = userSnap.data();
         if(data.pw !== pass){err.textContent='Incorrect password.';err.style.display='block';return;}
-        acct = {depot:data.depot,name:data.name,isHQ:!!data.isHQ||data.role==='super_admin'||data.role==='hq_admin',isSuperAdmin:data.role==='super_admin',role:data.role||''};
+        const role = data.role || data.role_code || '';
+        const depot = data.depot || data.depot_code || 'HQ';
+        acct = {
+          depot,
+          name:data.name || user,
+          isHQ:!!data.isHQ || !!data.is_hq || role==='super_admin' || role==='hq_admin' || depot==='HQ',
+          isSuperAdmin:!!data.isSuperAdmin || !!data.is_super_admin || role==='super_admin',
+          role,
+        };
       }
     }catch(err){console.error('User lookup failed',err);}
   }
@@ -1750,15 +1785,13 @@ async function renderAdmin(){
   let users=[];
   try{
     users = await loadAdminUsers();
-    if(!db){
-      await loadDepotMeta();
-      await loadDesignationMeta();
-      await loadStatusMeta();
-      await loadReportMeta();
-      await loadTrainTypeMeta();
-      await loadShiftMeta();
-      await loadAccessMeta();
-    }
+    await loadDepotMeta();
+    await loadDesignationMeta();
+    await loadStatusMeta();
+    await loadReportMeta();
+    await loadTrainTypeMeta();
+    await loadShiftMeta();
+    await loadAccessMeta();
   }catch(err){
     console.error('Failed to load admin users',err);
     if(pbody) pbody.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to load admin data. Check your MySQL backend connection.</div>`;
@@ -2552,6 +2585,8 @@ window.saveStatusMetaRecord = saveStatusMetaRecord;
 window.saveReportMetaRecord = saveReportMetaRecord;
 window.saveSimpleMetaRecord = saveSimpleMetaRecord;
 window.removeSimpleMetaRecord = removeSimpleMetaRecord;
+window.saveAccessMetaRecord = saveAccessMetaRecord;
+window.removeAccessMetaRecord = removeAccessMetaRecord;
 window.runReport = runReport;
 window.saveUserAccount = saveUserAccount;
 window.downloadCrewUploadTemplate = downloadCrewUploadTemplate;

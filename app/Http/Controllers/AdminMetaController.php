@@ -33,30 +33,22 @@ class AdminMetaController extends Controller
             return;
         }
 
-        $exists = DB::table('admin_meta')
-            ->where('collection', 'users')
-            ->where('record_id', $username)
-            ->exists();
-
-        if ($exists) {
-            return;
-        }
-
-        DB::table('admin_meta')->insert([
-            'collection' => 'users',
-            'record_id' => $username,
-            'payload' => json_encode([
-                'username' => $username,
-                'name' => 'Super Admin',
-                'depot' => 'HQ',
-                'role' => 'super_admin',
-                'pw' => $password,
-                'isHQ' => true,
-                'isSuperAdmin' => true,
-            ]),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::table('admin_meta')->updateOrInsert(
+            ['collection' => 'users', 'record_id' => $username],
+            [
+                'payload' => json_encode([
+                    'username' => $username,
+                    'name' => 'Super Admin',
+                    'depot' => 'HQ',
+                    'role' => 'super_admin',
+                    'pw' => $password,
+                    'isHQ' => true,
+                    'isSuperAdmin' => true,
+                ]),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
 
         if (Schema::hasTable('users')) {
             DB::table('users')->updateOrInsert(
@@ -344,6 +336,7 @@ class AdminMetaController extends Controller
 
     public function usersIndex()
     {
+        $this->ensureSuperAdminUser();
         return $this->normalizedIndex('users');
     }
 

@@ -33,31 +33,41 @@ class SeedSuperAdmin extends Command
             return self::FAILURE;
         }
 
-        $exists = DB::table('admin_meta')
-            ->where('collection', 'users')
-            ->where('record_id', $username)
-            ->exists();
+        DB::table('admin_meta')->updateOrInsert(
+            ['collection' => 'users', 'record_id' => $username],
+            [
+                'payload' => json_encode([
+                    'username' => $username,
+                    'name' => 'Super Admin',
+                    'depot' => 'HQ',
+                    'role' => 'super_admin',
+                    'pw' => $password,
+                    'isHQ' => true,
+                    'isSuperAdmin' => true,
+                ]),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
 
-        if ($exists) {
-            $this->info('Superadmin already exists.');
-            return self::SUCCESS;
+        if (Schema::hasTable('users')) {
+            DB::table('users')->updateOrInsert(
+                ['username' => $username],
+                [
+                    'name' => 'Super Admin',
+                    'depot_code' => 'HQ',
+                    'role_code' => 'super_admin',
+                    'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports']),
+                    'pw' => $password,
+                    'is_hq' => true,
+                    'is_super_admin' => true,
+                    'is_active' => true,
+                    'metadata' => json_encode([]),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
         }
-
-        DB::table('admin_meta')->insert([
-            'collection' => 'users',
-            'record_id' => $username,
-            'payload' => json_encode([
-                'username' => $username,
-                'name' => 'Super Admin',
-                'depot' => 'HQ',
-                'role' => 'super_admin',
-                'pw' => $password,
-                'isHQ' => true,
-                'isSuperAdmin' => true,
-            ]),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
 
         $this->info('Superadmin seeded successfully.');
 

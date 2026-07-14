@@ -33,25 +33,26 @@ class CrewDataController extends Controller
             ->orderByDesc('created_at')
             ->first();
 
-        $record = $payload;
-        $record['id'] = $payload['id'] ?? ($row->crew_id ?: $row->record_id);
-        $record['record_id'] = $row->record_id;
-        $record['name'] = $member?->display_name ?: trim((string) ($member?->first_name ?? '') . ' ' . (string) ($member?->last_name ?? '')) ?: ($payload['name'] ?? $row->record_id);
-        $record['grade'] = $member?->designation_code ?? ($payload['grade'] ?? '');
-        $record['depot'] = $member?->depot_code ?? $row->depot;
-        $record['staff_number'] = $member?->staff_number ?? $row->staff_number ?? ($payload['staff_number'] ?? '');
-        $record['shift'] = $assignment->shift ?? ($payload['shift'] ?? '');
-        $record['status'] = $payload['status'] ?? ($latestHistory->status_code ?? '');
-        $record['route'] = $payload['route'] ?? '';
-        $record['trainType'] = $payload['trainType'] ?? '';
-        $record['bookTime'] = $payload['bookTime'] ?? '';
-        $record['notes'] = $payload['notes'] ?? '';
-        $record['since'] = $payload['since'] ?? '';
-        $record['restStarted'] = $payload['restStarted'] ?? null;
-        $record['awayDepot'] = $payload['awayDepot'] ?? null;
-        $record['monthly'] = $payload['monthly'] ?? [];
-        $record['monthKey'] = $payload['monthKey'] ?? null;
-        $record['lastUpdated'] = $payload['lastUpdated'] ?? $row->updated_at;
+        $record = array_merge($payload, [
+            'id' => $payload['id'] ?? ($row->crew_id ?: $row->record_id),
+            'record_id' => $row->record_id,
+            'name' => $payload['name'] ?? ($member?->display_name ?: trim((string) ($member?->first_name ?? '') . ' ' . (string) ($member?->last_name ?? '')) ?: $row->record_id),
+            'grade' => $payload['grade'] ?? ($member?->designation_code ?? ''),
+            'depot' => $payload['depot'] ?? ($member?->depot_code ?? $row->depot),
+            'staff_number' => $payload['staff_number'] ?? ($member?->staff_number ?? $row->staff_number ?? ''),
+            'shift' => $payload['shift'] ?? ($assignment?->shift ?? ''),
+            'status' => $payload['status'] ?? ($latestHistory?->status_code ?? ''),
+            'route' => $payload['route'] ?? '',
+            'trainType' => $payload['trainType'] ?? '',
+            'bookTime' => $payload['bookTime'] ?? '',
+            'notes' => $payload['notes'] ?? '',
+            'since' => $payload['since'] ?? '',
+            'restStarted' => $payload['restStarted'] ?? null,
+            'awayDepot' => $payload['awayDepot'] ?? null,
+            'monthly' => $payload['monthly'] ?? [],
+            'monthKey' => $payload['monthKey'] ?? null,
+            'lastUpdated' => $payload['lastUpdated'] ?? $row->updated_at,
+        ]);
 
         return $record;
     }
@@ -402,6 +403,16 @@ class CrewDataController extends Controller
         $merged['id'] = (string) ($merged['id'] ?? $recordId);
         $merged['depot'] = (string) ($merged['depot'] ?? $decodedExisting['depot'] ?? strtok($recordId, '_') ?: 'HQ');
         $merged['staff_number'] = trim((string) ($merged['staff_number'] ?? $decodedExisting['staff_number'] ?? ''));
+        $merged['name'] = $merged['name'] ?? $payload['name'] ?? $recordId;
+        $merged['grade'] = $merged['grade'] ?? $payload['grade'] ?? '';
+        $merged['status'] = $merged['status'] ?? $payload['status'] ?? '';
+        $merged['route'] = $merged['route'] ?? $payload['route'] ?? '';
+        $merged['trainType'] = $merged['trainType'] ?? $payload['trainType'] ?? '';
+        $merged['notes'] = $merged['notes'] ?? $payload['notes'] ?? '';
+        $merged['since'] = $merged['since'] ?? $payload['since'] ?? '';
+        $merged['monthly'] = $merged['monthly'] ?? $payload['monthly'] ?? [];
+        $merged['monthKey'] = $merged['monthKey'] ?? $payload['monthKey'] ?? null;
+        $merged['lastUpdated'] = $merged['lastUpdated'] ?? $payload['lastUpdated'] ?? now()->toIso8601String();
         $shift = trim((string) ($merged['shift'] ?? ''));
         unset($merged['shift'], $merged['shift_assignment']);
 

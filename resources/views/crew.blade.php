@@ -14,9 +14,6 @@
   <div class="lerr" id="loginErr"></div>
   <div class="frow"><label>Username</label><input type="text" id="lUser" placeholder="e.g. hq_admin" autocomplete="username"></div>
   <div class="frow"><label>Password</label><input type="password" id="lPass" placeholder="Password" autocomplete="current-password"></div>
-  <div class="frow"><label>Depot</label>
-    <select id="lDepot"></select>
-  </div>
   <button class="btn-login" onclick="doLogin()">Sign in →</button>
   <div class="lhint" id="loginHint"></div>
 </div>
@@ -178,7 +175,7 @@
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Full Name *</label>
     <input type="text" id="addName" placeholder="e.g. John Kamau Njoroge" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Staff Number</label>
-    <input type="text" id="addStaffNumber" placeholder="e.g. STAFF-001" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
+    <input type="text" id="addStaffNumber" placeholder="e.g. 0001" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px">
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Designation *</label>
     <select id="addGrade" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;outline:none;margin-bottom:8px"></select>
     <label class="modal" style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:3px">Route / Assignment</label>

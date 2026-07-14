@@ -972,22 +972,35 @@ async function doLogin(){
   let acct=null;
   if(db){
     try{
-      const userRef = doc(db,'users',user);
-      const userSnap = await getDoc(userRef);
-      if(userSnap.exists()){
-        const data = userSnap.data();
-        if(data.pw !== pass){err.textContent='Incorrect password.';err.style.display='block';return;}
-        const role = data.role || data.role_code || '';
-        const depot = data.depot || data.depot_code || 'HQ';
-        acct = {
-          depot,
-          name:data.name || user,
-          isHQ:!!data.isHQ || !!data.is_hq || role==='super_admin' || role==='hq_admin' || depot==='HQ',
-          isSuperAdmin:!!data.isSuperAdmin || !!data.is_super_admin || role==='super_admin',
-          role,
-        };
+      const resp = await fetch('/mysql/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': getCsrfToken(),
+        },
+        body: JSON.stringify({ username: user, password: pass }),
+      });
+      if (!resp.ok) {
+        err.textContent = resp.status === 401 ? 'Incorrect username or password.' : 'Unable to verify credentials.';
+        err.style.display = 'block';
+        return;
       }
-    }catch(err){console.error('User lookup failed',err);}
+      const data = await resp.json();
+      const role = data.role || data.role_code || '';
+      const depot = data.depot || data.depot_code || 'HQ';
+      acct = {
+        depot,
+        name: data.name || user,
+        isHQ: !!data.isHQ || !!data.is_hq || role === 'super_admin' || role === 'hq_admin' || depot === 'HQ',
+        isSuperAdmin: !!data.isSuperAdmin || !!data.is_super_admin || role === 'super_admin',
+        role,
+      };
+    } catch (authErr) {
+      console.error('User lookup failed', authErr);
+      err.textContent = 'Unable to verify credentials.';
+      err.style.display = 'block';
+      return;
+    }
   }
   if(!acct){
     err.textContent='Account not found.';

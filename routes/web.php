@@ -12,6 +12,7 @@ Route::get('/mysql/meta/{collection}', [AdminMetaController::class, 'normalizedI
 Route::post('/mysql/meta/{collection}/{id}', [AdminMetaController::class, 'normalizedSave']);
 Route::delete('/mysql/meta/{collection}/{id}', [AdminMetaController::class, 'normalizedDelete']);
 Route::get('/mysql/users', [AdminMetaController::class, 'usersIndex']);
+Route::post('/mysql/login', [AdminMetaController::class, 'mysqlLogin']);
 Route::post('/mysql/users/{id}', [AdminMetaController::class, 'usersSave']);
 Route::delete('/mysql/users/{id}', [AdminMetaController::class, 'usersDelete']);
 Route::get('/mysql/crew-view', [CrewDataController::class, 'normalizedIndex']);

@@ -6,7 +6,7 @@
 <div id="loginPage">
 <div class="lcard">
   <div class="llogo">
-    <div class="llogo-mark"><svg viewBox="0 0 24 24"><path d="M3 13h2v7H3v-7zm4-5h2v12H7V8zm4 3h2v9h-2v-9zm4-6h2v15h-2V5zm4 2h2v13h-2V7zM1 20h22v2H1v-2z"/></svg></div>
+    <div class="llogo-mark"><img src="{{ asset('assets/logo.png') }}" alt="KR Logo"></div>
     <div class="llogo-text"><strong>Kenya Railways Corporation</strong><span>Crew Booking System - Live</span></div>
   </div>
   <div class="lh1">Sign in</div>
@@ -21,7 +21,7 @@
 
 <div id="app">
 <div id="topBar">
-  <div class="tb-mark"><svg viewBox="0 0 24 24"><path d="M3 13h2v7H3v-7zm4-5h2v12H7V8zm4 3h2v9h-2v-9zm4-6h2v15h-2V5zm4 2h2v13h-2V7zM1 20h22v2H1v-2z"/></svg></div>
+  <div class="tb-mark"><img src="{{ asset('assets/logo.png') }}" alt="KR Logo"></div>
   <span class="tb-title">KR Crew System</span>
   <div class="tb-sep"></div>
   <span class="tb-badge" id="tbBadge"></span>

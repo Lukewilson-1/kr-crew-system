@@ -442,6 +442,75 @@ class AdminMetaController extends Controller
         return $this->normalizedDelete('users', $id);
     }
 
+    public function mysqlLogin(Request $request)
+    {
+        $payload = $request->json()->all();
+        if (!is_array($payload) || empty($payload['username']) || !isset($payload['password'])) {
+            return response()->json(['error' => 'Username and password are required.'], 400);
+        }
+
+        $username = trim(strtolower((string) $payload['username']));
+        $password = (string) $payload['password'];
+
+        $this->ensureTable();
+        $this->ensureSuperAdminUser();
+
+        $user = null;
+        if (Schema::hasTable('users')) {
+            $row = DB::table('users')->where('username', $username)->first();
+            if ($row) {
+                $user = [
+                    'username' => $row->username,
+                    'name' => $row->name,
+                    'depot' => $row->depot_code ?: 'HQ',
+                    'role' => $row->role_code ?? '',
+                    'isHQ' => (bool) $row->is_hq,
+                    'isSuperAdmin' => (bool) $row->is_super_admin,
+                    'is_active' => (bool) $row->is_active,
+                    'pw' => $row->pw,
+                ];
+            }
+        }
+
+        if ($user === null) {
+            $row = DB::table('admin_meta')->where('collection', 'users')->where('record_id', $username)->first();
+            if ($row) {
+                $payload = json_decode($row->payload, true) ?: [];
+                $user = [
+                    'username' => $username,
+                    'name' => $payload['name'] ?? $username,
+                    'depot' => $payload['depot'] ?? 'HQ',
+                    'role' => $payload['role'] ?? '',
+                    'isHQ' => !empty($payload['isHQ']),
+                    'isSuperAdmin' => !empty($payload['isSuperAdmin']),
+                    'is_active' => $payload['is_active'] ?? true,
+                    'pw' => $payload['pw'] ?? '',
+                ];
+            }
+        }
+
+        if ($user === null) {
+            return response()->json(['error' => 'Invalid credentials.'], 401);
+        }
+
+        if (!$user['is_active']) {
+            return response()->json(['error' => 'Account is inactive.'], 403);
+        }
+
+        $hash = $user['pw'] ?? '';
+        $valid = $hash !== '' && Hash::check($password, $hash);
+        if (!$valid && $hash === $password) {
+            $valid = true;
+        }
+
+        if (!$valid) {
+            return response()->json(['error' => 'Invalid credentials.'], 401);
+        }
+
+        unset($user['pw']);
+        return response()->json($user);
+    }
+
     protected function normalizeDirectCollection(string $collection, object $row): array
     {
         return $this->mapNormalizedCollectionRecord($collection, $row);

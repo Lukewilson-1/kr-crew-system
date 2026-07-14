@@ -4,7 +4,6 @@ namespace App\Filament\Pages\Auth;
 
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Auth\Login as BaseLogin;
-use Filament\Pages\Auth\Login as FilamentLoginPage;
 
 class Login extends BaseLogin
 {
@@ -24,16 +23,5 @@ class Login extends BaseLogin
             'username' => $data['username'],
             'password' => $data['password'],
         ];
-    }
-
-    protected function throwFailureValidationException(): never
-    {
-        \Log::error('Filament login failed', [
-            'data' => request()->all(),
-            'user' => auth()->user(),
-        ]);
-        throw \Illuminate\Validation\ValidationException::withMessages([
-            'data.username' => __('filament-panels::pages/auth/login.messages.failed'),
-        ]);
     }
 }

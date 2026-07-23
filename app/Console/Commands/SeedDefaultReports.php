@@ -1,38 +1,18 @@
 <?php
 
-namespace App\Providers;
+namespace App\Console\Commands;
 
 use App\Models\ReportDefinition;
-use Illuminate\Pagination\PaginationState;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\View;
-use Illuminate\Support\ServiceProvider;
+use Illuminate\Console\Command;
 
-class AppServiceProvider extends ServiceProvider
+class SeedDefaultReports extends Command
 {
-    public function register(): void
+    protected $signature = 'reports:seed-defaults';
+
+    protected $description = 'Seed the default report definitions for the reports page.';
+
+    public function handle(): int
     {
-        //
-    }
-
-    public function boot(): void
-    {
-        PaginationState::resolveUsing($this->app);
-
-        View::addNamespace(
-            'pagination',
-            base_path('vendor/laravel/framework/src/Illuminate/Pagination/resources/views')
-        );
-
-        $this->seedDefaultReports();
-    }
-
-    private function seedDefaultReports(): void
-    {
-        if (! Schema::hasTable('reports')) {
-            return;
-        }
-
         $defaults = [
             [
                 'name' => 'Daily Status Export',
@@ -102,5 +82,9 @@ class AppServiceProvider extends ServiceProvider
                 $definition
             );
         }
+
+        $this->info('Default report definitions seeded successfully.');
+
+        return self::SUCCESS;
     }
 }

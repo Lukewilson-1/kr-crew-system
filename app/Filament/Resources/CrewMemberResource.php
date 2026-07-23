@@ -8,7 +8,11 @@ use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Actions\EditAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Table;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 
@@ -44,7 +48,7 @@ class CrewMemberResource extends Resource
                 TextColumn::make('designation_code')->label('Designation')->searchable()->sortable(),
                 TextColumn::make('employment_status_code')->label('Status')->searchable()->sortable(),
                 TextColumn::make('email')->searchable(),
-                TextColumn::make('is_active')->label('Active')->boolean()->sortable(),
+                IconColumn::make('is_active')->label('Active')->boolean()->sortable(),
             ])
             ->filters([
                 SelectFilter::make('is_active')->options([1 => 'Active', 0 => 'Inactive']),
@@ -56,11 +60,11 @@ class CrewMemberResource extends Resource
                 ]),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

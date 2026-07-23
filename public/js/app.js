@@ -25,6 +25,13 @@ const DEFAULT_DESIGNATION_DEFINITIONS=[
   {id:'super_admin',label:'Super Admin',aliases:['super admin'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:90},
 ];
 let REPORT_TEMPLATES={};
+const DEFAULT_REPORT_TEMPLATES=[
+  {id:'daily-status',label:'Daily status export',description:'Download the current crew status snapshot for the active depot view.',reportType:'status',buttonText:'Export current status',visible:true,order:10},
+  {id:'monthly-register',label:'Monthly register',description:'Download the current month roster with daily status codes for every crew member.',reportType:'monthly',buttonText:'Download monthly register',visible:true,order:20},
+  {id:'utilization',label:'Utilization report',description:'Review booked-day utilization over a selected time window.',reportType:'utilization',buttonText:'Export utilization',visible:true,order:30},
+  {id:'absence',label:'Absence / NTB report',description:'Export staff who are currently on leave, sick, or marked NTB.',reportType:'absence',buttonText:'Export absence report',visible:true,order:40},
+  {id:'print-register',label:'Printable register',description:'Open the monthly register view for printing.',reportType:'print',buttonText:'Open printable view',visible:true,order:50},
+];
 const USER_ROLE_OPTIONS=[
   {id:'super_admin',label:'Super Admin'},
   {id:'hq_admin',label:'HQ Admin'},
@@ -884,7 +891,18 @@ function normalizeReportMetaRecord(docSnapOrData){
 }
 
 async function seedReportMetaIfEmpty(){
-  return;
+  if(Object.keys(REPORT_TEMPLATES).length) return;
+  REPORT_TEMPLATES = Object.fromEntries(DEFAULT_REPORT_TEMPLATES.map(meta => [meta.id, meta]));
+  if(!db) return;
+  try {
+    const batch = writeBatch(db);
+    DEFAULT_REPORT_TEMPLATES.forEach(meta => {
+      batch.set(doc(db, 'reportMeta', meta.id), meta, { merge: true });
+    });
+    await batch.commit();
+  } catch (err) {
+    console.warn('Failed to seed report metadata', err);
+  }
 }
 
 async function loadReportMeta(){
@@ -898,10 +916,14 @@ async function loadReportMeta(){
       const meta = normalizeReportMetaRecord(docSnap);
       if(meta) templates[meta.id] = meta;
     });
-    REPORT_TEMPLATES = templates;
+    if(Object.keys(templates).length === 0){
+      REPORT_TEMPLATES = Object.fromEntries(DEFAULT_REPORT_TEMPLATES.map(meta => [meta.id, meta]));
+    } else {
+      REPORT_TEMPLATES = templates;
+    }
   }catch(err){
     console.error('Failed to load report metadata',err);
-    REPORT_TEMPLATES = {};
+    REPORT_TEMPLATES = Object.fromEntries(DEFAULT_REPORT_TEMPLATES.map(meta => [meta.id, meta]));
   }
 }
 
@@ -913,10 +935,14 @@ async function loadLocalReportMeta(){
       const meta = normalizeReportMetaRecord(item);
       if(meta) templates[meta.id] = meta;
     });
-    REPORT_TEMPLATES = templates;
+    if(Object.keys(templates).length === 0){
+      REPORT_TEMPLATES = Object.fromEntries(DEFAULT_REPORT_TEMPLATES.map(meta => [meta.id, meta]));
+    } else {
+      REPORT_TEMPLATES = templates;
+    }
   }catch(err){
     console.error('Failed to load local report metadata',err);
-    REPORT_TEMPLATES = {};
+    REPORT_TEMPLATES = Object.fromEntries(DEFAULT_REPORT_TEMPLATES.map(meta => [meta.id, meta]));
   }
 }
 

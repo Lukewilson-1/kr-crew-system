@@ -20,3 +20,9 @@ Route::get('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalize
 Route::post('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedSave']);
 Route::delete('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedDelete']);
 Route::get('/', [CrewController::class, 'index']);
+Route::get('/reports', [App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
+Route::get('/reports/daily-status', [App\Http\Controllers\ReportController::class, 'dailyStatus'])->name('reports.daily-status');
+Route::get('/reports/monthly-register', [App\Http\Controllers\ReportController::class, 'monthlyRegister'])->name('reports.monthly-register');
+Route::get('/reports/utilization', [App\Http\Controllers\ReportController::class, 'utilization'])->name('reports.utilization');
+Route::get('/reports/absence', [App\Http\Controllers\ReportController::class, 'absence'])->name('reports.absence');
+Route::get('/reports/printable', [App\Http\Controllers\ReportController::class, 'printable'])->name('reports.printable');

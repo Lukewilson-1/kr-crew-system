@@ -11,6 +11,9 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Filament\Tables;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
@@ -106,11 +109,11 @@ class UserResource extends Resource
                 SelectFilter::make('is_active')->options([1 => 'Active', 0 => 'Inactive']),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

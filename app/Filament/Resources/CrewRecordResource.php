@@ -8,6 +8,9 @@ use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -54,14 +57,23 @@ class CrewRecordResource extends Resource
                     'R' => 'Resting',
                     'L' => 'Leave',
                 ]),
-                SelectFilter::make('depot')->relationship('depot', 'name'),
+                SelectFilter::make('depot')->options(function () {
+                    return 
+                        	CrewRecord::query()
+                            ->select('depot')
+                            ->distinct()
+                            ->pluck('depot', 'depot')
+                            ->filter()
+                            ->mapWithKeys(fn ($value) => [$value => $value])
+                            ->all();
+                }),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

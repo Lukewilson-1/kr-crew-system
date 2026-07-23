@@ -1,39 +1,15 @@
 <?php
 
-namespace App\Providers;
+namespace Database\Seeders;
 
 use App\Models\ReportDefinition;
-use Illuminate\Pagination\PaginationState;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\View;
-use Illuminate\Support\ServiceProvider;
+use Illuminate\Database\Seeder;
 
-class AppServiceProvider extends ServiceProvider
+class ReportDefinitionSeeder extends Seeder
 {
-    public function register(): void
+    public function run(): void
     {
-        //
-    }
-
-    public function boot(): void
-    {
-        PaginationState::resolveUsing($this->app);
-
-        View::addNamespace(
-            'pagination',
-            base_path('vendor/laravel/framework/src/Illuminate/Pagination/resources/views')
-        );
-
-        $this->seedDefaultReports();
-    }
-
-    private function seedDefaultReports(): void
-    {
-        if (! Schema::hasTable('reports')) {
-            return;
-        }
-
-        $defaults = [
+        $definitions = [
             [
                 'name' => 'Daily Status Export',
                 'slug' => 'daily-status-export',
@@ -96,7 +72,7 @@ class AppServiceProvider extends ServiceProvider
             ],
         ];
 
-        foreach ($defaults as $definition) {
+        foreach ($definitions as $definition) {
             ReportDefinition::query()->updateOrCreate(
                 ['slug' => $definition['slug']],
                 $definition

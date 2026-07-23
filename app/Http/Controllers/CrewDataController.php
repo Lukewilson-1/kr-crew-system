@@ -179,16 +179,29 @@ class CrewDataController extends Controller
         $displayName = $this->buildDisplayName($payload);
         $firstName = $this->normalizeText($payload['first_name'] ?? '');
         $lastName = $this->normalizeText($payload['last_name'] ?? '');
+        $crewId = $this->normalizeText($payload['id'] ?? $existing?->crew_id ?? $recordId) ?: $recordId;
+        $staffNumber = $this->normalizeText($payload['staff_number'] ?? $existing?->staff_number ?? '');
 
         if ($displayName === '' && ($firstName !== '' || $lastName !== '')) {
             $displayName = trim($firstName . ' ' . $lastName);
         }
 
+        $member = DB::table($this->memberTable)->where('record_id', $recordId)->first();
+
+        if (! $member && $crewId !== '') {
+            $member = DB::table($this->memberTable)->where('crew_id', $crewId)->first();
+        }
+
+        if (! $member && $staffNumber !== '') {
+            $member = DB::table($this->memberTable)->where('staff_number', $staffNumber)->first();
+        }
+
         DB::table($this->memberTable)->updateOrInsert(
-            ['record_id' => $recordId],
+            ['record_id' => $member?->record_id ?? $recordId],
             [
-                'crew_id' => $this->normalizeText($payload['id'] ?? $existing?->crew_id ?? $recordId) ?: $recordId,
-                'staff_number' => ($staffNumber = $this->normalizeText($payload['staff_number'] ?? $existing?->staff_number ?? '')) !== '' ? $staffNumber : null,
+                'record_id' => $recordId,
+                'crew_id' => $crewId,
+                'staff_number' => $staffNumber !== '' ? $staffNumber : null,
                 'depot_code' => $this->normalizeText($payload['depot'] ?? $depot) ?: $depot,
                 'first_name' => $firstName !== '' ? $firstName : null,
                 'last_name' => $lastName !== '' ? $lastName : null,
@@ -200,7 +213,7 @@ class CrewDataController extends Controller
                 'email' => ($email = $this->normalizeText($payload['email'] ?? '')) !== '' ? $email : null,
                 'is_active' => !array_key_exists('active', $payload) || $payload['active'] !== false,
                 'metadata' => json_encode($payload),
-                'created_at' => $existing?->created_at ?: now(),
+                'created_at' => $member?->created_at ?? ($existing?->created_at ?: now()),
                 'updated_at' => now(),
             ]
         );

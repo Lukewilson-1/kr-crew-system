@@ -2,12 +2,12 @@
 
 namespace App;
 
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Hash;
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -22,11 +22,22 @@ class User extends Authenticatable implements FilamentUser
 
     public $incrementing = false;
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $model): void {
+            if (blank($model->username) && filled($model->email)) {
+                $model->username = (string) str($model->email)->before('@')->slug('_')->value();
+            }
+        });
+    }
+
     public $timestamps = true;
 
     protected $fillable = [
         'username',
+        'email',
         'name',
+        'password',
         'pw',
         'depot_code',
         'role_code',
@@ -37,7 +48,7 @@ class User extends Authenticatable implements FilamentUser
         'metadata',
     ];
 
-    protected $hidden = ['pw'];
+    protected $hidden = ['password', 'pw'];
 
     protected $casts = [
         'permissions' => 'array',
@@ -81,7 +92,54 @@ class User extends Authenticatable implements FilamentUser
 
     public function getAuthPassword(): string
     {
-        return $this->pw;
+        return (string) ($this->getAttribute('password') ?: $this->getAttribute('pw') ?: '');
+    }
+
+    public function getAuthIdentifierName(): string
+    {
+        return 'email';
+    }
+
+    public function getAuthIdentifier(): string
+    {
+        return (string) ($this->getAttribute('email') ?: $this->getAttribute('username') ?? '');
+    }
+
+    public function passwordMatches(string $plainPassword): bool
+    {
+        $candidateHashes = array_filter([
+            (string) ($this->getAttribute('password') ?? ''),
+            (string) ($this->getAttribute('pw') ?? ''),
+        ]);
+
+        foreach ($candidateHashes as $stored) {
+            if ($stored === '') {
+                continue;
+            }
+
+            if (Hash::check($plainPassword, $stored)) {
+                return true;
+            }
+
+            if ($stored === $plainPassword) {
+                $this->forceFill(['password' => Hash::make($plainPassword), 'pw' => Hash::make($plainPassword)]);
+                $this->saveQuietly();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function setPasswordAttribute(?string $value): void
+    {
+        if ($value === null || $value === '') {
+            return;
+        }
+
+        $this->attributes['password'] = Hash::make($value);
+        $this->attributes['pw'] = Hash::make($value);
     }
 
     public function setPwAttribute(?string $value): void
@@ -92,11 +150,14 @@ class User extends Authenticatable implements FilamentUser
 
         if (str_starts_with($value, '$2y$') || str_starts_with($value, '$argon2i$') || str_starts_with($value, '$argon2id$')) {
             $this->attributes['pw'] = $value;
+            $this->attributes['password'] = $value;
 
             return;
         }
 
-        $this->attributes['pw'] = Hash::make($value);
+        $hashed = Hash::make($value);
+        $this->attributes['pw'] = $hashed;
+        $this->attributes['password'] = $hashed;
     }
 
     public function getRememberTokenName(): ?string

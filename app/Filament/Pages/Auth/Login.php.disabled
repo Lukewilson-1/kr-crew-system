@@ -1,0 +1,116 @@
+<?php
+
+namespace App\Filament\Pages\Auth;
+
+use App\User;
+use Filament\Facades\Filament;
+use Filament\Forms\Components\TextInput;
+use Filament\Http\Responses\Auth\Contracts\LoginResponse;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Pages\Auth\Login as BaseLogin;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+
+class Login extends BaseLogin
+{
+    public function authenticate(): ?LoginResponse
+    {
+        $data = $this->form->getState();
+        $username = (string) ($data['username'] ?? '');
+
+        Log::debug('Filament login attempt started', [
+            'username' => $username,
+        ]);
+
+        $credentials = $this->getCredentialsFromFormData($data);
+        $user = $this->resolveUserFromCredentials($credentials);
+
+        if ($user === null || ! $user->passwordMatches((string) ($credentials['password'] ?? ''))) {
+            Log::warning('Filament login attempt failed', [
+                'username' => $username,
+            ]);
+
+            $this->throwFailureValidationException();
+        }
+
+        Filament::auth()->login($user, $data['remember'] ?? false);
+
+        $user = Filament::auth()->user();
+
+        if (
+            ($user instanceof FilamentUser) &&
+            (! $user->canAccessPanel(Filament::getCurrentPanel()))
+        ) {
+            Filament::auth()->logout();
+
+            Log::warning('Filament login attempt denied by panel access', [
+                'username' => $username,
+            ]);
+
+            $this->throwFailureValidationException();
+        }
+
+        session()->regenerate();
+
+        Log::debug('Filament login attempt succeeded', [
+            'username' => $username,
+            'redirect' => Filament::getUrl(),
+        ]);
+
+        return app(LoginResponse::class);
+    }
+
+    protected function getEmailFormComponent(): TextInput
+    {
+        return TextInput::make('username')
+            ->label('Username')
+            ->required()
+            ->autocomplete('username')
+            ->autofocus()
+            ->extraInputAttributes(['tabindex' => 1]);
+    }
+
+    protected function getCredentialsFromFormData(array $data): array
+    {
+        $login = (string) ($data['username'] ?? '');
+
+        return [
+            filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username' => $login,
+            'password' => $data['password'],
+        ];
+    }
+
+    protected function resolveUserFromCredentials(array $credentials): ?User
+    {
+        $identifier = null;
+        $password = (string) ($credentials['password'] ?? '');
+
+        if (isset($credentials['email']) && $credentials['email'] !== '') {
+            $identifier = $credentials['email'];
+        } elseif (isset($credentials['username']) && $credentials['username'] !== '') {
+            $identifier = $credentials['username'];
+        }
+
+        if ($identifier === null || $identifier === '') {
+            return null;
+        }
+
+        $user = User::query()
+            ->where('email', $identifier)
+            ->orWhere('username', $identifier)
+            ->first();
+
+        if ($user instanceof User && $user->passwordMatches($password)) {
+            return $user;
+        }
+
+        return null;
+    }
+
+    protected function throwFailureValidationException(): never
+    {
+        throw ValidationException::withMessages([
+            'data.username' => __('filament-panels::pages/auth/login.messages.failed'),
+        ]);
+    }
+}

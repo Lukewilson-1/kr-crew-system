@@ -5,8 +5,8 @@ namespace App\Filament\Resources;
 use App\CrewMember;
 use App\Filament\Resources\CrewMemberResource\Pages;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
@@ -16,15 +16,15 @@ class CrewMemberResource extends Resource
 {
     protected static ?string $model = CrewMember::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-users';
 
     protected static ?string $navigationLabel = 'Crew Members';
 
     protected static ?int $navigationSort = 10;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form->schema([
+        return $schema->components([
             Forms\Components\TextInput::make('display_name')->required(),
             Forms\Components\TextInput::make('staff_number'),
             Forms\Components\TextInput::make('depot_code'),

@@ -5,8 +5,8 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\CrewRecordResource\Pages;
 use App\CrewRecord;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
@@ -16,15 +16,15 @@ class CrewRecordResource extends Resource
 {
     protected static ?string $model = CrewRecord::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
     protected static ?string $navigationLabel = 'Crew Reports';
 
     protected static ?int $navigationSort = 20;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form->schema([
+        return $schema->components([
             Forms\Components\TextInput::make('name')->required(),
             Forms\Components\TextInput::make('staff_number'),
             Forms\Components\TextInput::make('depot'),

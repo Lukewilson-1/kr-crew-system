@@ -28,4 +28,30 @@ class UserPasswordHandlingTest extends TestCase
 
         $this->assertSame($hashed, $user->pw);
     }
+
+    public function test_plaintext_password_is_accepted_and_rehashed_when_checked(): void
+    {
+        $user = new User();
+        $user->setRawAttributes([
+            'username' => 'regression-user-' . uniqid('', true),
+            'name' => 'Super Admin',
+            'pw' => 'superadmin123',
+        ]);
+
+        $this->assertTrue($user->passwordMatches('superadmin123'));
+        $this->assertTrue(Hash::check('superadmin123', $user->getAttribute('pw')));
+        $this->assertNotSame('superadmin123', $user->getAttribute('pw'));
+    }
+
+    public function test_model_password_matches_accepts_plaintext_passwords(): void
+    {
+        $user = new User();
+        $user->setRawAttributes([
+            'username' => 'provider-regression-' . uniqid('', true),
+            'name' => 'Super Admin',
+            'pw' => 'superadmin123',
+        ]);
+
+        $this->assertTrue($user->passwordMatches('superadmin123'));
+    }
 }

@@ -1,7 +1,0 @@
-﻿
-  GET|HEAD   admin/login filament.admin.auth.login › App\Filament\Pages\Auth\…
-  GET|HEAD   login .......................... login › AuthController@showLogin
-  POST       login ..................... web.login.post › AuthController@login
-
-                                                            Showing [3] routes
-

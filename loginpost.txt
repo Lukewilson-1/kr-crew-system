@@ -1,5 +1,0 @@
-﻿
-  POST       login ..................... web.login.post › AuthController@login
-
-                                                            Showing [1] routes
-

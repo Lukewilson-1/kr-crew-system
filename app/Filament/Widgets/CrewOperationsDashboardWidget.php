@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\ReportDefinition;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 

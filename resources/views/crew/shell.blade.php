@@ -57,11 +57,11 @@
                 <div id="sidebar">
                     <div class="sb-group">
                         <div class="sb-sec">Main Depot</div>
-                        <div class="sb-item active" onclick="goPage('dashboard')" id="sb-dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
-                        <div class="sb-item" onclick="goPage('roster')" id="sb-roster"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.85"/></svg>Crew Roster</div>
-                        <div class="sb-item" onclick="goPage('rest')" id="sb-rest"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Rest Countdowns</div>
-                        <div class="sb-item" onclick="goPage('monthly')" id="sb-monthly"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly View</div>
-                        <div class="sb-item" onclick="goPage('reports')" id="sb-reports"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>Reports</div>
+                        <a href="/crew-dashboard" class="sb-item active" onclick="if(typeof goPage==='function'){goPage('dashboard');return false;}" id="sb-dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+                        <a href="/crew-roster" class="sb-item" onclick="if(typeof goPage==='function'){goPage('roster');return false;}" id="sb-roster"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.85"/></svg>Crew Roster</a>
+                        <a href="/crew-rest" class="sb-item" onclick="if(typeof goPage==='function'){goPage('rest');return false;}" id="sb-rest"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Rest Countdowns</a>
+                        <a href="/crew-monthly" class="sb-item" onclick="if(typeof goPage==='function'){goPage('monthly');return false;}" id="sb-monthly"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly View</a>
+                        <a href="/crew-reports" class="sb-item" onclick="if(typeof goPage==='function'){goPage('reports');return false;}" id="sb-reports"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>Reports</a>
                         <div id="depotSection" style="display:none">
                             <div class="sb-sec">Depots</div>
                             <div id="sbDepots"></div>

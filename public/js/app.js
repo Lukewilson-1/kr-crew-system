@@ -1243,14 +1243,18 @@ function goPage(p){
     window.location.href = '/admin';
     return;
   }
-
+  console.log('goPage called', p);
   (async function(){
     currentPage=p;if(p!=='roster')activeFilter='all';
     const path = PAGE_PATHS[p] || '/';
-    if (window.location.pathname !== path) {
-      history.pushState({ page: p }, '', path);
-    } else {
-      history.replaceState({ page: p }, '', path);
+    try{
+      if (window.location.pathname !== path) {
+        history.pushState({ page: p }, '', path);
+      } else {
+        history.replaceState({ page: p }, '', path);
+      }
+    }catch(e){
+      console.warn('history push failed',e);
     }
     document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
     const el=document.getElementById('sb-'+p);if(el)el.classList.add('active');
@@ -1269,7 +1273,7 @@ function goPage(p){
         }
       }
     }catch(err){console.warn('Page module load failed',err);}
-    refreshPage();
+    try{ refreshPage(); }catch(err){ console.warn('refreshPage failed',err); }
     persistSession();
   })();
 }
@@ -2111,13 +2115,7 @@ async function removeSimpleMetaRecord(key, recordId){
       await refreshSimpleMetaUi(key);
       setSyncStatus('ok','Local metadata removed');
     } else {
-      const resp = await fetch(`/admin/meta/${encodeURIComponent(config.collection)}/${encodeURIComponent(recordId)}`, {
-        method:'DELETE',
-        headers:{'X-CSRF-TOKEN':getCsrfToken()},
-      });
-      if(!resp.ok){
-        throw new Error(await resp.text());
-      }
+      await deleteDoc(doc(db, config.collection, recordId));
       await refreshSimpleMetaUi(key);
     }
     renderAdmin();

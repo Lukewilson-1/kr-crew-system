@@ -35,21 +35,21 @@
     $hasAlpineValidClasses = filled($alpineValid);
     $hasAlpineClasses = $hasAlpineDisabledClasses || $hasAlpineValidClasses;
 
-    $enabledWrapperClasses = 'bg-white focus-within:ring-2 dark:bg-white/5';
-    $disabledWrapperClasses = 'fi-disabled bg-gray-50 dark:bg-transparent';
+    $enabledWrapperClasses = 'bg-white focus-within:ring-2';
+    $disabledWrapperClasses = 'fi-disabled bg-gray-50';
     $validWrapperClasses = 'ring-gray-950/10';
-    $invalidWrapperClasses = 'fi-invalid ring-danger-600 dark:ring-danger-500';
-    $enabledValidWrapperClasses = 'focus-within:ring-primary-600 dark:ring-white/20 dark:focus-within:ring-primary-500';
-    $enabledInvalidWrapperClasses = 'focus-within:ring-danger-600 dark:focus-within:ring-danger-500';
+    $invalidWrapperClasses = 'fi-invalid ring-danger-600';
+    $enabledValidWrapperClasses = 'focus-within:ring-primary-600';
+    $enabledInvalidWrapperClasses = 'focus-within:ring-danger-600';
     $disabledValidWrapperClasses = 'dark:ring-white/10';
 
     $actionsClasses = 'flex items-center gap-3';
-    $labelClasses = 'fi-input-wrp-label whitespace-nowrap text-sm text-gray-500 dark:text-gray-400';
+    $labelClasses = 'fi-input-wrp-label whitespace-nowrap text-sm text-gray-500';
 
     $getIconClasses = fn (string | array $color = 'gray'): string => \Illuminate\Support\Arr::toCssClasses([
         'fi-input-wrp-icon h-5 w-5',
         match ($color) {
-            'gray' => 'text-gray-400 dark:text-gray-500',
+            'gray' => 'text-gray-400',
             default => 'text-custom-500',
         },
     ]);
@@ -111,7 +111,7 @@
                 'hidden' => ! $hasPrefix,
                 'pe-1' => $inlinePrefix && filled($prefix),
                 'pe-2' => $inlinePrefix && blank($prefix),
-                'border-e border-gray-200 pe-3 ps-3 dark:border-white/10' => ! $inlinePrefix,
+                'border-e border-gray-200 pe-3 ps-3' => ! $inlinePrefix,
             ])
         >
             @if (count($prefixActions))
@@ -182,7 +182,7 @@
                 'flex items-center gap-x-3 pe-3',
                 'ps-1' => $inlineSuffix && filled($suffix),
                 'ps-2' => $inlineSuffix && blank($suffix),
-                'border-s border-gray-200 ps-3 dark:border-white/10' => ! $inlineSuffix,
+                'border-s border-gray-200 ps-3' => ! $inlineSuffix,
             ])
         >
             @if (filled($suffix))

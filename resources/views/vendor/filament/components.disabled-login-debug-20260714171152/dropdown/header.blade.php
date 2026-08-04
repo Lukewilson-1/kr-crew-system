@@ -35,8 +35,8 @@
                     default => $iconSize,
                 },
                 match ($color) {
-                    'gray' => 'text-gray-400 dark:text-gray-500',
-                    default => 'text-custom-500 dark:text-custom-400',
+                    'gray' => 'text-gray-400',
+                    default => 'text-custom-500',
                 },
             ])
             @style([
@@ -53,8 +53,8 @@
         @class([
             'fi-dropdown-header-label flex-1 truncate text-start',
             match ($color) {
-                'gray' => 'text-gray-700 dark:text-gray-200',
-                default => 'text-custom-600 dark:text-custom-400',
+                'gray' => 'text-gray-700',
+                default => 'text-custom-600',
             },
         ])
         @style([

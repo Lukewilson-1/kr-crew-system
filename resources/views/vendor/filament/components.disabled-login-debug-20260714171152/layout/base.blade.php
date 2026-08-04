@@ -106,7 +106,7 @@
     </head>
 
     <body
-        class="fi-body fi-panel-{{ filament()->getId() }} min-h-screen bg-gray-50 font-normal text-gray-950 antialiased dark:bg-gray-950 dark:text-white"
+        class="fi-body fi-panel-{{ filament()->getId() }} min-h-screen bg-gray-50 font-normal text-gray-950 antialiased"
     >
         {{ \Filament\Support\Facades\FilamentView::renderHook('panels::body.start') }}
 

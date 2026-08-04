@@ -15,6 +15,7 @@ class CrewDataController extends Controller
     protected string $shiftTable = 'crew_shift_assignments';
     protected string $memberTable = 'crew_members';
     protected string $historyTable = 'crew_status_history';
+    protected string $segmentTable = 'crew_status_segments';
 
     protected function payloadFromRow(object $row): array
     {
@@ -32,8 +33,19 @@ class CrewDataController extends Controller
             ->orderByDesc('effective_at')
             ->orderByDesc('created_at')
             ->first();
+        $monthKey = $payload['monthKey'] ?? null;
+        $segments = $this->fetchStatusSegments($row->record_id, $monthKey);
+        $computedMonthly = !empty($segments) ? $this->buildDailyMonthlyFromSegments($segments) : [];
+        $monthly = !empty($computedMonthly) ? $computedMonthly : ($payload['monthly'] ?? []);
+        $finalStatus = $payload['status'] ?? ($latestHistory?->status_code ?? '');
+        if ($finalStatus === '' && !empty($segments)) {
+            $finalStatus = $this->computeFinalStatusFromSegments($segments, (int) date('j')) ?? '';
+        }
+        if ($finalStatus === '' && !empty($segments)) {
+            $finalStatus = $this->computeFinalStatusFromSegments($segments) ?? '';
+        }
 
-        $record = array_merge($payload, [
+        return array_merge($payload, [
             'id' => $payload['id'] ?? ($row->crew_id ?: $row->record_id),
             'record_id' => $row->record_id,
             'name' => $payload['name'] ?? ($member?->display_name ?: trim((string) ($member?->first_name ?? '') . ' ' . (string) ($member?->last_name ?? '')) ?: $row->record_id),
@@ -49,12 +61,12 @@ class CrewDataController extends Controller
             'since' => $payload['since'] ?? '',
             'restStarted' => $payload['restStarted'] ?? null,
             'awayDepot' => $payload['awayDepot'] ?? null,
-            'monthly' => $payload['monthly'] ?? [],
+            'monthly' => $monthly,
             'monthKey' => $payload['monthKey'] ?? null,
+            'status_segments' => $segments,
+            'final_status' => $finalStatus,
             'lastUpdated' => $payload['lastUpdated'] ?? $row->updated_at,
         ]);
-
-        return $record;
     }
 
     protected function loadCrewViewRows(?string $depot = null, ?string $monthKey = null): array
@@ -155,6 +167,50 @@ class CrewDataController extends Controller
                 $table->softDeletes();
             });
         }
+
+        if (!Schema::hasTable($this->segmentTable)) {
+            Schema::create($this->segmentTable, function (Blueprint $table) {
+                $table->string('segment_id')->primary();
+                $table->string('crew_record_id')->index();
+                $table->string('crew_id')->nullable()->index();
+                $table->string('depot_code')->nullable()->index();
+                $table->string('month_key')->nullable()->index();
+                $table->unsignedTinyInteger('day')->index();
+                $table->unsignedSmallInteger('sort_order')->default(100)->index();
+                $table->string('status_code')->index();
+                $table->string('train_type')->nullable();
+                $table->string('route')->nullable();
+                $table->string('book_time')->nullable();
+                $table->timestamp('rest_started_at')->nullable();
+                $table->string('away_depot')->nullable();
+                $table->text('notes')->nullable();
+                $table->json('metadata')->nullable();
+                $table->timestamps();
+                $table->softDeletes();
+            });
+        } else {
+            $segmentColumns = [
+                'crew_id' => fn (Blueprint $table) => $table->string('crew_id')->nullable()->index(),
+                'depot_code' => fn (Blueprint $table) => $table->string('depot_code')->nullable()->index(),
+                'month_key' => fn (Blueprint $table) => $table->string('month_key')->nullable()->index(),
+                'day' => fn (Blueprint $table) => $table->unsignedTinyInteger('day')->nullable()->index(),
+                'sort_order' => fn (Blueprint $table) => $table->unsignedSmallInteger('sort_order')->default(100)->index(),
+                'status_code' => fn (Blueprint $table) => $table->string('status_code')->nullable()->index(),
+                'train_type' => fn (Blueprint $table) => $table->string('train_type')->nullable(),
+                'route' => fn (Blueprint $table) => $table->string('route')->nullable(),
+                'book_time' => fn (Blueprint $table) => $table->string('book_time')->nullable(),
+                'rest_started_at' => fn (Blueprint $table) => $table->timestamp('rest_started_at')->nullable(),
+                'away_depot' => fn (Blueprint $table) => $table->string('away_depot')->nullable(),
+                'notes' => fn (Blueprint $table) => $table->text('notes')->nullable(),
+                'metadata' => fn (Blueprint $table) => $table->json('metadata')->nullable(),
+            ];
+
+            foreach ($segmentColumns as $column => $callback) {
+                if (!Schema::hasColumn($this->segmentTable, $column)) {
+                    Schema::table($this->segmentTable, $callback);
+                }
+            }
+        }
     }
 
     protected function normalizeText(mixed $value): string
@@ -251,6 +307,214 @@ class CrewDataController extends Controller
         ]);
     }
 
+    protected function fetchStatusSegments(string $recordId, ?string $monthKey = null): array
+    {
+        if (!Schema::hasTable($this->segmentTable)) {
+            return [];
+        }
+
+        $query = DB::table($this->segmentTable)
+            ->where('crew_record_id', $recordId);
+
+        if ($monthKey !== null && $monthKey !== '') {
+            $query->where('month_key', $monthKey);
+        }
+
+        $rows = $query
+            ->orderBy('day')
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->get();
+
+        return array_map(function ($row) {
+            $toIso8601 = function ($value): ?string {
+                if ($value === null || $value === '') {
+                    return null;
+                }
+
+                if (is_string($value)) {
+                    return $value;
+                }
+
+                if (method_exists($value, 'toIso8601String')) {
+                    return $value->toIso8601String();
+                }
+
+                return (string) $value;
+            };
+
+            return [
+                'segment_id' => $row->segment_id,
+                'crew_record_id' => $row->crew_record_id,
+                'crew_id' => $row->crew_id,
+                'depot_code' => $row->depot_code,
+                'month_key' => $row->month_key,
+                'day' => (int) $row->day,
+                'sort_order' => (int) $row->sort_order,
+                'status_code' => $row->status_code,
+                'train_type' => $row->train_type,
+                'route' => $row->route,
+                'book_time' => $row->book_time,
+                'rest_started_at' => $toIso8601($row->rest_started_at),
+                'away_depot' => $row->away_depot,
+                'notes' => $row->notes,
+                'metadata' => json_decode($row->metadata ?? 'null', true),
+                'created_at' => $toIso8601($row->created_at),
+                'updated_at' => $toIso8601($row->updated_at),
+            ];
+        }, $rows->all());
+    }
+
+    protected function buildDailyMonthlyFromSegments(array $segments): array
+    {
+        $monthly = [];
+        usort($segments, function ($left, $right) {
+            $leftDay = (int) ($left['day'] ?? 0);
+            $rightDay = (int) ($right['day'] ?? 0);
+            if ($leftDay === $rightDay) {
+                return ((int) ($left['sort_order'] ?? 100)) <=> ((int) ($right['sort_order'] ?? 100));
+            }
+            return $leftDay <=> $rightDay;
+        });
+
+        foreach ($segments as $segment) {
+            $day = $segment['day'] ?? null;
+            if (!is_int($day) || $day < 1 || $day > 31) {
+                continue;
+            }
+            $monthly['d'.$day] = $segment['status_code'] ?? '';
+        }
+        return $monthly;
+    }
+
+    protected function computeFinalStatusFromSegments(array $segments, ?int $day = null): ?string
+    {
+        $status = null;
+        foreach ($segments as $segment) {
+            if ($day !== null && $segment['day'] !== $day) {
+                continue;
+            }
+            $status = $segment['status_code'] ?? $status;
+        }
+        return $status;
+    }
+
+    protected function syncCrewStatusSegments(string $recordId, array $payload, ?object $existing = null): void
+    {
+        if (!Schema::hasTable($this->segmentTable)) {
+            return;
+        }
+
+        $monthKey = trim((string) ($payload['monthKey'] ?? ''));
+        if ($monthKey === '') {
+            return;
+        }
+
+        $segments = [];
+        if (is_array($payload['status_segments'] ?? null)) {
+            foreach ($payload['status_segments'] as $segment) {
+                if (!is_array($segment)) {
+                    continue;
+                }
+                $segments[] = $segment;
+            }
+        } elseif (is_array($payload['monthly'] ?? null)) {
+            foreach ($payload['monthly'] as $key => $code) {
+                if (!is_string($key) || !preg_match('/^d(\d+)$/', $key, $matches)) {
+                    continue;
+                }
+                $day = (int) $matches[1];
+                $segments[] = [
+                    'day' => $day,
+                    'sort_order' => 100,
+                    'status_code' => trim((string) $code),
+                    'train_type' => $payload['trainType'] ?? null,
+                    'route' => $payload['route'] ?? null,
+                    'book_time' => $payload['bookTime'] ?? null,
+                    'rest_started_at' => null,
+                    'away_depot' => $payload['awayDepot'] ?? null,
+                    'notes' => $payload['notes'] ?? null,
+                    'metadata' => json_encode([
+                        'updatedBy' => $payload['updatedBy'] ?? null,
+                    ]),
+                ];
+            }
+        }
+
+        foreach ($segments as $segment) {
+            $day = isset($segment['day']) ? (int) $segment['day'] : 0;
+            $statusCode = trim((string) ($segment['status_code'] ?? ''));
+            if ($day < 1 || $day > 31) {
+                continue;
+            }
+
+            if ($statusCode === '') {
+                DB::table($this->segmentTable)
+                    ->where('crew_record_id', $recordId)
+                    ->where('month_key', $monthKey)
+                    ->where('day', $day)
+                    ->delete();
+                continue;
+            }
+
+            $segmentPayload = [
+                'crew_id' => $this->normalizeText($payload['id'] ?? $existing?->crew_id ?? $recordId) ?: $recordId,
+                'depot_code' => $this->normalizeText($payload['depot'] ?? $existing?->depot ?? '') ?: null,
+                'month_key' => $monthKey,
+                'day' => $day,
+                'sort_order' => (int) ($segment['sort_order'] ?? 100),
+                'status_code' => $statusCode,
+                'status' => $statusCode,
+                'train_type' => trim((string) ($segment['train_type'] ?? '')) ?: null,
+                'route' => trim((string) ($segment['route'] ?? '')) ?: null,
+                'book_time' => trim((string) ($segment['book_time'] ?? '')) ?: null,
+                'start_time' => trim((string) ($segment['start_time'] ?? $segment['book_time'] ?? '00:00')) ?: '00:00',
+                'end_time' => trim((string) ($segment['end_time'] ?? $segment['book_time'] ?? '23:59')) ?: '23:59',
+                'rest_started_at' => $segment['rest_started_at'] ?? null,
+                'away_depot' => trim((string) ($segment['away_depot'] ?? '')) ?: null,
+                'notes' => trim((string) ($segment['notes'] ?? '')) ?: null,
+                'note' => trim((string) ($segment['notes'] ?? '')) ?: null,
+                'metadata' => $segment['metadata'] ?? json_encode([]),
+                'created_at' => $existing?->created_at ?: now(),
+                'updated_at' => now(),
+            ];
+
+            if (in_array(Schema::getColumnType($this->segmentTable, 'segment_id'), ['string', 'varchar', 'text'], true)) {
+                $segmentPayload['segment_id'] = (string) ($segment['segment_id'] ?? Str::uuid());
+            }
+
+            if (Schema::hasColumn($this->segmentTable, 'date')) {
+                $segmentPayload['date'] = $this->resolveSegmentDate($monthKey, $day);
+            }
+
+            if (Schema::hasColumn($this->segmentTable, 'status')) {
+                $segmentPayload['status'] = $statusCode;
+            }
+
+            if (Schema::hasColumn($this->segmentTable, 'note')) {
+                $segmentPayload['note'] = trim((string) ($segment['notes'] ?? '')) ?: null;
+            }
+
+            if (Schema::hasColumn($this->segmentTable, 'start_time')) {
+                $segmentPayload['start_time'] = trim((string) ($segment['book_time'] ?? '')) ?: '00:00';
+            }
+
+            if (Schema::hasColumn($this->segmentTable, 'end_time')) {
+                $segmentPayload['end_time'] = trim((string) ($segment['book_time'] ?? '')) ?: '23:59';
+            }
+
+            DB::table($this->segmentTable)->updateOrInsert(
+                [
+                    'crew_record_id' => $recordId,
+                    'month_key' => $monthKey,
+                    'day' => $day,
+                    'sort_order' => (int) ($segment['sort_order'] ?? 100),
+                ],
+                $segmentPayload
+            );
+        }
+    }
+
     protected function backfillNormalizedCrewTables(): void
     {
         if (!Schema::hasTable($this->memberTable) || !Schema::hasTable($this->table)) {
@@ -262,6 +526,7 @@ class CrewDataController extends Controller
             $payload = $this->payloadFromRow($row);
 
             $this->syncCrewMember((string) $row->record_id, $payload, (string) ($row->depot ?? 'HQ'), $row);
+            $this->syncCrewStatusSegments((string) $row->record_id, $payload, $row);
 
             $status = $this->normalizeText($payload['status'] ?? '');
             if ($status !== '') {
@@ -314,6 +579,15 @@ class CrewDataController extends Controller
         return trim($recordId);
     }
 
+    protected function resolveSegmentDate(string $monthKey, int $day): string
+    {
+        $parts = preg_split('/[-\/]/', $monthKey) ?: [];
+        $year = (int) ($parts[0] ?? date('Y'));
+        $month = (int) ($parts[1] ?? date('m'));
+
+        return sprintf('%04d-%02d-%02d', $year, $month, max(1, min(31, $day)));
+    }
+
     protected function saveShiftAssignment(string $recordId, array $payload, string $depot): void
     {
         $shift = trim((string) ($payload['shift'] ?? ''));
@@ -353,6 +627,7 @@ class CrewDataController extends Controller
         );
 
         $this->syncCrewMember($recordId, $payload, $depot, $existing);
+        $this->syncCrewStatusSegments($recordId, $payload, $existing);
         $this->appendStatusHistory($recordId, $payload, $existing);
     }
 

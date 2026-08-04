@@ -1,0 +1,6 @@
+﻿
+  POST       admin/logout filament.admin.auth.logout › Filament\Auth › Logout…
+  POST       logout ....................... web.logout › AuthController@logout
+
+                                                            Showing [2] routes
+

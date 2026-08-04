@@ -1,0 +1,6 @@
+﻿
+  GET|HEAD       admin filament.admin.pages.dashboard › Filament\Pages › Dash…
+  GET|HEAD       dashboard .................. dashboard › CrewController@index
+
+                                                            Showing [2] routes
+

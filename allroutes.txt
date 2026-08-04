@@ -1,0 +1,69 @@
+﻿
+  GET|HEAD   / ....................................................................................................................... CrewController@index
+  GET|HEAD   admin ............................................................................ filament.admin.pages.dashboard › Filament\Pages › Dashboard
+  GET|HEAD   admin/crew-members ............. filament.admin.resources.crew-members.index › App\Filament\Resources\CrewMemberResource\Pages\ListCrewMembers
+  GET|HEAD   admin/crew-members/create .... filament.admin.resources.crew-members.create › App\Filament\Resources\CrewMemberResource\Pages\CreateCrewMember
+  GET|HEAD   admin/crew-members/{record}/edit . filament.admin.resources.crew-members.edit › App\Filament\Resources\CrewMemberResource\Pages\EditCrewMember
+  GET|HEAD   admin/depots ................................... filament.admin.resources.depots.index › App\Filament\Resources\DepotResource\Pages\ListDepots
+  GET|HEAD   admin/depots/create .......................... filament.admin.resources.depots.create › App\Filament\Resources\DepotResource\Pages\CreateDepot
+  GET|HEAD   admin/depots/{record}/edit ....................... filament.admin.resources.depots.edit › App\Filament\Resources\DepotResource\Pages\EditDepot
+  GET|HEAD   admin/designations ........... filament.admin.resources.designations.index › App\Filament\Resources\DesignationResource\Pages\ListDesignations
+  GET|HEAD   admin/designations/create .. filament.admin.resources.designations.create › App\Filament\Resources\DesignationResource\Pages\CreateDesignation
+  GET|HEAD   admin/designations/{record}/edit filament.admin.resources.designations.edit › App\Filament\Resources\DesignationResource\Pages\EditDesignation
+  GET|HEAD   admin/login ........................................................................ filament.admin.auth.login › App\Filament\Pages\Auth\Login
+  POST       admin/logout ................................................................... filament.admin.auth.logout › Filament\Auth › LogoutController
+  GET|HEAD   admin/meta ......................................................................................................... AdminMetaController@index
+  POST       admin/meta/{collection}/{id} ........................................................................................ AdminMetaController@save
+  DELETE     admin/meta/{collection}/{id} ...................................................................................... AdminMetaController@delete
+  GET|HEAD   admin/permissions ............... filament.admin.resources.permissions.index › App\Filament\Resources\PermissionResource\Pages\ListPermissions
+  GET|HEAD   admin/permissions/create ...... filament.admin.resources.permissions.create › App\Filament\Resources\PermissionResource\Pages\CreatePermission
+  GET|HEAD   admin/permissions/{record}/edit ... filament.admin.resources.permissions.edit › App\Filament\Resources\PermissionResource\Pages\EditPermission
+  GET|HEAD   admin/reports ............................... filament.admin.resources.reports.index › App\Filament\Resources\ReportResource\Pages\ListReports
+  GET|HEAD   admin/reports/create ...................... filament.admin.resources.reports.create › App\Filament\Resources\ReportResource\Pages\CreateReport
+  GET|HEAD   admin/reports/{record}/edit ................... filament.admin.resources.reports.edit › App\Filament\Resources\ReportResource\Pages\EditReport
+  GET|HEAD   admin/roles ....................................... filament.admin.resources.roles.index › App\Filament\Resources\RoleResource\Pages\ListRoles
+  GET|HEAD   admin/roles/create .............................. filament.admin.resources.roles.create › App\Filament\Resources\RoleResource\Pages\CreateRole
+  GET|HEAD   admin/roles/{record}/edit ........................... filament.admin.resources.roles.edit › App\Filament\Resources\RoleResource\Pages\EditRole
+  GET|HEAD   admin/shifts ................................... filament.admin.resources.shifts.index › App\Filament\Resources\ShiftResource\Pages\ListShifts
+  GET|HEAD   admin/shifts/create .......................... filament.admin.resources.shifts.create › App\Filament\Resources\ShiftResource\Pages\CreateShift
+  GET|HEAD   admin/shifts/{record}/edit ....................... filament.admin.resources.shifts.edit › App\Filament\Resources\ShiftResource\Pages\EditShift
+  GET|HEAD   admin/status-codes ............. filament.admin.resources.status-codes.index › App\Filament\Resources\StatusCodeResource\Pages\ListStatusCodes
+  GET|HEAD   admin/status-codes/create .... filament.admin.resources.status-codes.create › App\Filament\Resources\StatusCodeResource\Pages\CreateStatusCode
+  GET|HEAD   admin/status-codes/{record}/edit . filament.admin.resources.status-codes.edit › App\Filament\Resources\StatusCodeResource\Pages\EditStatusCode
+  GET|HEAD   admin/train-types ................. filament.admin.resources.train-types.index › App\Filament\Resources\TrainTypeResource\Pages\ListTrainTypes
+  GET|HEAD   admin/train-types/create ........ filament.admin.resources.train-types.create › App\Filament\Resources\TrainTypeResource\Pages\CreateTrainType
+  GET|HEAD   admin/train-types/{record}/edit ..... filament.admin.resources.train-types.edit › App\Filament\Resources\TrainTypeResource\Pages\EditTrainType
+  GET|HEAD   admin/users ....................................... filament.admin.resources.users.index › App\Filament\Resources\UserResource\Pages\ListUsers
+  GET|HEAD   admin/users/create .............................. filament.admin.resources.users.create › App\Filament\Resources\UserResource\Pages\CreateUser
+  GET|HEAD   admin/users/{record}/edit ........................... filament.admin.resources.users.edit › App\Filament\Resources\UserResource\Pages\EditUser
+  GET|HEAD   dashboard ................................................................................................... dashboard › CrewController@index
+  GET|HEAD   filament/exports/{export}/download ............................................. filament.exports.download › Filament\Actions › DownloadExport
+  GET|HEAD   filament/imports/{import}/failed-rows/download ........... filament.imports.failed-rows.download › Filament\Actions › DownloadImportFailureCsv
+  GET|HEAD   livewire/livewire.js ............................................................. Livewire\Mechanisms › FrontendAssets@returnJavaScriptAsFile
+  GET|HEAD   livewire/livewire.min.js.map ....................................................................... Livewire\Mechanisms › FrontendAssets@maps
+  GET|HEAD   livewire/preview-file/{filename} .................................... livewire.preview-file › Livewire\Features › FilePreviewController@handle
+  POST       livewire/update .................................................. default.livewire.update › Livewire\Mechanisms › HandleRequests@handleUpdate
+  POST       livewire/upload-file .................................................. livewire.upload-file › Livewire\Features › FileUploadController@handle
+  GET|HEAD   login ....................................................................................................... login › AuthController@showLogin
+  POST       login .................................................................................................. web.login.post › AuthController@login
+  POST       logout .................................................................................................... web.logout › AuthController@logout
+  GET|HEAD   mysql/crew-view ........................................................................................... CrewDataController@normalizedIndex
+  GET|HEAD   mysql/crew-view/{recordId} ................................................................................. CrewDataController@normalizedShow
+  POST       mysql/crew-view/{recordId} ................................................................................. CrewDataController@normalizedSave
+  DELETE     mysql/crew-view/{recordId} ............................................................................... CrewDataController@normalizedDelete
+  GET|HEAD   mysql/meta/{collection} .................................................................................. AdminMetaController@normalizedIndex
+  POST       mysql/meta/{collection}/{id} .............................................................................. AdminMetaController@normalizedSave
+  DELETE     mysql/meta/{collection}/{id} ............................................................................ AdminMetaController@normalizedDelete
+  GET|HEAD   mysql/users ................................................................................................... AdminMetaController@usersIndex
+  POST       mysql/users/{id} ............................................................................................... AdminMetaController@usersSave
+  DELETE     mysql/users/{id} ............................................................................................. AdminMetaController@usersDelete
+  GET|HEAD   reports ............................................................................................... reports.index › ReportController@index
+  GET|HEAD   reports/absence ................................................................................... reports.absence › ReportController@absence
+  GET|HEAD   reports/daily-status ..................................................................... reports.daily-status › ReportController@dailyStatus
+  GET|HEAD   reports/monthly-register ......................................................... reports.monthly-register › ReportController@monthlyRegister
+  GET|HEAD   reports/printable ............................................................................. reports.printable › ReportController@printable
+  GET|HEAD   reports/utilization ....................................................................... reports.utilization › ReportController@utilization
+  GET|HEAD   session/user .............................................................................................. session.user › AuthController@user
+
+                                                                                                                                        Showing [65] routes
+

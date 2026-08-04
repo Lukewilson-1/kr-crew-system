@@ -43,7 +43,7 @@
 
     @if (! $isSimple)
         <span
-            class="fi-pagination-overview text-sm font-medium text-gray-700 dark:text-gray-200"
+            class="fi-pagination-overview text-sm font-medium text-gray-700"
         >
             {{
                 trans_choice(
@@ -119,7 +119,7 @@
 
     @if ((! $isSimple) && $paginator->hasPages())
         <ol
-            class="fi-pagination-items justify-self-end rounded-lg bg-white shadow-sm ring-1 ring-gray-950/10 dark:bg-white/5 dark:ring-white/20"
+            class="fi-pagination-items justify-self-end rounded-lg bg-white shadow-sm ring-1 ring-gray-950/10"
         >
             @if (! $paginator->onFirstPage())
                 <x-filament::pagination.item

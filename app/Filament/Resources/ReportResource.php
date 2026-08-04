@@ -17,6 +17,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\KeyValue;
 use Filament\Tables\Filters\SelectFilter;
 
 class ReportResource extends Resource
@@ -46,6 +48,41 @@ class ReportResource extends Resource
             TextInput::make('category')->label('Category')->maxLength(255),
             TextInput::make('sort_order')->label('Sort order')->numeric()->default(0),
             Checkbox::make('is_active')->label('Active')->default(true),
+            Select::make('builder_layout')
+                ->label('Builder layout')
+                ->options([
+                    'table' => 'Table',
+                    'cards' => 'Cards',
+                    'timeline' => 'Timeline',
+                ])
+                ->default('table'),
+            Repeater::make('builder_columns')
+                ->label('Builder columns')
+                ->schema([
+                    TextInput::make('label')->required()->label('Label'),
+                    TextInput::make('key')->required()->label('Key'),
+                    Select::make('type')->options([
+                        'text' => 'Text',
+                        'badge' => 'Badge',
+                        'date' => 'Date',
+                    ])->default('text')->required(),
+                ])
+                ->collapsible()
+                ->default([]),
+            Repeater::make('builder_filters')
+                ->label('Builder filters')
+                ->schema([
+                    TextInput::make('label')->required()->label('Label'),
+                    TextInput::make('key')->required()->label('Key'),
+                    Select::make('type')->options([
+                        'select' => 'Select',
+                        'date' => 'Date',
+                        'text' => 'Text',
+                    ])->default('select')->required(),
+                ])
+                ->collapsible()
+                ->default([]),
+            TextInput::make('builder_group_by')->label('Group by field'),
         ]);
     }
 

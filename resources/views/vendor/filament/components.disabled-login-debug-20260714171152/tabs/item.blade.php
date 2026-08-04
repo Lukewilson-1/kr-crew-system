@@ -23,20 +23,20 @@
 
     $hasAlpineActiveClasses = filled($alpineActive);
 
-    $inactiveItemClasses = 'hover:bg-gray-50 focus-visible:bg-gray-50 dark:hover:bg-white/5 dark:focus-visible:bg-white/5';
+    $inactiveItemClasses = 'hover:bg-gray-50 focus-visible:bg-gray-50';
 
     // @deprecated `fi-tabs-item-active` has been replaced by `fi-active`.
-    $activeItemClasses = 'fi-active fi-tabs-item-active bg-gray-50 dark:bg-white/5';
+    $activeItemClasses = 'fi-active fi-tabs-item-active bg-gray-50';
 
-    $inactiveLabelClasses = 'text-gray-500 group-hover:text-gray-700 group-focus-visible:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-200 dark:group-focus-visible:text-gray-200';
+    $inactiveLabelClasses = 'text-gray-500 group-hover:text-gray-700 group-focus-visible:text-gray-700';
 
-    $activeLabelClasses = 'text-primary-600 dark:text-primary-400';
+    $activeLabelClasses = 'text-primary-600';
 
     $iconClasses = 'fi-tabs-item-icon h-5 w-5 shrink-0 transition duration-75';
 
-    $inactiveIconClasses = 'text-gray-400 dark:text-gray-500';
+    $inactiveIconClasses = 'text-gray-400';
 
-    $activeIconClasses = 'text-primary-600 dark:text-primary-400';
+    $activeIconClasses = 'text-primary-600';
 @endphp
 
 <{{ $tag }}

@@ -124,6 +124,17 @@ class CrewOperationsDashboardWidget extends Widget
             ? round(($bookedDays / ($daysInMonth * $totalCrew)) * 100, 1)
             : 0;
 
+        $reportCount = ReportDefinition::query()->count();
+        $recentReports = ReportDefinition::query()
+            ->orderByDesc('created_at')
+            ->limit(3)
+            ->get(['name', 'type'])
+            ->map(fn ($report) => [
+                'name' => $report->name,
+                'type' => ucfirst((string) $report->type),
+            ])
+            ->toArray();
+
         return [
             'summary' => [
                 ['label' => 'Total crew', 'value' => $totalCrew, 'hint' => 'Records currently available in the roster'],
@@ -136,6 +147,8 @@ class CrewOperationsDashboardWidget extends Widget
             'standbyDays' => $standbyDays,
             'depotBreakdown' => $depotBreakdown,
             'standbyLeaders' => $standbyLeaders,
+            'reportCount' => $reportCount,
+            'recentReports' => $recentReports,
         ];
     }
 }

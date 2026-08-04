@@ -112,7 +112,7 @@
                 @endif
             @endif
             @class([
-                'fi-modal-close-overlay fixed inset-0 bg-gray-950/50 dark:bg-gray-950/75',
+                'fi-modal-close-overlay fixed inset-0 bg-gray-950/50',
                 'cursor-pointer' => $closeByClickingAway,
             ])
             style="will-change: transform"
@@ -158,7 +158,7 @@
                     x-transition:leave-end="scale-100"
                 @endif
                 @class([
-                    'fi-modal-window pointer-events-auto relative flex w-full cursor-default flex-col bg-white shadow-xl ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10',
+                    'fi-modal-window pointer-events-auto relative flex w-full cursor-default flex-col bg-white shadow-xl ring-1 ring-gray-950/5',
                     'fi-modal-slide-over-window ms-auto overflow-y-auto' => $slideOver,
                     'h-screen' => $slideOver || ($width === MaxWidth::Screen),
                     'mx-auto rounded-xl' => ! ($slideOver || ($width === MaxWidth::Screen)),
@@ -194,7 +194,7 @@
                     <div
                         @class([
                             'fi-modal-header flex px-6 pt-6',
-                            'fi-sticky sticky top-0 z-10 border-b border-gray-200 bg-white pb-6 dark:border-white/10 dark:bg-gray-900' => $stickyHeader,
+                            'fi-sticky sticky top-0 z-10 border-b border-gray-200 bg-white pb-6' => $stickyHeader,
                             'rounded-t-xl' => $stickyHeader && ! ($slideOver || ($width === MaxWidth::Screen)),
                             match ($alignment) {
                                 Alignment::Start, Alignment::Left => 'gap-x-5',
@@ -237,8 +237,8 @@
                                         @class([
                                             'rounded-full',
                                             match ($iconColor) {
-                                                'gray' => 'fi-color-gray bg-gray-100 dark:bg-gray-500/20',
-                                                default => 'fi-color-custom bg-custom-100 dark:bg-custom-500/20',
+                                                'gray' => 'fi-color-gray bg-gray-100',
+                                                default => 'fi-color-custom bg-custom-100',
                                             },
                                             match ($alignment) {
                                                 Alignment::Start, Alignment::Left => 'p-2',
@@ -260,8 +260,8 @@
                                             @class([
                                                 'fi-modal-icon h-6 w-6',
                                                 match ($iconColor) {
-                                                    'gray' => 'text-gray-500 dark:text-gray-400',
-                                                    default => 'text-custom-600 dark:text-custom-400',
+                                                    'gray' => 'text-gray-500',
+                                                    default => 'text-custom-600',
                                                 },
                                             ])
                                         />
@@ -307,7 +307,7 @@
                             'fi-modal-footer w-full',
                             'pe-6 ps-[5.25rem]' => $icon && ($alignment === Alignment::Start) && ($footerActionsAlignment !== Alignment::Center) && (! $stickyFooter),
                             'px-6' => ! ($icon && ($alignment === Alignment::Start) && ($footerActionsAlignment !== Alignment::Center) && (! $stickyFooter)),
-                            'fi-sticky sticky bottom-0 border-t border-gray-200 bg-white py-5 dark:border-white/10 dark:bg-gray-900' => $stickyFooter,
+                            'fi-sticky sticky bottom-0 border-t border-gray-200 bg-white py-5' => $stickyFooter,
                             'rounded-b-xl' => $stickyFooter && ! ($slideOver || ($width === MaxWidth::Screen)),
                             'pb-6' => ! $stickyFooter,
                             'mt-6' => (! $stickyFooter) && \Filament\Support\is_slot_empty($slot),

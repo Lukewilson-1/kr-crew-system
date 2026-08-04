@@ -40,6 +40,67 @@ const USER_ROLE_OPTIONS=[
   {id:'crew_admin',label:'Crew Admin'},
 ];
 
+const PAGE_PATHS = {
+  dashboard: '/crew-dashboard',
+  roster: '/crew-roster',
+  rest: '/crew-rest',
+  monthly: '/crew-monthly',
+  reports: '/crew-reports',
+};
+
+// App ready flag for lazy-loaded page modules
+window.__CREW_APP_READY = false;
+function getPageFromPathname(pathname = window.location.pathname) {
+  const normalized = String(pathname).toLowerCase().replace(/\/+$/g, '');
+  return Object.entries(PAGE_PATHS).find(([, path]) => path === normalized)?.[0] || null;
+}
+
+// Safe DOM setters to avoid runtime errors when elements are missing
+function safeSetInner(id, html) {
+  try {
+    const e = document.getElementById(id);
+    if (e) e.innerHTML = html;
+  } catch (err) {
+    console.warn('safeSetInner failed for', id, err && err.message);
+  }
+}
+
+function safeSetText(id, text) {
+  try {
+    const e = document.getElementById(id);
+    if (e) e.textContent = text;
+  } catch (err) {
+    console.warn('safeSetText failed for', id, err && err.message);
+  }
+}
+
+function selectMonthDay(day){
+  const numericDay = Number(day);
+  if (!Number.isInteger(numericDay) || numericDay < 1) return;
+  selectedMonthDay = numericDay;
+  renderMonthly();
+}
+
+function buildMonthlyTotals(allCrew, maxDay){
+  const totals = {BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
+  allCrew.forEach(c=>{
+    for(let d=1;d<=maxDay;d++){
+      const code = getFinalStatusForDay(c,d) || '';
+      if (totals[code] !== undefined) totals[code]++;
+    }
+  });
+  return totals;
+}
+
+function buildDayTotals(allCrew, day){
+  const totals = {BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
+  allCrew.forEach(c=>{
+    const code = getFinalStatusForDay(c,day) || '';
+    if (totals[code] !== undefined) totals[code]++;
+  });
+  return totals;
+}
+
 function getRoleSelectOptions(selectedRole){
   const roleSource = roleMetadataCache.length ? sortAccessMetaRecords(roleMetadataCache) : USER_ROLE_OPTIONS;
   return roleSource.map(role=>{
@@ -98,7 +159,8 @@ const DEFAULT_SHIFT_LABEL='Day shift';
 let currentUser=null;
 let state={};        // {depot:{crewId:crewDoc}}
 let listeners=[];
-let currentPage='dashboard',activeFilter='all',hqDepotView='all',editKey=null;
+let currentPage='monthly',activeFilter='all',hqDepotView='all',editKey=null;
+let selectedMonthDay = new Date().getDate();
 let cdInterval=null; // countdown ticker
 let currentModalGrade=null;
 let lastRefreshTime=0; // prevent rapid refresh spamming
@@ -357,6 +419,40 @@ function updateStatusValidation(){
   }
 }
 
+function getServerUser(){
+  return window.__CURRENT_USER__ || null;
+}
+
+function normalizeCurrentUser(user){
+  if(!user) return null;
+  return {
+    username: user.username || user.email || '',
+    depot: user.depot || user.depot_code || 'HQ',
+    name: user.name || user.username || '',
+    isHQ: !!user.isHQ,
+    isSuperAdmin: !!user.isSuperAdmin,
+    role: user.role || user.role_code || '',
+  };
+}
+
+function setCurrentUser(user){
+  const normalized = normalizeCurrentUser(user);
+  if(!normalized) return;
+  currentUser = normalized;
+  window.currentUser = currentUser;
+  const tbBadgeEl = document.getElementById('tbBadge');
+  if(tbBadgeEl) tbBadgeEl.textContent = getTopAccessLabel();
+  const tbUserEl = document.getElementById('tbUser');
+  if(tbUserEl) tbUserEl.textContent = currentUser.name || currentUser.username || '';
+  updateSidebarSections();
+  if(currentUser.isHQ){
+    const sbDepotsEl = document.getElementById('sbDepots');
+    if(sbDepotsEl){
+      sbDepotsEl.innerHTML = getActiveDepots().map(d=>`<div class="sb-depot" onclick="setHqDepotView('${d}');goPage('roster')" id="sbd-${d}"><div class="sb-depot-dot" style="background:${DEPOT_COLORS[d]}"></div>${d}</div>`).join('');
+    }
+  }
+}
+
 function persistSession(){
   if(!currentUser){localStorage.removeItem(SESSION_KEY);return;}
   localStorage.setItem(SESSION_KEY,JSON.stringify({
@@ -373,50 +469,66 @@ function persistSession(){
 
 async function restoreSession(){
   const raw = localStorage.getItem(SESSION_KEY);
-  if(!raw) return false;
-  try{
-    const saved = JSON.parse(raw);
-    if(!saved.username||!saved.depot||!saved.name) return false;
-    currentUser={username:saved.username,depot:saved.depot,name:saved.name,isHQ:!!saved.isHQ,isSuperAdmin:!!saved.isSuperAdmin,role:saved.role||''};
-    hqDepotView=(saved.isHQ||saved.isSuperAdmin)?saved.hqDepotView||'all':'all';
-    currentPage=saved.currentPage||'dashboard';
-    document.getElementById('loginPage').classList.remove('show');
-    document.getElementById('app').classList.add('show');
-    document.getElementById('tbBadge').textContent=getTopAccessLabel();
-    document.getElementById('tbUser').textContent=currentUser.name;
-    if(currentUser.isHQ){
-      document.getElementById('depotSection').style.display='block';
-      document.getElementById('sbDepots').innerHTML=getActiveDepots().map(d=>`<div class="sb-depot" onclick="setHqDepotView('${d}');goPage('roster')" id="sbd-${d}"><div class="sb-depot-dot" style="background:${DEPOT_COLORS[d]}"></div>${d}</div>`).join('');
+  let saved = null;
+  if(raw){
+    try{
+      saved = JSON.parse(raw);
+    }catch(err){
+      console.warn('Session parse failed, falling back to server user',err);
+      saved = null;
     }
-    const lds = hasGlobalAccess()?getActiveDepots():[currentUser.depot];
-    if(db){
-      await seedDepotMetaIfEmpty();
-      await loadDepotMeta();
-      await seedDesignationMetaIfEmpty();
-      await loadDesignationMeta();
-      await seedUsersIfEmpty();
-      await seedStatusMetaIfEmpty();
-      await loadStatusMeta();
-      await seedTrainTypeMetaIfEmpty();
-      await loadTrainTypeMeta();
-      await seedShiftMetaIfEmpty();
-      await loadShiftMeta();
-      await loadAccessMeta();
-      populateDesignationSelect();
-      populateTrainTypeSelect();
-      populateShiftSelects();
-      await Promise.all(lds.map(seedDepotIfEmpty));
-      await ensureRestCountdownSample();
-      attachListeners(lds);
-    }
-    setInterval(updateClock,1000);
-    updateClock();
-    if(cdInterval)clearInterval(cdInterval);
-    goPage(currentPage);
-    cdInterval=setInterval(()=>{checkRestExpirations();if(currentPage==='rest')renderRest();else updateCountdownsInTable();},10000);
-    setLog(`Restored session - ${currentUser.name}`);
-    return true;
-  }catch(err){console.error('Session restore failed',err);return false;}
+  }
+  if(!saved || !saved.username || !saved.depot || !saved.name){
+    const serverUser = getServerUser();
+    if(!serverUser) return false;
+    saved = {
+      username: serverUser.username,
+      depot: serverUser.depot,
+      name: serverUser.name,
+      isHQ: serverUser.isHQ,
+      isSuperAdmin: serverUser.isSuperAdmin,
+      role: serverUser.role,
+      hqDepotView: serverUser.isHQ ? 'all' : 'all',
+      currentPage: 'monthly',
+    };
+  }
+  const normalized = normalizeCurrentUser(saved);
+  if(!normalized) return false;
+  currentUser = normalized;
+  hqDepotView = currentUser.isHQ ? saved.hqDepotView || 'all' : 'all';
+  const pageFromPath = getPageFromPathname(window.location.pathname);
+  currentPage = pageFromPath || saved.currentPage || 'monthly';
+  const loginPageEl = document.getElementById('loginPage'); if (loginPageEl) loginPageEl.classList.remove('show');
+  const appEl = document.getElementById('app'); if (appEl) appEl.classList.add('show');
+  setCurrentUser(currentUser);
+  const lds = hasGlobalAccess()?getActiveDepots():[currentUser.depot];
+  if(db){
+    await seedDepotMetaIfEmpty();
+    await loadDepotMeta();
+    await seedDesignationMetaIfEmpty();
+    await loadDesignationMeta();
+    await seedUsersIfEmpty();
+    await seedStatusMetaIfEmpty();
+    await loadStatusMeta();
+    await seedTrainTypeMetaIfEmpty();
+    await loadTrainTypeMeta();
+    await seedShiftMetaIfEmpty();
+    await loadShiftMeta();
+    await loadAccessMeta();
+    populateDesignationSelect();
+    populateTrainTypeSelect();
+    populateShiftSelects();
+    await Promise.all(lds.map(seedDepotIfEmpty));
+    await ensureRestCountdownSample();
+    attachListeners(lds);
+  }
+  setInterval(updateClock,1000);
+  updateClock();
+  if(cdInterval)clearInterval(cdInterval);
+  goPage(currentPage);
+  cdInterval=setInterval(()=>{checkRestExpirations();if(currentPage==='rest')renderRest();else updateCountdownsInTable();},10000);
+  setLog(`Restored session - ${currentUser.name}`);
+  return true;
 }
 
 /* ════════ REST COUNTDOWN ══════════════════════════════════════════════════ */
@@ -963,36 +1075,48 @@ function attachListeners(depots){
     const unsub=onSnapshot(query(collection(db,'crew'), where('depot','==',depot)), snap=>{
       snap.docChanges().forEach(ch=>{const d=ch.doc.data();const id=d.id||ch.doc.id;if(ch.type==='removed')delete state[depot][id];else state[depot][id]=d;});
       setSyncStatus('ok','Live');
-      // Update UI incrementally without full page refresh to preserve form state and user input
-      updateLiveCountdowns();
+      syncCurrentPageFromLiveData();
     },err=>{setSyncStatus('err','Sync error');setLog('Error: '+err.message);});
     listeners.push(unsub);
   });
 }
 
-function updateLiveCountdowns(){
-  // Update only the countdown displays without full page refresh
-  // This keeps modals and forms open while syncing data changes
-  if(currentPage==='rest') renderRest();
-  else if(currentPage==='roster' || currentPage==='dashboard') updateCountdownsInTable();
+function syncCurrentPageFromLiveData(){
+  if (['rest','dashboard','roster','monthly','reports'].includes(currentPage)) {
+    refreshPage();
+  } else {
+    updateCountdownsInTable();
+  }
 }
 
 /* ════════ WRITE ═══════════════════════════════════════════════════════════ */
 async function writeCrewDoc(depot,id,updates){
   normalizeCrewGradePayload(updates);
-  if(demoMode||!db){if(!state[depot])state[depot]={};state[depot][id]={...state[depot][id],...updates};return;}
-  await setDoc(doc(db,'crew',`${depot}_${id}`),{...updates,lastUpdated:serverTimestamp()},{merge:true});
+  if(!state[depot]) state[depot] = {};
+  const previous = state[depot][id] ? { ...state[depot][id] } : null;
+  state[depot][id] = { ...state[depot][id], ...updates };
+  refreshPage();
+  if(demoMode||!db){return;}
+  try {
+    await setDoc(doc(db,'crew',`${depot}_${id}`),{...updates,lastUpdated:serverTimestamp()},{merge:true});
+  } catch(err) {
+    if(previous) state[depot][id] = previous;
+    throw err;
+  }
 }
 async function addCrewDoc(depot,obj){
   normalizeCrewGradePayload(obj);
-  if(demoMode||!db){if(!state[depot])state[depot]={};state[depot][obj.id]=obj;return;}
+  if(!state[depot]) state[depot] = {};
+  state[depot][obj.id]=obj;
+  refreshPage();
+  if(demoMode||!db){return;}
   await setDoc(doc(db,'crew',`${depot}_${obj.id}`),{...obj,lastUpdated:serverTimestamp()});
 }
 
 /* ════════ AUTH ════════════════════════════════════════════════════════════ */
 async function doLogin(){
-  const user=document.getElementById('lUser').value.trim().toLowerCase();
-  const pass=document.getElementById('lPass').value;
+  const user=document.getElementById('lUser')?.value.trim().toLowerCase();
+  const pass=document.getElementById('lPass')?.value;
   const err=document.getElementById('loginErr');err.style.display='none';
   if(!user||!pass){err.textContent='Enter username and password.';err.style.display='block';return;}
   let acct=null;
@@ -1033,14 +1157,9 @@ async function doLogin(){
     err.style.display='block';
     return;
   }
-  currentUser={username:user,depot:acct.depot,name:acct.name,isHQ:acct.isHQ,isSuperAdmin:!!acct.isSuperAdmin,role:acct.role||''};
-  document.getElementById('loginPage').classList.remove('show');
-  document.getElementById('app').classList.add('show');
-  document.getElementById('tbBadge').textContent=getTopAccessLabel();
-  document.getElementById('tbUser').textContent=currentUser.name;
-  updateSidebarSections();
-  if(currentUser.isHQ){
-    document.getElementById('sbDepots').innerHTML=getActiveDepots().map(d=>`<div class="sb-depot" onclick="setHqDepotView('${d}');goPage('roster')" id="sbd-${d}"><div class="sb-depot-dot" style="background:${DEPOT_COLORS[d]}"></div>${d}</div>`).join('');
+  setCurrentUser({ username:user,depot:acct.depot,name:acct.name,isHQ:acct.isHQ,isSuperAdmin:!!acct.isSuperAdmin,role:acct.role||'' });
+  if(document.getElementById('app')){
+    document.getElementById('app').classList.add('show');
   }
   const lds=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   if(db){
@@ -1057,21 +1176,35 @@ async function doLogin(){
     attachListeners(lds);
   }
   persistSession();
-  goPage('dashboard');
+  goPage('monthly');
   setInterval(updateClock,1000);updateClock();
   if(cdInterval)clearInterval(cdInterval);
   cdInterval=setInterval(()=>{checkRestExpirations();if(currentPage==='rest')renderRest();else updateCountdownsInTable();},10000);
   setLog(`Signed in - ${currentUser.name}`);
 }
 
-function doLogout(){
+async function doLogout(){
+  try {
+    await fetch('/logout', {
+      method: 'POST',
+      headers: {
+        'X-CSRF-TOKEN': getCsrfToken(),
+        'Accept': 'application/json',
+      },
+    });
+  } catch (err) {
+    console.warn('Logout request failed', err);
+  }
   listeners.forEach(u=>u());listeners=[];if(cdInterval)clearInterval(cdInterval);
   currentUser=null;hqDepotView='all';
   persistSession();
   updateSidebarSections();
-  document.getElementById('app').classList.remove('show');
-  document.getElementById('loginPage').classList.add('show');
-  document.getElementById('lUser').value='';document.getElementById('lPass').value='';
+  if(document.getElementById('app')){
+    document.getElementById('app').classList.remove('show');
+  }
+  if(document.getElementById('lUser')) document.getElementById('lUser').value='';
+  if(document.getElementById('lPass')) document.getElementById('lPass').value='';
+  window.location.href = '/login';
 }
 
 /* ════════ HELPERS ═════════════════════════════════════════════════════════ */
@@ -1098,7 +1231,11 @@ function setSyncStatus(t,m){
   if(ld)ld.style.background=t==='ok'?'#69F0AE':t==='err'?'#EF5350':'#FFB300';
   if(lt)lt.textContent=t==='ok'?'Live':t==='err'?'Offline':'Syncing…';
 }
-function setLoginHint(demo){document.getElementById('loginHint').innerHTML=demo?'Demo mode - no sync.':'Use MySQL user credentials to sign in.';}
+function setLoginHint(demo){
+  const hintEl = document.getElementById('loginHint');
+  if (!hintEl) return;
+  hintEl.innerHTML = demo ? 'Demo mode - no sync.' : 'Use MySQL user credentials to sign in.';
+}
 
 /* ════════ NAVIGATION ══════════════════════════════════════════════════════ */
 function goPage(p){
@@ -1107,21 +1244,54 @@ function goPage(p){
     return;
   }
 
-  currentPage=p;if(p!=='roster')activeFilter='all';
-  document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
-  const el=document.getElementById('sb-'+p);if(el)el.classList.add('active');
-  const titles={dashboard:'Dashboard',roster:'Crew Roster',rest:'Rest Countdowns',monthly:'Monthly View',reports:'Reports'};
-  document.getElementById('phTitle').textContent=titles[p]||p;
-  refreshPage();
-  persistSession();
+  (async function(){
+    currentPage=p;if(p!=='roster')activeFilter='all';
+    const path = PAGE_PATHS[p] || '/';
+    if (window.location.pathname !== path) {
+      history.pushState({ page: p }, '', path);
+    } else {
+      history.replaceState({ page: p }, '', path);
+    }
+    document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
+    const el=document.getElementById('sb-'+p);if(el)el.classList.add('active');
+    const titles={dashboard:'Dashboard',roster:'Crew Roster',rest:'Rest Countdowns',monthly:'Monthly View',reports:'Reports'};
+    document.getElementById('phTitle').textContent=titles[p]||p;
+    document.title = `KR Crew System - ${titles[p]||p}`;
+    // Try to lazy-load a small page module for faster UX
+    const moduleMap = {dashboard:'/js/pages/dashboard.js', roster:'/js/pages/roster.js', rest:'/js/pages/rest.js', monthly:'/js/pages/monthly.js', reports:'/js/pages/reports.js'};
+    try{
+      if(moduleMap[p]){
+        const mod = await import(moduleMap[p]);
+        if(mod && typeof mod.init === 'function'){
+          await mod.init();
+          persistSession();
+          return;
+        }
+      }
+    }catch(err){console.warn('Page module load failed',err);}
+    refreshPage();
+    persistSession();
+  })();
 }
+
+window.addEventListener('popstate', event => {
+  const pageFromState = event.state?.page;
+  const pageFromPath = getPageFromPathname(window.location.pathname);
+  const page = pageFromState || pageFromPath || currentPage;
+  if (page && page !== currentPage) {
+    currentPage = page;
+    document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
+    const el=document.getElementById('sb-'+page);if(el)el.classList.add('active');
+    refreshPage();
+  }
+});
 
 /* ════════ DASHBOARD ═══════════════════════════════════════════════════════ */
 function renderDashboard(){
   const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   const all=getAllCrew(state, depots);const c=cts(all);
-  document.getElementById('phSub').textContent=`Live booking board · ${MONTH_NAME}`;
-  document.getElementById('phActions').innerHTML='';
+  safeSetText('phSub', `Live booking board · ${MONTH_NAME}`);
+  safeSetInner('phActions', '');
 
   let html=kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]]);
 
@@ -1152,17 +1322,17 @@ function renderDashboard(){
     html+=`<div class="sec-hdr"><span class="sec-title">Today - ${currentUser.depot}</span><button class="btn btn-green btn-sm no-print" onclick="openAddModal()">+ Add crew</button></div>`;
     html+=crewTableHtml(currentUser.depot,false,true);
   }
-  document.getElementById('pbody').innerHTML=html;
+  safeSetInner('pbody', html);
 }
 
 /* ════════ ROSTER ══════════════════════════════════════════════════════════ */
 function renderRoster(){
   const depots=currentUser.isHQ?(hqDepotView==='all'?getActiveDepots():[hqDepotView]):[currentUser.depot];
   const label=currentUser.isHQ?(hqDepotView==='all'?'All Depots':hqDepotView+' Depot'):currentUser.depot+' Depot';
-  document.getElementById('phSub').textContent=`${label} · ${MONTH_NAME}`;
+  safeSetText('phSub', `${label} · ${MONTH_NAME}`);
   const allCrew=getAllCrew(state, depots);const c=cts(allCrew);
-  document.getElementById('phActions').innerHTML=currentUser.isHQ?'':
-    `<button class="btn btn-ghost btn-sm no-print" onclick="openAddModal()">+ Add crew</button>`;
+  safeSetInner('phActions', currentUser.isHQ?''
+    :`<button class="btn btn-ghost btn-sm no-print" onclick="openAddModal()">+ Add crew</button>`);
 
   let html='';
   if(currentUser.isHQ){
@@ -1174,7 +1344,7 @@ function renderRoster(){
   html+=kpiHtml([['TOT','Total',allCrew.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]],'repeat(auto-fit,minmax(80px,1fr))');
   const showDepot=currentUser.isHQ&&hqDepotView==='all';
   html+=crewTableHtml(hqDepotView==='all'&&currentUser.isHQ?'all':depots[0],showDepot,!currentUser.isHQ);
-  document.getElementById('pbody').innerHTML=html;
+  safeSetInner('pbody', html);
   updatePills();
 }
 
@@ -1255,8 +1425,8 @@ function updateCountdownsInTable(){
 
 /* ════════ REST PAGE ═══════════════════════════════════════════════════════ */
 function renderRest(){
-  document.getElementById('phSub').textContent='Live rest countdowns - drivers only';
-  document.getElementById('phActions').innerHTML='';
+  safeSetText('phSub', 'Live rest countdowns - drivers only');
+  safeSetInner('phActions', '');
   const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   const all=getAllCrew(state, depots).filter(c=>isDesignationRestEligible(c.grade));
   const resting=all.filter(c=>c.status==='R');
@@ -1301,7 +1471,7 @@ function renderRest(){
   html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Changamwe};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Home depot</div><div style="font-size:11px;color:var(--text2)">${homeHours}h rest period</div></div></div>`;
   html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${DEPOT_COLORS.Mtito};flex-shrink:0"></div><div><div style="font-size:12px;font-weight:700">Away depot</div><div style="font-size:11px;color:var(--text2)">${awayHours}h rest period</div></div></div>`;
   html+=`</div>`;
-  document.getElementById('pbody').innerHTML=html;
+  safeSetInner('pbody', html);
   // Live tick for rest page
   if(cdInterval)clearInterval(cdInterval);
   cdInterval=setInterval(()=>{
@@ -1326,18 +1496,25 @@ function renderMonthly(){
   const depots=currentUser.isHQ?(hqDepotView==='all'?getActiveDepots():[hqDepotView]):[currentUser.depot];
   const allCrew=getAllCrew(state, depots).sort((a,b)=>a.name.localeCompare(b.name));
   const showDepot=currentUser.isHQ&&hqDepotView==='all';
-  document.getElementById('phSub').textContent=`${MONTH_NAME} - Daily Position Register`;
-  document.getElementById('phActions').innerHTML=`
+  safeSetText('phSub', `${MONTH_NAME} - Daily Position Register`);
+  safeSetInner('phActions', `
     ${currentUser.isHQ?`<select class="sel-sm no-print" onchange="setHqDepotView(this.value);renderMonthly()"><option value="all">All depots</option>${getActiveDepots().map(d=>`<option value="${d}"${hqDepotView===d?' selected':''}>${d}</option>`).join('')}</select>`:''}
     <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">🖨 Print</button>
-    <button class="btn btn-primary btn-sm no-print" onclick="exportMonthlyCSV()">⬇ CSV</button>`;
+    <button class="btn btn-primary btn-sm no-print" onclick="exportMonthlyCSV()">⬇ CSV</button>`);
 
   let html=`<div class="legend">`;
   Object.entries(STATUS_META).forEach(([code,m])=>{html+=`<div class="leg-item"><div class="leg-dot" style="background:${m.bg};border:1px solid ${m.fg}50"></div><b>${code}</b> = ${m.label}</div>`;});
   const maxDay = CD; // current month monthly review only shows data up to today
-  html+=`</div><div class="month-wrap"><table class="month-tbl"><thead><tr>
+  const selectedDay = selectedMonthDay > maxDay ? maxDay : selectedMonthDay;
+  const dayTotals = buildDayTotals(allCrew, selectedDay);
+  const monthTotals = buildMonthlyTotals(allCrew, maxDay);
+  const selectedDate = new Date(CY,CM,selectedDay);
+  const selectedLabel = `${DAY_NAMES[selectedDate.getDay()]} ${selectedDay} ${MONTH_NAME.split(' ')[0]}`;
+
+  html+=`</div><div class="month-panel"><div class="month-main"><div class="month-summary-card"><div class="summary-row"><div><strong>Selected day</strong><div class="summary-note">${selectedLabel}</div></div><div class="summary-value">${allCrew.length} crew</div></div><div class="summary-row"><div><strong>Total statuses</strong><div class="summary-note">Selected day counts</div></div><div class="summary-value">${Object.values(dayTotals).reduce((sum,v)=>sum+v,0)} records</div></div></div><div class="status-breakdown-grid">${Object.entries(STATUS_META).map(([code,m])=>`<div class="status-breakdown-card ${code==='BK'?'bk-card':''}"><div class="status-breakdown-dot" style="background:${m.bg};border:1px solid ${m.fg}50"></div><div><div class="status-breakdown-code">${code}</div><div class="status-breakdown-count">${dayTotals[code]||0}</div></div></div>`).join('')}</div>`;
+  html+=`<div class="month-wrap"><table class="month-tbl"><thead><tr>
     <th class="mc-name">Name</th>${showDepot?'<th class="mc-dep">Depot</th>':''}`;
-  for(let d=1;d<=maxDay;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const isTod=d===CD;html+=`<th style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;}
+  for(let d=1;d<=maxDay;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const isTod=d===CD;const isSelected=d===selectedDay;html+=`<th class="${isSelected?'selected-header':''}" style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}" onclick="selectMonthDay(${d})"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;}
   html+=`<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3F2F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>`;
 
   allCrew.forEach((c,i)=>{
@@ -1346,28 +1523,41 @@ function renderMonthly(){
     if(showDepot)html+=`<td class="mc-dep" style="color:${DEPOT_COLORS[c.depot]};font-weight:700">${c.depot}</td>`;
     const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
     for(let d=1;d<=maxDay;d++){
-      const key=`d${d}`;const code=(c.monthly&&c.monthly[key])||'';
+      const daySegments = getDaySegments(c, d);
+      const code=getFinalStatusForDay(c,d)||'';
       const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;
       const isEngineeringBooking = code==='BK' && String(c.trainType||'')==='Engineering';
-      const cls=code?(code==='BK' ? (isEngineeringBooking ? 'day-BK day-BK-eng' : 'day-BK') : `day-${code}`):(we?'day-we':'');const isTod=d===CD;
+      const isTod=d===CD;
+      const isSelected=d===selectedDay;
+      const cls=code?(code==='BK' ? (isEngineeringBooking ? 'day-BK day-BK-eng' : 'day-BK') : `day-${code}`):(we?'day-we':'');
       if(sm[code]!==undefined)sm[code]++;
-      const edAtt=!currentUser.isHQ?`class="${cls} day-ed${isTod?' today-col':''}" title="Click to edit" onclick="openDayEdit('${c.depot}','${c.id}',${d})"`:`class="${cls}${isTod?' today-col':''}"`;
-      html+=`<td ${edAtt}>${code||''}</td>`;
+      const selectedClass = isSelected ? ' selected-col' : '';
+      const edAtt=!currentUser.isHQ?`class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" title="Click to edit" onclick="openDayEdit('${c.depot}','${c.id}',${d})"`:`class="${cls}${isTod?' today-col':''}${selectedClass}"`;
+      const cellContent = daySegments.length > 1 ? `<span class="month-segment-stack" title="${daySegments.map(s=>`${s.status_code||s.status||''}`).join(' → ')}">${daySegments.map(s=>`<span class="segment-bar ${s.status_code ? 'status-'+s.status_code : ''}" style="background:${STATUS_META[s.status_code||s.status]?.bg || '#CBD5E1'}"></span>`).join('')}</span>` : `<span>${code||''}</span>`;
+      html+=`<td ${edAtt}>${cellContent}</td>`;
     }
     html+=`<td class="mc-sBK">${sm.BK}</td><td class="mc-sSB">${sm.SB}</td><td class="mc-sR">${sm.R}</td><td class="mc-sL">${sm.L}</td><td class="mc-sSK">${sm.SK}</td><td class="mc-sNTB">${sm.NTB}</td><td class="mc-sTO">${sm.TO}</td></tr>`;
   });
   // Booked count row
   html+=`<tr style="background:#0F172A"><td class="mc-name" style="color:#E0E0E0;font-weight:700;font-size:10px">BOOKED / DAY</td>${showDepot?'<td style="background:#0F172A"></td>':''}`;
-  for(let d=1;d<=maxDay;d++){const key=`d${d}`;const bk=allCrew.filter(c=>(c.monthly&&c.monthly[key])==='BK').length;const engineering=allCrew.filter(c=>(c.monthly&&c.monthly[key])==='BK' && String(c.trainType||'')==='Engineering').length;html+=`<td class="${engineering>0?'mc-sBK-eng':'mc-sBK'}">${bk}</td>`;}
+  for(let d=1;d<=maxDay;d++){const bk=allCrew.filter(c=>getDaySegmentCode(c,d)==='BK').length;const engineering=allCrew.filter(c=>getDaySegmentCode(c,d)==='BK' && String(c.trainType||'')==='Engineering').length;html+=`<td class="${engineering>0?'mc-sBK-eng':'mc-sBK'}">${bk}</td>`;}
   html+=`<td colspan="7" style="color:rgba(255,255,255,.4);font-size:10px;text-align:left;padding-left:8px">Booked per day</td></tr>`;
-  html+=`</tbody></table></div>`;
-  document.getElementById('pbody').innerHTML=html;
+  const selectedCrew = allCrew.filter(c => {
+    const code = getDaySegmentCode(c, selectedDay) || '';
+    return Boolean(code);
+  }).sort((a,b)=>a.name.localeCompare(b.name));
+  html+=`</tbody></table></div><aside class="month-side"><div class="month-side-card"><h3>Monthly totals</h3><div class="status-side-list">${Object.entries(monthTotals).map(([code,total])=>`<div class="status-side-item"><span class="status-side-chip status-${code}">${code}</span><span>${total}</span></div>`).join('')}</div></div><div class="month-side-card"><h3>Selected day details</h3><div class="status-side-list">${Object.entries(dayTotals).map(([code,total])=>`<div class="status-side-item"><span class="status-side-chip status-${code}">${code}</span><span>${total}</span></div>`).join('')}</div><div class="selected-day-list">${selectedCrew.length?selectedCrew.map(c=>{
+      const code = getDaySegmentCode(c, selectedDay) || '';
+      const label = STATUS_META[code]?.label || code || 'Unknown';
+      return `<div class="selected-day-item"><span>${c.name}${showDepot?` (${c.depot})`:''}</span><span class="selected-day-code ${code?`status-${code}`:''}">${code}</span></div>`;
+    }).join(''):`<div class="selected-day-none">No crew assigned on this date.</div>`}</div></div></aside></div>`;
+  safeSetInner('pbody', html);
 }
 
 /* ════════ REPORTS ═════════════════════════════════════════════════════════ */
 function renderReports(){
-  document.getElementById('phSub').textContent='Export and download crew data';
-  document.getElementById('phActions').innerHTML='';
+  safeSetText('phSub', 'Export and download crew data');
+  safeSetInner('phActions', '');
   const monthOptions=getRecentMonthOptions(12);
   const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   const all=getAllCrew(state, depots);const c=cts(all);
@@ -1398,13 +1588,13 @@ function renderReports(){
       </div>
     </div>`;
   }
-  document.getElementById('pbody').innerHTML=`
+  safeSetInner('pbody', `
   <div class="rep-grid">
     ${cards}
   </div>
   <hr class="divider">
   <div class="sec-hdr"><span class="sec-title">${MONTH_NAME} - snapshot</span></div>
-  ${kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]])}`;
+  ${kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]])}`);
   updateReportSummary();
 }
 
@@ -1461,6 +1651,47 @@ function getRecentMonthKeys(count=12){
 function getRecentMonthOptions(count=12){
   return getRecentMonthKeys(count).map(key=>`<option value="${key}"${key===MONTH_KEY?' selected':''}>${formatMonthLabel(key)}</option>`).join('');
 }
+function buildMonthlyFromStatusSegments(item){
+  if(!item||!Array.isArray(item.status_segments)) return item?.monthly||{};
+  const monthly = {...(item.monthly||{})};
+  item.status_segments.forEach(seg=>{
+    if(!seg||typeof seg.day!=='number') return;
+    monthly[`d${seg.day}`] = seg.status_code || '';
+  });
+  return monthly;
+}
+function getDaySegmentCode(item, day){
+  if(item?.status_segments?.length){
+    const seg = item.status_segments.find(x=>x.day===day);
+    if(seg) return seg.status_code || '';
+  }
+  return item?.monthly?.[`d${day}`] || '';
+}
+function buildStatusSegmentsForDay(item, day, status){
+  const segments = Array.isArray(item?.status_segments) ? [...item.status_segments] : [];
+  const idx = segments.findIndex(x=>x.day===day);
+  if(status===''){
+    if(idx!==-1) segments.splice(idx,1);
+    return segments;
+  }
+  const newSeg = {day,sort_order:100,status_code:status};
+  if(idx===-1) segments.push(newSeg);
+  else segments[idx] = {...segments[idx], ...newSeg};
+  return segments;
+}
+
+function getDaySegments(item, day){
+  const segments = Array.isArray(item?.status_segments) ? item.status_segments.filter(x => x && x.day === day) : [];
+  return segments.sort((a,b)=>(a.sort_order||100)-(b.sort_order||100));
+}
+
+function getFinalStatusForDay(item, day){
+  const segments = getDaySegments(item, day);
+  if (segments.length) {
+    return segments[segments.length - 1].status_code || segments[segments.length - 1].status || '';
+  }
+  return item?.monthly?.[`d${day}`] || '';
+}
 function windowLabel(windowKey){
   switch(windowKey){
     case 'month': return 'This month';
@@ -1498,7 +1729,7 @@ async function exportMonthlyCSV(monthKey=MONTH_KEY){
     alert(`No monthly register found for ${formatMonthLabel(monthKey)}.`);
     return;
   }
-  const maxDay = monthKey===MONTH_KEY ? CD : Math.max(...crew.map(c=>Object.keys(c.monthly||{}).length), 0);
+  const maxDay = monthKey===MONTH_KEY ? CD : Math.max(...crew.map(c=>Object.keys(buildMonthlyFromStatusSegments(c)).length), 0);
   let hdr='ID,Name,Designation,Depot';
   for(let i=1;i<=maxDay;i++) hdr+=`,${i}`;
   hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
@@ -1507,7 +1738,7 @@ async function exportMonthlyCSV(monthKey=MONTH_KEY){
     let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;
     const counts={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
     for(let i=1;i<=maxDay;i++){
-      const code=(c.monthly&&c.monthly[`d${i}`])||'';
+      const code=getDaySegmentCode(c,i)||'';
       if(counts[code]!==undefined) counts[code]++;
       row+=`,"${code}"`;
     }
@@ -1528,7 +1759,7 @@ async function fetchUtilizationReportData(windowKey='month'){
       const existing = crewMap.get(idKey) || {id:c.id,name:c.name,grade:getDesignationLabel(c.grade),depot:c.depot,bookedDays:0,months:new Set()};
       existing.months.add(monthKey);
       const days=getDaysInMonthKey(monthKey);
-      for(let d=1;d<=days;d++) if((c.monthly&&c.monthly[`d${d}`])==='BK') existing.bookedDays++;
+      for(let d=1;d<=days;d++) if(getDaySegmentCode(c,d)==='BK') existing.bookedDays++;
       crewMap.set(idKey,existing);
     });
   }
@@ -1561,7 +1792,7 @@ async function updateReportSummary(){
     monthNote=`No archive found for ${formatMonthLabel(monthKey)}.`;
   } else {
     const bookedDays = monthCrew.reduce((sum,c)=>{
-      for(let d=1;d<=getDaysInMonthKey(monthKey);d++) if((c.monthly&&c.monthly[`d${d}`])==='BK') sum++;
+      for(let d=1;d<=getDaysInMonthKey(monthKey);d++) if(getDaySegmentCode(c,d)==='BK') sum++;
       return sum;
     },0);
     monthNote=`${formatMonthLabel(monthKey)}: ${monthCrew.length} crew, ${bookedDays} booked days.`;
@@ -1901,8 +2132,8 @@ async function renderAdmin(){
   const dbReady = !!db;
   const pbody = document.getElementById('pbody');
   const errorPanel = '<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to render admin interface. Check console for details.</div>';
-  document.getElementById('phSub').textContent='Manage MySQL-backed configuration';
-  document.getElementById('phActions').innerHTML=hasGlobalAccess()?'<button class="btn btn-ghost btn-sm no-print" onclick="reloadAdminData()">Reload</button>':'';
+  safeSetText('phSub', 'Manage MySQL-backed configuration');
+  safeSetInner('phActions', hasGlobalAccess()?'<button class="btn btn-ghost btn-sm no-print" onclick="reloadAdminData()">Reload</button>':'');
   if(!hasGlobalAccess()){
     if(pbody) pbody.innerHTML='<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Admin tools are available to HQ users only.</div>';
     return;
@@ -1949,7 +2180,7 @@ async function renderAdmin(){
     </div>`;
 
   const designationRecords = getAllDesignationMetadata().length ? getAllDesignationMetadata() : DEFAULT_DESIGNATION_DEFINITIONS;
-  const designationRows=designationRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id))).map(meta=>{
+  const designationRows = designationRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id))).map(meta=>{
     return `<div class="admin-row" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 90px 90px 90px 90px 100px 90px;">
       <input value="${meta.id}" data-admin-desig-id="${meta.id}" class="admin-field" placeholder="Designation id" disabled>
       <input value="${meta.label}" data-admin-desig-label="${meta.id}" class="admin-field" placeholder="Label" disabled>
@@ -1958,20 +2189,44 @@ async function renderAdmin(){
       <label class="admin-checkbox-label"><input type="checkbox" ${meta.isCrewMember?'checked':''} data-admin-desig-crew="${meta.id}"> Crew</label>
       <label class="admin-checkbox-label"><input type="checkbox" ${meta.isUser?'checked':''} data-admin-desig-user="${meta.id}"> User</label>
       <input type="number" value="${meta.order||999}" data-admin-desig-order="${meta.id}" class="admin-field" min="0" placeholder="Order">
-      <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('${meta.id}')">Save</button>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('${meta.id}')">Save</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteDesignationMetaRecord('${meta.id}')">Delete</button>
+      </div>
     </div>`;
   }).join('');
+  const newDesignationRow = `<div class="admin-row admin-row-add" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 90px 90px 90px 90px 100px 90px;">
+      <input value="" data-admin-desig-id="new" class="admin-field" placeholder="New designation id">
+      <input value="" data-admin-desig-label="new" class="admin-field" placeholder="Label">
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-rest="new"> Rest</label>
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-login="new"> Login</label>
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-crew="new"> Crew</label>
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-user="new"> User</label>
+      <input type="number" value="999" data-admin-desig-order="new" class="admin-field" min="0" placeholder="Order">
+      <button class="btn btn-primary btn-sm" onclick="saveDesignationMetaRecord('new')">Add</button>
+    </div>`;
 
-  const statusRows=STATUSES.map(statusId=>{
-    const meta=STATUS_META[statusId]||{label:statusId,bg:'#ECEFF1',fg:'#37474F'};
+  const statusRecords = Object.values(statusMetadataCache).length ? Object.values(statusMetadataCache) : STATUSES.map(statusId => ({id: statusId, label: STATUS_META[statusId]?.label || statusId, bg: STATUS_META[statusId]?.bg || '#ECEFF1', fg: STATUS_META[statusId]?.fg || '#37474F', order: STATUS_META[statusId]?.order || 999, active: true}));
+  const statusRows = statusRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id))).map(meta=>{
     return `<div class="admin-row">
-      <input value="${statusId}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Status id">
-      <input value="${meta.label}" data-admin-status-label="${statusId}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
-      <input type="color" value="${meta.bg||'#ECEFF1'}" data-admin-status-bg="${statusId}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
-      <input type="color" value="${meta.fg||'#37474F'}" data-admin-status-fg="${statusId}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
-      <button class="btn btn-primary btn-sm" onclick="saveStatusMetaRecord('${statusId}')">Save</button>
+      <input value="${meta.id}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Status id">
+      <input value="${meta.label}" data-admin-status-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input type="color" value="${meta.bg||'#ECEFF1'}" data-admin-status-bg="${meta.id}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
+      <input type="color" value="${meta.fg||'#37474F'}" data-admin-status-fg="${meta.id}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" onclick="saveStatusMetaRecord('${meta.id}')">Save</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteStatusMetaRecord('${meta.id}')">Delete</button>
+      </div>
     </div>`;
   }).join('');
+  const newStatusRow = `<div class="admin-row admin-row-add">
+      <input value="" data-admin-status-id="new" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);" placeholder="New status id">
+      <input value="" data-admin-status-label="new" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
+      <input type="color" value="#ECEFF1" data-admin-status-bg="new" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
+      <input type="color" value="#37474F" data-admin-status-fg="new" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
+      <button class="btn btn-primary btn-sm" onclick="saveStatusMetaRecord('new')">Add</button>
+    </div>`;
+
 
   const reportRows=Object.values(REPORT_TEMPLATES).sort((a,b)=>a.order-b.order||a.label.localeCompare(b.label)).map(meta=>{
     const typeOptions=REPORT_TYPES.map(type=>`<option value="${type.id}"${type.id===meta.reportType?' selected':''}>${type.label}</option>`).join('');
@@ -1981,10 +2236,22 @@ async function renderAdmin(){
       <select data-admin-report-type="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)">${typeOptions}</select>
       <input value="${meta.order||999}" type="number" min="0" data-admin-report-order="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Order">
       <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${meta.visible?'checked':''} data-admin-report-visible="${meta.id}"> Visible</label>
-      <button class="btn btn-primary btn-sm" onclick="saveReportMetaRecord('${meta.id}')">Save</button>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" onclick="saveReportMetaRecord('${meta.id}')">Save</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteReportMetaRecord('${meta.id}')">Delete</button>
+      </div>
       <div style="grid-column:1 / -1;font-size:11px;color:var(--text2);padding:4px 0;">${meta.description||''}</div>
     </div>`;
   }).join('');
+
+  const newReportRow = `<div class="admin-row admin-row-add">
+      <input value="" data-admin-report-id="new" class="admin-field" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);" placeholder="New report id">
+      <input value="" data-admin-report-label="new" class="admin-field" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);" placeholder="Label">
+      <select data-admin-report-type="new" class="admin-field" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);">${REPORT_TYPES.map(type=>`<option value="${type.id}">${type.label}</option>`).join('')}</select>
+      <input value="999" type="number" min="0" data-admin-report-order="new" class="admin-field" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);" placeholder="Order">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" checked data-admin-report-visible="new"> Visible</label>
+      <button class="btn btn-primary btn-sm" onclick="saveReportMetaRecord('new')">Add</button>
+    </div>`;
 
   const userRows=users.map(user=>{
     const userRole=user.role||'booking_officer';
@@ -2213,15 +2480,22 @@ async function saveDepotMetaRecord(depotId){
 }
 
 async function saveDesignationMetaRecord(designationId){
-  const currentMeta = getAllDesignationMetadata().find(item=>item.id===designationId) || DEFAULT_DESIGNATION_DEFINITIONS.find(item=>item.id===designationId) || {id:designationId,label:designationId,aliases:[]};
+  const idEl = document.querySelector(`[data-admin-desig-id="${designationId}"]`);
+  const labelEl = document.querySelector(`[data-admin-desig-label="${designationId}"]`);
+  const nextId = designationId === 'new' ? (idEl?.value||'').trim() : designationId;
+  if(!nextId){
+    alert('Designation id cannot be blank');
+    return;
+  }
+  const currentMeta = getAllDesignationMetadata().find(item=>item.id===designationId) || DEFAULT_DESIGNATION_DEFINITIONS.find(item=>item.id===designationId) || {id:nextId,label:nextId,aliases:[]};
   const orderEl=document.querySelector(`[data-admin-desig-order="${designationId}"]`);
   const restEl=document.querySelector(`[data-admin-desig-rest="${designationId}"]`);
   const loginEl=document.querySelector(`[data-admin-desig-login="${designationId}"]`);
   const crewEl=document.querySelector(`[data-admin-desig-crew="${designationId}"]`);
   const userEl=document.querySelector(`[data-admin-desig-user="${designationId}"]`);
   const meta={
-    id: designationId,
-    label: currentMeta.label || designationId,
+    id: nextId,
+    label: (labelEl?.value||currentMeta.label||nextId).trim(),
     aliases: Array.isArray(currentMeta.aliases) ? currentMeta.aliases : [],
     restEligible:!!restEl?.checked,
     canLogin:!!loginEl?.checked,
@@ -2231,7 +2505,7 @@ async function saveDesignationMetaRecord(designationId){
   };
   if(!db){
     try{
-      await saveLocalAdminRecord('designationMeta',designationId,meta);
+      await saveLocalAdminRecord('designationMeta',nextId,meta);
       await loadDesignationMeta();
       renderAdmin();
       setSyncStatus('ok','Local metadata saved');
@@ -2243,24 +2517,52 @@ async function saveDesignationMetaRecord(designationId){
       return; 
     }
   }
-  await setDoc(doc(db,'designationMeta',designationId),meta,{merge:true});
+  await setDoc(doc(db,'designationMeta',nextId),meta,{merge:true});
+  await loadDesignationMeta();
   renderAdmin();
 }
 
+async function deleteDesignationMetaRecord(designationId){
+  if(!confirm(`Delete ${designationId} from designations?`)) return;
+  try{
+    if(!db){
+      await deleteLocalAdminRecord('designationMeta',designationId);
+      await loadDesignationMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local designation removed');
+      return;
+    }
+    await deleteDoc(doc(db,'designationMeta',designationId));
+    await loadDesignationMeta();
+    renderAdmin();
+    setSyncStatus('ok','Designation removed');
+  }catch(err){
+    console.error('Failed to delete designation', err);
+    setSyncStatus('err','Delete failed');
+    alert('Unable to remove the designation right now.');
+  }
+}
+
 async function saveStatusMetaRecord(statusId){
+  const idEl = document.querySelector(`[data-admin-status-id="${statusId}"]`);
+  const nextId = statusId === 'new' ? (idEl?.value||'').trim() : statusId;
+  if(!nextId){
+    alert('Status id cannot be blank');
+    return;
+  }
   const labelEl=document.querySelector(`[data-admin-status-label="${statusId}"]`);
   const bgEl=document.querySelector(`[data-admin-status-bg="${statusId}"]`);
   const fgEl=document.querySelector(`[data-admin-status-fg="${statusId}"]`);
   const meta={
-    id:statusId,
-    label:(labelEl?.value||statusId).trim(),
+    id:nextId,
+    label:(labelEl?.value||nextId).trim(),
     bg:(bgEl?.value||'#ECEFF1').trim(),
     fg:(fgEl?.value||'#37474F').trim(),
     order:STATUS_META[statusId]?.order ?? STATUSES.indexOf(statusId) ?? 999,
   };
   if(!db){
     try{
-      await saveLocalAdminRecord('statusMeta',statusId,meta);
+      await saveLocalAdminRecord('statusMeta',nextId,meta);
       await loadStatusMeta();
       renderAdmin();
       setSyncStatus('ok','Local metadata saved');
@@ -2272,26 +2574,53 @@ async function saveStatusMetaRecord(statusId){
       return;
     }
   }
-  await setDoc(doc(db,'statusMeta',statusId),meta,{merge:true});
+  await setDoc(doc(db,'statusMeta',nextId),meta,{merge:true});
   await loadStatusMeta();
   renderAdmin();
 }
 
+async function deleteStatusMetaRecord(statusId){
+  if(!confirm(`Delete ${statusId} from statuses?`)) return;
+  try{
+    if(!db){
+      await deleteLocalAdminRecord('statusMeta',statusId);
+      await loadStatusMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local status removed');
+      return;
+    }
+    await deleteDoc(doc(db,'statusMeta',statusId));
+    await loadStatusMeta();
+    renderAdmin();
+    setSyncStatus('ok','Status removed');
+  }catch(err){
+    console.error('Failed to delete status', err);
+    setSyncStatus('err','Delete failed');
+    alert('Unable to remove the status right now.');
+  }
+}
+
 async function saveReportMetaRecord(reportId){
+  const idEl = document.querySelector(`[data-admin-report-id="${reportId}"]`);
+  const nextId = reportId === 'new' ? (idEl?.value||'').trim() : reportId;
+  if(!nextId){
+    alert('Report id cannot be blank');
+    return;
+  }
   const labelEl=document.querySelector(`[data-admin-report-label="${reportId}"]`);
   const typeEl=document.querySelector(`[data-admin-report-type="${reportId}"]`);
   const orderEl=document.querySelector(`[data-admin-report-order="${reportId}"]`);
   const visibleEl=document.querySelector(`[data-admin-report-visible="${reportId}"]`);
   const meta={
-    id:reportId,
-    label:(labelEl?.value||reportId).trim(),
+    id:nextId,
+    label:(labelEl?.value||nextId).trim(),
     reportType:(typeEl?.value||'status').trim(),
     order:Number(orderEl?.value||999),
     visible:!!visibleEl?.checked,
   };
   if(!db){
     try{
-      await saveLocalAdminRecord('reportMeta',reportId,meta);
+      await saveLocalAdminRecord('reportMeta',nextId,meta);
       await loadReportMeta();
       renderAdmin();
       setSyncStatus('ok','Local metadata saved');
@@ -2303,9 +2632,30 @@ async function saveReportMetaRecord(reportId){
       return;
     }
   }
-  await setDoc(doc(db,'reportMeta',reportId),meta,{merge:true});
+  await setDoc(doc(db,'reportMeta',nextId),meta,{merge:true});
   await loadReportMeta();
   renderAdmin();
+}
+
+async function deleteReportMetaRecord(reportId){
+  if(!confirm(`Delete ${reportId} from reports?`)) return;
+  try{
+    if(!db){
+      await deleteLocalAdminRecord('reportMeta', reportId);
+      await loadReportMeta();
+      renderAdmin();
+      setSyncStatus('ok','Local report removed');
+      return;
+    }
+    await deleteDoc(doc(db,'reportMeta',reportId));
+    await loadReportMeta();
+    renderAdmin();
+    setSyncStatus('ok','Report removed');
+  }catch(err){
+    console.error('Failed to delete report', err);
+    setSyncStatus('err','Delete failed');
+    alert('Unable to remove the report right now.');
+  }
 }
 
 async function saveUserAccount(username){
@@ -2429,12 +2779,12 @@ function openDayEdit(depot,id,day){
   editKey={depot,id,day};
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   currentModalGrade=c.grade;
-  populateStatusSelects((c.monthly&&c.monthly[`d${day}`])||'SB');
+  populateStatusSelects(getDaySegmentCode(c,day)||'SB');
   populateTrainTypeSelect('');
   const dt=new Date(CY,CM,day);
   document.getElementById('mTitle').textContent='Edit daily position';
   document.getElementById('mSub').textContent=`${c.name} · ${DAY_NAMES[dt.getDay()]} ${day} ${MONTH_NAME.split(' ')[0]}`;
-  document.getElementById('mStatus').value=(c.monthly&&c.monthly[`d${day}`])||'SB';
+  document.getElementById('mStatus').value=getDaySegmentCode(c,day)||'SB';
   document.getElementById('mTrainType').value='';document.getElementById('mBookTime').value='';
   document.getElementById('mRoute').value=c.route||'';
   const staffNumberEl=document.getElementById('mStaffNumber');
@@ -2467,28 +2817,30 @@ async function saveModal(){
     if(editKey.day){
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
       const monthly={...(c.monthly||{})};monthly[`d${editKey.day}`]=newStatus;
+      const status_segments = buildStatusSegmentsForDay(c, editKey.day, newStatus);
       const restLocation=document.getElementById('mRestLocation').value;
       const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
-      const upd={monthly,awayDepot};
+      const upd={monthly,status_segments,awayDepot};
       if(editKey.day===CD){upd.status=newStatus;upd.trainType=trainType;upd.bookTime=bookTime;upd.since=fmtTime(new Date());upd.updatedBy=currentUser.username;if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);upd.restStarted=rs.toISOString();}else if(newStatus!=='R')upd.restStarted=null;}
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name} Day ${editKey.day} → ${STATUS_META[newStatus]?.label}`);
     } else {
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
       const monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
+      const status_segments = buildStatusSegmentsForDay(c, CD, newStatus);
       let restStarted=c.restStarted||null;
       if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);restStarted=rs.toISOString();}
       else if(newStatus!=='R')restStarted=null;
       const restLocation=document.getElementById('mRestLocation').value;
       const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
-      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,awayDepot: newStatus==='R'?awayDepot:null};
+      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,status_segments,awayDepot: newStatus==='R'?awayDepot:null};
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${trainType?' ('+trainType+')':''}${bookTime?' @ '+bookTime:''}`);
     }
     setSyncStatus('ok','Saved');
   }catch(err){setSyncStatus('err','Save failed');setLog('Error: '+err.message);}
   closeModal();
-  if(!db)refreshPage();
+  refreshPage();
 }
 
 /* ════════ REMOVE CREW ═════════════════════════════════════════════════════ */
@@ -2659,8 +3011,8 @@ async function addSingleCrew(depot,name,grade,route,initStatus,trainType='',shif
   const prefix=depot.substring(0,2).toUpperCase();
   let num=1;while(existing.includes(`${prefix}-${String(num).padStart(3,'0')}`))num++;
   const id=`${prefix}-${String(num).padStart(3,'0')}`;
-  const monthly={};for(let d=1;d<=DAYS_IN_MON;d++)monthly[`d${d}`]='';monthly[`d${CD}`]=initStatus;
-  const obj={id,name,staff_number:String(staffNumber||'').trim(),grade:normalizeDesignation(grade),depot,route,shift:String(shift||'').trim(),status:initStatus,trainType,notes,since:fmtTime(new Date()),monthly,restStarted:null,awayDepot:null,updatedBy:currentUser.username,monthKey:MONTH_KEY};
+  const monthly={};const status_segments=[];for(let d=1;d<=DAYS_IN_MON;d++)monthly[`d${d}`]='';if(initStatus){monthly[`d${CD}`]=initStatus;status_segments.push({day:CD,sort_order:100,status_code:initStatus});}
+  const obj={id,name,staff_number:String(staffNumber||'').trim(),grade:normalizeDesignation(grade),depot,route,shift:String(shift||'').trim(),status:initStatus,trainType,notes,since:fmtTime(new Date()),monthly,status_segments,restStarted:null,awayDepot:null,updatedBy:currentUser.username,monthKey:MONTH_KEY};
   await addCrewDoc(depot,obj);
 }
 
@@ -2679,10 +3031,12 @@ function filterSearch(){const q=(document.getElementById('crewSearch')?.value||'
 /* ════════ EXPORT ══════════════════════════════════════════════════════════ */
 function exportCSV(){
   const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d);
-  let csv='Staff Number,Name,Designation,Depot,Route,Shift,Status,Train Type,Booked Time,Rest Remaining,Since,Notes\n';
+  let csv='Staff Number,Name,Designation,Depot,Route,Shift,Status,Today,Train Type,Booked Time,Rest Remaining,Since,Notes\n';
   all.forEach(c=>{
     const sec=restSecondsLeft(c);const rem=sec!==null&&sec>0?fmtCountdown(sec):(sec===0?'Complete':'-');
-    csv+=`"${getCrewStaffNumberLabel(c)}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${c.route||''}","${getCrewShiftLabel(c)}","${STATUS_META[c.status]?.label||c.status}","${c.trainType||''}","${c.status==='BK'&&c.bookTime?c.bookTime:''}","${rem}","${c.since||''}","${(c.notes||'').replace(/"/g,"'")}"\n`;
+    const daySegments = getDaySegments(c, CD);
+    const todayStatus = daySegments.length > 1 ? daySegments.map(seg=>seg.status_code||seg.status||'').join(' → ') : (c.status || '');
+    csv+=`"${getCrewStaffNumberLabel(c)}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${c.route||''}","${getCrewShiftLabel(c)}","${STATUS_META[c.status]?.label||c.status}","${todayStatus}","${c.trainType||''}","${c.status==='BK'&&c.bookTime?c.bookTime:''}","${rem}","${c.since||''}","${(c.notes||'').replace(/"/g,"'")}"\n`;
   });
   dlCSV(csv,`KR_Status_${todayStr()}.csv`);
 }
@@ -2690,7 +3044,7 @@ function exportMonthlyCSVLegacy(){
   const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
   let hdr='ID,Name,Designation,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
   let csv=hdr;
-  all.forEach(c=>{let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};for(let i=1;i<=DAYS_IN_MON;i++){const code=(c.monthly&&c.monthly[`d${i}`])||'';if(sm[code]!==undefined)sm[code]++;row+=`,"${code}"`;}row+=`,${sm.BK},${sm.SB},${sm.R},${sm.L},${sm.SK},${sm.T},${sm.NTB},${sm.TO}`;csv+=row+'\n';});
+  all.forEach(c=>{let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};for(let i=1;i<=DAYS_IN_MON;i++){const code=getDaySegmentCode(c,i)||'';if(sm[code]!==undefined)sm[code]++;row+=`,"${code}"`;}row+=`,${sm.BK},${sm.SB},${sm.R},${sm.L},${sm.SK},${sm.T},${sm.NTB},${sm.TO}`;csv+=row+'\n';});
   dlCSV(csv,`KR_Monthly_${MONTH_NAME.replace(' ','_')}.csv`);
 }
 function exportAbsenceCSV(){
@@ -2725,8 +3079,11 @@ window.reloadAdminData = reloadAdminData;
 window.renderAdmin = renderAdmin;
 window.saveDepotMetaRecord = saveDepotMetaRecord;
 window.saveDesignationMetaRecord = saveDesignationMetaRecord;
+window.deleteDesignationMetaRecord = deleteDesignationMetaRecord;
 window.saveStatusMetaRecord = saveStatusMetaRecord;
+window.deleteStatusMetaRecord = deleteStatusMetaRecord;
 window.saveReportMetaRecord = saveReportMetaRecord;
+window.deleteReportMetaRecord = deleteReportMetaRecord;
 window.saveSimpleMetaRecord = saveSimpleMetaRecord;
 window.removeSimpleMetaRecord = removeSimpleMetaRecord;
 window.saveAccessMetaRecord = saveAccessMetaRecord;
@@ -2746,7 +3103,6 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeA
 ['lUser','lPass'].forEach(id=>{document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});});
 
 async function bootApp(){
-  document.getElementById('loginPage')?.classList.add('show');
   populateLoginDepotOptions();
   const cfg = await loadBackendConfig();
   if(cfg){
@@ -2754,21 +3110,23 @@ async function bootApp(){
     if(ok){
       await seedBackendUsers();
       const hasSession = await restoreSession();
-      if(!hasSession){
-        document.getElementById('loginPage').classList.add('show');
-      }
       setSyncStatus('ok','MySQL connected');
       setLoginHint(false);
       setLog(hasSession?'MySQL connected - session restored.':'MySQL connected - ready.');
+      if(document.getElementById('app')){
+        document.getElementById('app').classList.add('show');
+      }
+        // mark app ready so lazy page modules can run
+        window.__CREW_APP_READY = true;
+        // if server provided an initial page, navigate there
+        try{if(window.__INITIAL_PAGE__){setTimeout(()=>goPage(window.__INITIAL_PAGE__),0);}}catch(e){}
     } else {
-      document.getElementById('loginPage').classList.add('show');
       setSyncStatus('err','Backend initialization failed');
       setLoginHint(false);
       const errEl = document.getElementById('loginErr');
       if(errEl) errEl.textContent = 'Backend init failed. Check console for details.';
     }
   } else {
-    document.getElementById('loginPage').classList.add('show');
     setSyncStatus('err','Backend unavailable');
     setLoginHint(false);
     const errEl = document.getElementById('loginErr');

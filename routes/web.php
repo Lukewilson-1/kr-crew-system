@@ -5,6 +5,8 @@ use App\Http\Controllers\CrewDataController;
 use App\Http\Controllers\AdminMetaController;
 use Illuminate\Support\Facades\Route;
 
+require __DIR__.'/auth.php';
+
 Route::get('/admin/meta', [AdminMetaController::class, 'index']);
 Route::post('/admin/meta/{collection}/{id}', [AdminMetaController::class, 'save']);
 Route::delete('/admin/meta/{collection}/{id}', [AdminMetaController::class, 'delete']);
@@ -19,10 +21,18 @@ Route::get('/mysql/crew-view', [CrewDataController::class, 'normalizedIndex']);
 Route::get('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedShow']);
 Route::post('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedSave']);
 Route::delete('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedDelete']);
-Route::get('/', [CrewController::class, 'index']);
-Route::get('/reports', [App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
-Route::get('/reports/daily-status', [App\Http\Controllers\ReportController::class, 'dailyStatus'])->name('reports.daily-status');
-Route::get('/reports/monthly-register', [App\Http\Controllers\ReportController::class, 'monthlyRegister'])->name('reports.monthly-register');
-Route::get('/reports/utilization', [App\Http\Controllers\ReportController::class, 'utilization'])->name('reports.utilization');
-Route::get('/reports/absence', [App\Http\Controllers\ReportController::class, 'absence'])->name('reports.absence');
-Route::get('/reports/printable', [App\Http\Controllers\ReportController::class, 'printable'])->name('reports.printable');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/', [CrewController::class, 'index']);
+    Route::get('/crew-dashboard', [CrewController::class, 'index']);
+    Route::get('/crew-roster', [CrewController::class, 'index']);
+    Route::get('/crew-rest', [CrewController::class, 'index']);
+    Route::get('/crew-monthly', [CrewController::class, 'index']);
+    Route::get('/crew-reports', [CrewController::class, 'index']);
+    Route::get('/reports', [App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
+    Route::get('/reports/daily-status', [App\Http\Controllers\ReportController::class, 'dailyStatus'])->name('reports.daily-status');
+    Route::get('/reports/monthly-register', [App\Http\Controllers\ReportController::class, 'monthlyRegister'])->name('reports.monthly-register');
+    Route::get('/reports/utilization', [App\Http\Controllers\ReportController::class, 'utilization'])->name('reports.utilization');
+    Route::get('/reports/absence', [App\Http\Controllers\ReportController::class, 'absence'])->name('reports.absence');
+    Route::get('/reports/printable', [App\Http\Controllers\ReportController::class, 'printable'])->name('reports.printable');
+});

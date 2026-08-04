@@ -19,5 +19,15 @@ class ReportDefinition extends Model
         'category',
         'is_active',
         'sort_order',
+        'builder_layout',
+        'builder_columns',
+        'builder_filters',
+        'builder_group_by',
+    ];
+
+    protected $casts = [
+        'builder_columns' => 'array',
+        'builder_filters' => 'array',
+        'is_active' => 'boolean',
     ];
 }

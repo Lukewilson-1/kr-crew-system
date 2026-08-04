@@ -50,6 +50,7 @@ class AdminPanelProvider extends PanelProvider
 
             ->pages([
                 Pages\Dashboard::class,
+                \App\Filament\Resources\ReportResource\Pages\BuilderReport::class,
             ])
 
             ->discoverWidgets(

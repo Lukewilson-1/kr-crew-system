@@ -5,6 +5,9 @@ namespace App\Filament\Resources;
 use App\CrewMember;
 use App\Filament\Resources\CrewMemberResource\Pages;
 use Filament\Forms;
+use App\Models\Depot;
+use Illuminate\Support\Facades\DB;
+use App\Models\Designation;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -15,12 +18,13 @@ use Filament\Tables\Table;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use BackedEnum;
 
 class CrewMemberResource extends Resource
 {
     protected static ?string $model = CrewMember::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-users';
+    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-users';
 
     protected static ?string $navigationLabel = 'Crew Members';
 
@@ -31,8 +35,16 @@ class CrewMemberResource extends Resource
         return $schema->components([
             Forms\Components\TextInput::make('display_name')->required(),
             Forms\Components\TextInput::make('staff_number'),
-            Forms\Components\TextInput::make('depot_code'),
-            Forms\Components\TextInput::make('designation_code'),
+            Forms\Components\Select::make('depot_code')
+                ->label('Depot')
+                ->options(fn (): array => Depot::query()->orderBy('depot_name')->pluck('depot_name', 'depot_code')->toArray())
+                ->searchable()
+                ->required(false),
+            Forms\Components\Select::make('designation_code')
+                ->label('Designation')
+                ->options(fn (): array => Designation::where('is_active', true)->orderBy('sort_order')->pluck('designation_name', 'designation_code')->toArray())
+                ->searchable()
+                ->required(false),
             Forms\Components\TextInput::make('employment_status_code'),
             Forms\Components\Toggle::make('is_active')->default(true),
         ]);

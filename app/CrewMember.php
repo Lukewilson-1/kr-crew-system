@@ -11,6 +11,11 @@ class CrewMember extends Model
 
     protected $table = 'crew_members';
 
+    // The crew_members table uses `record_id` as the primary key (string), not the default `id`.
+    protected $primaryKey = 'record_id';
+    public $incrementing = false;
+    protected $keyType = 'string';
+
     protected $fillable = [
         'record_id',
         'crew_id',

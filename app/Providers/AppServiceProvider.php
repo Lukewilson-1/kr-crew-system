@@ -32,6 +32,10 @@ class AppServiceProvider extends ServiceProvider
         if (! Schema::hasTable('reports')) {
             return;
         }
+        // Only seed defaults when the reports table is empty so admin edits are not overwritten on every boot.
+        if (ReportDefinition::query()->exists()) {
+            return;
+        }
 
         $defaults = [
             [

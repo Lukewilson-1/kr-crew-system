@@ -76,7 +76,13 @@
 
         <div class="mt-6 grid gap-4 lg:grid-cols-[1fr_0.9fr]">
             <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div class="text-sm font-semibold text-gray-900">Depot booking mix</div>
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <div class="text-sm font-semibold text-gray-900">Depot booking mix</div>
+                        <div class="text-sm text-gray-500">Current crew counts, booked and standby spread by depot.</div>
+                    </div>
+                    <div class="rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700">{{ count($this->getViewData()['depotBreakdown']) }} depots</div>
+                </div>
                 <div class="mt-4 space-y-4">
                     @foreach ($this->getViewData()['depotBreakdown'] as $item)
                         <div class="rounded-2xl bg-slate-50 p-4">
@@ -96,8 +102,62 @@
             </div>
 
             <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div class="text-sm font-semibold text-gray-900">Deployment themes</div>
-                <div class="mt-4 text-sm text-slate-600">This dashboard highlights crew status, depot trends, and report builder activity in a concise, card-based layout. Use the Builder page to define report exports or summary views that can accelerate admin decisions.</div>
+                <div class="text-sm font-semibold text-gray-900">Status composition</div>
+                <div class="mt-4 flex gap-4">
+                    <div class="relative h-48 w-48 rounded-full bg-slate-50 p-6 shadow-inner">
+                        <svg viewBox="0 0 120 120" class="h-full w-full">
+                            @php
+                                $status = $this->getViewData()['statusCounts'];
+                                $total = array_sum($status) ?: 1;
+                                $angles = [];
+                                $start = 0;
+                                $colors = [
+                                    'BK' => '#059669',
+                                    'SB' => '#2563eb',
+                                    'R' => '#7c3aed',
+                                    'L' => '#ea580c',
+                                    'SK' => '#dc2626',
+                                    'NTB' => '#334155',
+                                    'TO' => '#0f766e',
+                                ];
+                            @endphp
+                            @foreach ($status as $code => $count)
+                                @php
+                                    $percent = $count / $total;
+                                    $angle = $percent * 360;
+                                    $end = $start + $angle;
+                                    $largeArc = $angle > 180 ? 1 : 0;
+                                    $startX = 60 + 40 * cos(deg2rad($start - 90));
+                                    $startY = 60 + 40 * sin(deg2rad($start - 90));
+                                    $endX = 60 + 40 * cos(deg2rad($end - 90));
+                                    $endY = 60 + 40 * sin(deg2rad($end - 90));
+                                @endphp
+                                @if ($count > 0)
+                                    <path d="M60,20 A40,40 0 {{ $largeArc }},1 {{ $endX }},{{ $endY }} L60,60 Z" fill="{{ $colors[$code] ?? '#94a3b8' }}" opacity="0.9" />
+                                @endif
+                                @php $start = $end; @endphp
+                            @endforeach
+                            <circle cx="60" cy="60" r="22" fill="#fff" />
+                        </svg>
+                        <div class="pointer-events-none absolute inset-0 grid place-items-center text-center">
+                            <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Status</div>
+                            <div class="text-2xl font-semibold text-slate-900">{{ $total }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 grid gap-2">
+                    @foreach ($this->getViewData()['statusCounts'] as $code => $count)
+                        @if ($count > 0)
+                            <div class="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm">
+                                <div class="flex items-center gap-3">
+                                    <span class="inline-flex h-3 w-3 rounded-full" style="background: {{ ['BK' => '#059669','SB' => '#2563eb','R' => '#7c3aed','L' => '#ea580c','SK' => '#dc2626','NTB' => '#334155','TO' => '#0f766e'][$code] ?? '#94a3b8' }}"></span>
+                                    <span class="font-medium text-slate-900">{{ $code }}</span>
+                                </div>
+                                <span class="text-slate-500">{{ $count }}</span>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
             </div>
         </div>
     </x-filament::section>

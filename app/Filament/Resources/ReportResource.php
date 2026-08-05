@@ -20,12 +20,13 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\KeyValue;
 use Filament\Tables\Filters\SelectFilter;
+use BackedEnum;
 
 class ReportResource extends Resource
 {
     protected static ?string $model = ReportDefinition::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-document-text';
+    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
 
     protected static ?string $navigationLabel = 'Reports';
 
@@ -84,6 +85,46 @@ class ReportResource extends Resource
                 ->default([]),
             TextInput::make('builder_group_by')->label('Group by field'),
         ]);
+    }
+
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'hasPermissionTo')) {
+            return $user->hasPermissionTo('manage_reports');
+        }
+
+        if (method_exists($user, 'can')) {
+            return $user->can('manage_reports');
+        }
+
+        return false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return static::canViewAny();
+    }
+
+    public static function canEdit(
+        \Illuminate\Database\Eloquent\Model $record
+    ): bool {
+        return static::canViewAny();
+    }
+
+    public static function canDelete(
+        \Illuminate\Database\Eloquent\Model $record
+    ): bool {
+        return static::canViewAny();
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return static::canViewAny();
     }
 
     public static function table(Table $table): Table

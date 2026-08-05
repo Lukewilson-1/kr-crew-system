@@ -5,7 +5,8 @@ namespace App\Filament\Resources\ReportResource\Pages;
 use App\Filament\Resources\ReportResource;
 use App\Models\ReportDefinition;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Section;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -21,7 +22,7 @@ class BuilderReport extends Page
 
     protected static string $resource = ReportResource::class;
 
-    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-cog-6-tooth';
+    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
     protected static ?string $navigationLabel = 'Builder';
 
@@ -66,6 +67,42 @@ class BuilderReport extends Page
                             'timeline' => 'Timeline',
                         ])->required(),
                         TextInput::make('builder_group_by')->label('Group by field'),
+                        Repeater::make('builder_columns')
+                            ->label('Columns')
+                            ->schema([
+                                TextInput::make('label')->label('Label')->required(),
+                                TextInput::make('key')->label('Key')->required(),
+                                Select::make('type')
+                                    ->label('Type')
+                                    ->options([
+                                        'text' => 'Text',
+                                        'badge' => 'Badge',
+                                        'date' => 'Date',
+                                    ])
+                                    ->default('text')
+                                    ->required(),
+                            ])
+                            ->collapsible()
+                            ->default([])
+                            ->columns(3),
+                        Repeater::make('builder_filters')
+                            ->label('Filters')
+                            ->schema([
+                                TextInput::make('label')->label('Label')->required(),
+                                TextInput::make('key')->label('Key')->required(),
+                                Select::make('type')
+                                    ->label('Type')
+                                    ->options([
+                                        'select' => 'Select',
+                                        'date' => 'Date',
+                                        'text' => 'Text',
+                                    ])
+                                    ->default('select')
+                                    ->required(),
+                            ])
+                            ->collapsible()
+                            ->default([])
+                            ->columns(3),
                     ])
                     ->columns(2),
             ])
@@ -83,8 +120,8 @@ class BuilderReport extends Page
             'type' => $data['type'] ?? 'report',
             'builder_layout' => $data['builder_layout'] ?? 'table',
             'builder_group_by' => $data['builder_group_by'] ?? null,
-            'builder_columns' => [],
-            'builder_filters' => [],
+            'builder_columns' => $data['builder_columns'] ?? [],
+            'builder_filters' => $data['builder_filters'] ?? [],
             'is_active' => true,
         ]);
 

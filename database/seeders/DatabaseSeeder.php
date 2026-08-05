@@ -10,6 +10,9 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             ReportDefinitionSeeder::class,
+            DepotSeeder::class,
+            ShiftTemplateSeeder::class,
+            DepotUserSeeder::class,
         ]);
     }
 }

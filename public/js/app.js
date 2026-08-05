@@ -25,13 +25,8 @@ const DEFAULT_DESIGNATION_DEFINITIONS=[
   {id:'super_admin',label:'Super Admin',aliases:['super admin'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:90},
 ];
 let REPORT_TEMPLATES={};
-const DEFAULT_REPORT_TEMPLATES=[
-  {id:'daily-status',label:'Daily status export',description:'Download the current crew status snapshot for the active depot view.',reportType:'status',buttonText:'Export current status',visible:true,order:10},
-  {id:'monthly-register',label:'Monthly register',description:'Download the current month roster with daily status codes for every crew member.',reportType:'monthly',buttonText:'Download monthly register',visible:true,order:20},
-  {id:'utilization',label:'Utilization report',description:'Review booked-day utilization over a selected time window.',reportType:'utilization',buttonText:'Export utilization',visible:true,order:30},
-  {id:'absence',label:'Absence / NTB report',description:'Export staff who are currently on leave, sick, or marked NTB.',reportType:'absence',buttonText:'Export absence report',visible:true,order:40},
-  {id:'print-register',label:'Printable register',description:'Open the monthly register view for printing.',reportType:'print',buttonText:'Open printable view',visible:true,order:50},
-];
+// Default templates removed so the frontend relies on server-managed report definitions.
+const DEFAULT_REPORT_TEMPLATES=[];
 const USER_ROLE_OPTIONS=[
   {id:'super_admin',label:'Super Admin'},
   {id:'hq_admin',label:'HQ Admin'},
@@ -999,6 +994,10 @@ function normalizeReportMetaRecord(docSnapOrData){
     buttonText: String(data.buttonText || 'Run'),
     visible: data.visible !== false,
     order: Number.isFinite(data.order) ? data.order : 999,
+    builder_layout: String(data.builder_layout || 'table'),
+    builder_columns: Array.isArray(data.builder_columns) ? data.builder_columns : [],
+    builder_filters: Array.isArray(data.builder_filters) ? data.builder_filters : [],
+    builder_group_by: data.builder_group_by ?? null,
   };
 }
 

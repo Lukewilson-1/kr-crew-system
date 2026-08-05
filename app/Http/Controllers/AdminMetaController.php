@@ -22,6 +22,8 @@ class AdminMetaController extends Controller
         'users' => 'users',
         'roles' => 'roles',
         'permissions' => 'permissions',
+        // Expose reports table as reportMeta so frontend can load admin-configured reports
+        'reportMeta' => 'reports',
     ];
 
     protected function ensureSuperAdminUser(): void
@@ -133,6 +135,19 @@ class AdminMetaController extends Controller
                 'active' => (bool) $row->is_active,
                 'startsAt' => $row->starts_at,
                 'endsAt' => $row->ends_at,
+            ],
+            'reportMeta' => [
+                'id' => $row->slug,
+                'label' => $row->name,
+                'description' => $row->description,
+                'reportType' => $row->type,
+                'buttonText' => $row->action_label ?? $row->actionLabel ?? 'Run',
+                'visible' => (bool) $row->is_active,
+                'order' => (int) $row->sort_order,
+                'builder_layout' => $row->builder_layout ?? 'table',
+                'builder_columns' => json_decode($row->builder_columns ?? '[]', true) ?: [],
+                'builder_filters' => json_decode($row->builder_filters ?? '[]', true) ?: [],
+                'builder_group_by' => $row->builder_group_by,
             ],
             'users' => [
                 'username' => $row->username,

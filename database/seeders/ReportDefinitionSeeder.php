@@ -9,7 +9,7 @@ class ReportDefinitionSeeder extends Seeder
 {
     public function run(): void
     {
-        $definitions = [
+        $defaults = [
             [
                 'name' => 'Daily Status Export',
                 'slug' => 'daily-status-export',
@@ -72,7 +72,7 @@ class ReportDefinitionSeeder extends Seeder
             ],
         ];
 
-        foreach ($definitions as $definition) {
+        foreach ($defaults as $definition) {
             ReportDefinition::query()->updateOrCreate(
                 ['slug' => $definition['slug']],
                 $definition

@@ -105,6 +105,21 @@ class User extends Authenticatable implements FilamentUser
         return (string) ($this->getAttribute('email') ?: $this->getAttribute('username') ?? '');
     }
 
+    public function hasPermissionTo(string $permission): bool
+    {
+        if ($this->is_super_admin) {
+            return true;
+        }
+
+        $permissions = $this->permissions;
+
+        if (is_array($permissions) && in_array($permission, $permissions, true)) {
+            return true;
+        }
+
+        return false;
+    }
+
     public function passwordMatches(string $plainPassword): bool
     {
         $candidateHashes = array_filter([

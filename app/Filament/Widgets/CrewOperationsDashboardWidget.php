@@ -144,6 +144,7 @@ class CrewOperationsDashboardWidget extends Widget
                 ['label' => 'Resting', 'value' => $statusCounts['R'], 'hint' => 'Crew still within rest'],
             ],
             'utilizationPercent' => $utilizationPercent,
+            'statusCounts' => $statusCounts,
             'bookedDays' => $bookedDays,
             'standbyDays' => $standbyDays,
             'depotBreakdown' => $depotBreakdown,

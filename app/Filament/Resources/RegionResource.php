@@ -24,10 +24,6 @@ class RegionResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Forms\Components\TextInput::make('region_code')
-                ->label('Code')
-                ->required()
-                ->maxLength(32),
             Forms\Components\TextInput::make('region_name')
                 ->label('Name')
                 ->required()
@@ -45,7 +41,6 @@ class RegionResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('region_code')->label('Code')->sortable()->searchable(),
                 TextColumn::make('region_name')->label('Name')->sortable()->searchable(),
                 TextColumn::make('description')->label('Description')->limit(40),
                 IconColumn::make('is_active')->label('Active')->boolean(),

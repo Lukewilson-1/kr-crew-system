@@ -14,6 +14,8 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Schemas\Schema;
 use Filament\Pages\Page;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema as DbSchema;
 use BackedEnum;
 
 class BuilderReport extends Page
@@ -49,7 +51,11 @@ class BuilderReport extends Page
             ->schema([
                 Section::make('Report details')
                     ->schema([
-                        TextInput::make('name')->required()->label('Report name'),
+                        TextInput::make('name')->required()->label('Report name')->reactive()->afterStateUpdated(function ($state, $set, $get) {
+                            if (blank($get('slug'))) {
+                                $set('slug', Str::slug($state));
+                            }
+                        }),
                         TextInput::make('slug')->required()->label('Slug'),
                         Textarea::make('description')->rows(3)->label('Description'),
                         Select::make('type')->options([
@@ -71,6 +77,26 @@ class BuilderReport extends Page
                             ->label('Columns')
                             ->schema([
                                 TextInput::make('label')->label('Label')->required(),
+                                Select::make('table')
+                                    ->label('Table')
+                                    ->searchable()
+                                    ->options(fn () => collect(DB::select('SHOW TABLES'))->mapWithKeys(function ($row) {
+                                        $arr = (array) $row;
+                                        $name = array_values($arr)[0] ?? null;
+
+                                        return $name ? [$name => $name] : [];
+                                    })->toArray())
+                                    ->reactive(),
+                                Select::make('column')
+                                    ->label('Column')
+                                    ->searchable()
+                                    ->options(fn (callable $get) => ($table = $get('table')) ? array_combine($cols = DbSchema::getColumnListing($table), $cols) : [])
+                                    ->afterStateUpdated(function ($state, $set, $get) {
+                                        $table = $get('table');
+                                        if ($table && $state) {
+                                            $set('key', $table . '.' . $state);
+                                        }
+                                    }),
                                 TextInput::make('key')->label('Key')->required(),
                                 Select::make('type')
                                     ->label('Type')
@@ -89,6 +115,20 @@ class BuilderReport extends Page
                             ->label('Filters')
                             ->schema([
                                 TextInput::make('label')->label('Label')->required(),
+                                Select::make('table')
+                                    ->label('Table')
+                                    ->searchable()
+                                    ->options(fn () => collect(DB::select('SHOW TABLES'))->mapWithKeys(function ($row) {
+                                        $arr = (array) $row;
+                                        $name = array_values($arr)[0] ?? null;
+
+                                        return $name ? [$name => $name] : [];
+                                    })->toArray())
+                                    ->reactive(),
+                                Select::make('column')
+                                    ->label('Column')
+                                    ->searchable()
+                                    ->options(fn (callable $get) => ($table = $get('table')) ? array_combine($cols = DbSchema::getColumnListing($table), $cols) : []),
                                 TextInput::make('key')->label('Key')->required(),
                                 Select::make('type')
                                     ->label('Type')

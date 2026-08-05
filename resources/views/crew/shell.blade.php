@@ -50,7 +50,10 @@
                 <div class="tb-right">
                     <span class="tb-user" id="tbUser"></span>
                     <span class="tb-clock" id="tbClock"></span>
-                    <button class="btn-out" onclick="doLogout()">Sign out</button>
+                    <form method="POST" action="{{ route('logout') }}" style="display:inline">
+                        @csrf
+                        <button type="submit" class="btn-out">Sign out</button>
+                    </form>
                 </div>
             </div>
             <div id="shell">

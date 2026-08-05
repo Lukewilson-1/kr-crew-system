@@ -1,8 +1,7 @@
 <?php
 
-namespace App;
+namespace App\Models;
 
-use App\Models\CrewStatusSegment;
 use Illuminate\Database\Eloquent\Model;
 
 class CrewRecord extends Model

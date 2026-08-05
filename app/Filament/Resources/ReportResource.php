@@ -21,6 +21,9 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\KeyValue;
 use Filament\Tables\Filters\SelectFilter;
 use BackedEnum;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema as DbSchema;
+use Illuminate\Support\Str;
 
 class ReportResource extends Resource
 {
@@ -35,7 +38,16 @@ class ReportResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->required()->label('Report name')->maxLength(255),
+            TextInput::make('name')
+                ->required()
+                ->label('Report name')
+                ->maxLength(255)
+                ->reactive()
+                ->afterStateUpdated(function ($state, $set, $get) {
+                    if (blank($get('slug'))) {
+                        $set('slug', Str::slug($state));
+                    }
+                }),
             TextInput::make('slug')->required()->label('Slug')->maxLength(255),
             Textarea::make('description')->rows(3)->label('Description'),
             TextInput::make('icon')->label('Icon')->maxLength(20),
@@ -61,6 +73,26 @@ class ReportResource extends Resource
                 ->label('Builder columns')
                 ->schema([
                     TextInput::make('label')->required()->label('Label'),
+                    Select::make('table')
+                        ->label('Table')
+                        ->searchable()
+                        ->options(fn () => collect(DB::select('SHOW TABLES'))->mapWithKeys(function ($row) {
+                            $arr = (array) $row;
+                            $name = array_values($arr)[0] ?? null;
+
+                            return $name ? [$name => $name] : [];
+                        })->toArray())
+                        ->reactive(),
+                    Select::make('column')
+                        ->label('Column')
+                        ->searchable()
+                        ->options(fn (callable $get) => ($table = $get('table')) ? array_combine($cols = DbSchema::getColumnListing($table), $cols) : [])
+                        ->afterStateUpdated(function ($state, $set, $get) {
+                            $table = $get('table');
+                            if ($table && $state) {
+                                $set('key', $table . '.' . $state);
+                            }
+                        }),
                     TextInput::make('key')->required()->label('Key'),
                     Select::make('type')->options([
                         'text' => 'Text',
@@ -74,6 +106,20 @@ class ReportResource extends Resource
                 ->label('Builder filters')
                 ->schema([
                     TextInput::make('label')->required()->label('Label'),
+                    Select::make('table')
+                        ->label('Table')
+                        ->searchable()
+                        ->options(fn () => collect(DB::select('SHOW TABLES'))->mapWithKeys(function ($row) {
+                            $arr = (array) $row;
+                            $name = array_values($arr)[0] ?? null;
+
+                            return $name ? [$name => $name] : [];
+                        })->toArray())
+                        ->reactive(),
+                    Select::make('column')
+                        ->label('Column')
+                        ->searchable()
+                        ->options(fn (callable $get) => ($table = $get('table')) ? array_combine($cols = DbSchema::getColumnListing($table), $cols) : []),
                     TextInput::make('key')->required()->label('Key'),
                     Select::make('type')->options([
                         'select' => 'Select',

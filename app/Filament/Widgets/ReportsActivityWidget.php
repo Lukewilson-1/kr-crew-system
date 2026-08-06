@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 
 class ReportsActivityWidget extends Widget
 {
+    protected static bool $isDiscovered = false;
+
     protected string $view = 'filament.widgets.reports-activity-widget';
 
     protected int | string | array $columnSpan = 1;

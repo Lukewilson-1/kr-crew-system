@@ -76,6 +76,11 @@ function selectMonthDay(day){
   renderMonthly();
 }
 
+function selectMonthlyCrewDay(depot,id,day){
+  selectedMonthCrewKey = `${depot}::${id}`;
+  selectMonthDay(day);
+}
+
 function buildMonthlyTotals(allCrew, maxDay){
   const totals = {BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
   allCrew.forEach(c=>{
@@ -156,6 +161,7 @@ let state={};        // {depot:{crewId:crewDoc}}
 let listeners=[];
 let currentPage='monthly',activeFilter='all',hqDepotView='all',editKey=null;
 let selectedMonthDay = new Date().getDate();
+let selectedMonthCrewKey = null;
 let cdInterval=null; // countdown ticker
 let currentModalGrade=null;
 let lastRefreshTime=0; // prevent rapid refresh spamming
@@ -1502,61 +1508,95 @@ function renderMonthly(){
   safeSetText('phSub', `${MONTH_NAME} - Daily Position Register`);
   safeSetInner('phActions', `
     ${currentUser.isHQ?`<select class="sel-sm no-print" onchange="setHqDepotView(this.value);renderMonthly()"><option value="all">All depots</option>${getActiveDepots().map(d=>`<option value="${d}"${hqDepotView===d?' selected':''}>${d}</option>`).join('')}</select>`:''}
-    <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">🖨 Print</button>
-    <button class="btn btn-primary btn-sm no-print" onclick="exportMonthlyCSV()">⬇ CSV</button>`);
+    <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">Print</button>
+    <button class="btn btn-primary btn-sm no-print" onclick="exportMonthlyCSV()">CSV</button>`);
 
-  let html=`<div class="legend">`;
-  Object.entries(STATUS_META).forEach(([code,m])=>{html+=`<div class="leg-item"><div class="leg-dot" style="background:${m.bg};border:1px solid ${m.fg}50"></div><b>${code}</b> = ${m.label}</div>`;});
-  const maxDay = CD; // current month monthly review only shows data up to today
-  const selectedDay = selectedMonthDay > maxDay ? maxDay : selectedMonthDay;
+  const maxDay = CD;
+  const selectedDay = Math.max(1, Math.min(maxDay, selectedMonthDay || CD));
   const dayTotals = buildDayTotals(allCrew, selectedDay);
-  const monthTotals = buildMonthlyTotals(allCrew, maxDay);
   const selectedDate = new Date(CY,CM,selectedDay);
   const selectedLabel = `${DAY_NAMES[selectedDate.getDay()]} ${selectedDay} ${MONTH_NAME.split(' ')[0]}`;
+  if(!selectedMonthCrewKey && allCrew.length) selectedMonthCrewKey = `${allCrew[0].depot}::${allCrew[0].id}`;
+  const selectedCrew = allCrew.find(c=>`${c.depot}::${c.id}`===selectedMonthCrewKey) || allCrew[0] || null;
+  const selectedSegments = selectedCrew ? getDaySegments(selectedCrew, selectedDay) : [];
+  const selectedFinal = selectedSegments.length ? selectedSegments[selectedSegments.length-1].status_code : '';
+  const dayMinutes = selectedSegments.reduce((acc,seg)=>{acc[seg.status_code]=(acc[seg.status_code]||0)+segmentDurationMinutes(seg);return acc;},{});
+  const days = Array.from({length:maxDay},(_,i)=>i+1);
+  const monthSummaryForCrew = selectedCrew ? Object.entries(STATUS_META).map(([code])=>[
+    code,
+    days.filter(day=>getFinalStatusForDay(selectedCrew, day)===code).length
+  ]).filter(([,count])=>count>0) : [];
 
-  html+=`</div><div class="month-panel"><div class="month-main"><div class="month-summary-card"><div class="summary-row"><div><strong>Selected day</strong><div class="summary-note">${selectedLabel}</div></div><div class="summary-value">${allCrew.length} crew</div></div><div class="summary-row"><div><strong>Total statuses</strong><div class="summary-note">Selected day counts</div></div><div class="summary-value">${Object.values(dayTotals).reduce((sum,v)=>sum+v,0)} records</div></div></div><div class="status-breakdown-grid">${Object.entries(STATUS_META).map(([code,m])=>`<div class="status-breakdown-card ${code==='BK'?'bk-card':''}"><div class="status-breakdown-dot" style="background:${m.bg};border:1px solid ${m.fg}50"></div><div><div class="status-breakdown-code">${code}</div><div class="status-breakdown-count">${dayTotals[code]||0}</div></div></div>`).join('')}</div>`;
-  html+=`<div class="month-wrap"><table class="month-tbl"><thead><tr>
-    <th class="mc-name">Name</th>${showDepot?'<th class="mc-dep">Depot</th>':''}`;
-  for(let d=1;d<=maxDay;d++){const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;const isTod=d===CD;const isSelected=d===selectedDay;html+=`<th class="${isSelected?'selected-header':''}" style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}" onclick="selectMonthDay(${d})"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;}
+  let html=`<div class="monthly-view">
+    <div class="legend month-legend">
+      ${Object.entries(STATUS_META).map(([code,m])=>`<div class="leg-item"><div class="leg-dot" style="background:${m.bg};border:1px solid ${m.fg}50"></div><b>${code}</b> = ${m.label}</div>`).join('')}
+      <span class="month-stack-hint">Stacked cell = multiple statuses that day, click to view</span>
+    </div>
+    <div class="month-panel">
+      <div class="month-main">
+        <div class="month-register-card">
+          <div class="month-register-head">
+            <div><div class="month-register-title">Monthly view</div><div class="month-register-sub">${MONTH_NAME} - Daily position register</div></div>
+            <div class="month-register-meta">${allCrew.length} crew - ${selectedLabel}</div>
+          </div>
+          <div class="month-wrap"><table class="month-tbl month-tbl-modern"><thead><tr>
+            <th class="mc-name">Name</th>${showDepot?'<th class="mc-dep">Depot</th>':''}`;
+
+  days.forEach(d=>{
+    const dt=new Date(CY,CM,d);
+    const we=dt.getDay()===0||dt.getDay()===6;
+    const isTod=d===CD;
+    const isSelected=d===selectedDay;
+    html+=`<th class="${isSelected?'selected-header':''}" style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}" onclick="selectMonthDay(${d})"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;
+  });
   html+=`<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3F2F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>`;
 
-  allCrew.forEach((c,i)=>{
-    const rowBg=i%2===0?'background:#F7F9FC':'';
-    html+=`<tr style="${rowBg}"><td class="mc-name">${c.name}</td>`;
+  allCrew.forEach(c=>{
+    const activeRow = selectedCrew && selectedCrew.id===c.id && selectedCrew.depot===c.depot;
+    html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name">${c.name}</td>`;
     if(showDepot)html+=`<td class="mc-dep" style="color:${DEPOT_COLORS[c.depot]};font-weight:700">${c.depot}</td>`;
     const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
-    for(let d=1;d<=maxDay;d++){
+    days.forEach(d=>{
       const daySegments = getDaySegments(c, d);
       const code=getFinalStatusForDay(c,d)||'';
-      const dt=new Date(CY,CM,d);const we=dt.getDay()===0||dt.getDay()===6;
+      const dt=new Date(CY,CM,d);
+      const we=dt.getDay()===0||dt.getDay()===6;
       const isEngineeringBooking = code==='BK' && String(c.trainType||'')==='Engineering';
       const isTod=d===CD;
       const isSelected=d===selectedDay;
       const cls=code?(code==='BK' ? (isEngineeringBooking ? 'day-BK day-BK-eng' : 'day-BK') : `day-${code}`):(we?'day-we':'');
       if(sm[code]!==undefined)sm[code]++;
-      const selectedClass = isSelected ? ' selected-col' : '';
-      const edAtt=!currentUser.isHQ?`class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" title="Click to edit" onclick="openDayEdit('${c.depot}','${c.id}',${d})"`:`class="${cls}${isTod?' today-col':''}${selectedClass}"`;
-      const cellContent = daySegments.length > 1 ? `<span class="month-segment-stack" title="${daySegments.map(s=>`${s.status_code||s.status||''}`).join(' → ')}">${daySegments.map(s=>`<span class="segment-bar ${s.status_code ? 'status-'+s.status_code : ''}" style="background:${STATUS_META[s.status_code||s.status]?.bg || '#CBD5E1'}"></span>`).join('')}</span>` : `<span>${code||''}</span>`;
-      html+=`<td ${edAtt}>${cellContent}</td>`;
-    }
+      const selectedClass = isSelected && activeRow ? ' selected-col' : '';
+      const cellClick=!currentUser.isHQ?`selectMonthlyCrewDay('${c.depot}','${c.id}',${d});openDayEdit('${c.depot}','${c.id}',${d})`:`selectMonthlyCrewDay('${c.depot}','${c.id}',${d})`;
+      const edAtt=`class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" title="${daySegments.length>1?'Multiple statuses - click to view':'Click to view'}" onclick="${cellClick}"`;
+      html+=`<td ${edAtt}>${renderMonthDayCell(daySegments, code)}</td>`;
+    });
     html+=`<td class="mc-sBK">${sm.BK}</td><td class="mc-sSB">${sm.SB}</td><td class="mc-sR">${sm.R}</td><td class="mc-sL">${sm.L}</td><td class="mc-sSK">${sm.SK}</td><td class="mc-sNTB">${sm.NTB}</td><td class="mc-sTO">${sm.TO}</td></tr>`;
   });
-  // Booked count row
+
   html+=`<tr style="background:#0F172A"><td class="mc-name" style="color:#E0E0E0;font-weight:700;font-size:10px">BOOKED / DAY</td>${showDepot?'<td style="background:#0F172A"></td>':''}`;
-  for(let d=1;d<=maxDay;d++){const bk=allCrew.filter(c=>getDaySegmentCode(c,d)==='BK').length;const engineering=allCrew.filter(c=>getDaySegmentCode(c,d)==='BK' && String(c.trainType||'')==='Engineering').length;html+=`<td class="${engineering>0?'mc-sBK-eng':'mc-sBK'}">${bk}</td>`;}
+  days.forEach(d=>{
+    const bk=allCrew.filter(c=>getFinalStatusForDay(c,d)==='BK').length;
+    const engineering=allCrew.filter(c=>getFinalStatusForDay(c,d)==='BK' && String(c.trainType||'')==='Engineering').length;
+    html+=`<td class="${engineering>0?'mc-sBK-eng':'mc-sBK'}">${bk}</td>`;
+  });
   html+=`<td colspan="7" style="color:rgba(255,255,255,.4);font-size:10px;text-align:left;padding-left:8px">Booked per day</td></tr>`;
-  const selectedCrew = allCrew.filter(c => {
-    const code = getDaySegmentCode(c, selectedDay) || '';
-    return Boolean(code);
-  }).sort((a,b)=>a.name.localeCompare(b.name));
-  html+=`</tbody></table></div><aside class="month-side"><div class="month-side-card"><h3>Monthly totals</h3><div class="status-side-list">${Object.entries(monthTotals).map(([code,total])=>`<div class="status-side-item"><span class="status-side-chip status-${code}">${code}</span><span>${total}</span></div>`).join('')}</div></div><div class="month-side-card"><h3>Selected day details</h3><div class="status-side-list">${Object.entries(dayTotals).map(([code,total])=>`<div class="status-side-item"><span class="status-side-chip status-${code}">${code}</span><span>${total}</span></div>`).join('')}</div><div class="selected-day-list">${selectedCrew.length?selectedCrew.map(c=>{
-      const code = getDaySegmentCode(c, selectedDay) || '';
-      const label = STATUS_META[code]?.label || code || 'Unknown';
-      return `<div class="selected-day-item"><span>${c.name}${showDepot?` (${c.depot})`:''}</span><span class="selected-day-code ${code?`status-${code}`:''}">${code}</span></div>`;
-    }).join(''):`<div class="selected-day-none">No crew assigned on this date.</div>`}</div></div></aside></div>`;
+
+  html+=`</tbody></table></div></div>
+        <div class="month-info-note">A crew member can carry several statuses in one day. The stacked cell segments are sized by time held; daily totals count the final status.</div>
+      </div>
+      <aside class="month-side">
+        <div class="month-side-card"><h3>Day timeline</h3><div class="summary-note">${selectedCrew?`${selectedCrew.name} - ${selectedDay} ${MONTH_NAME.split(' ')[0]}`:'No crew selected'}</div><div class="month-timeline">${selectedSegments.length?selectedSegments.map((seg,index)=>{
+          const meta=STATUS_META[seg.status_code]||{label:seg.status_code,bg:'#ECEFF1',fg:'#37474F'};
+          return `<div class="month-timeline-row"><div class="month-timeline-rail"><span style="background:${meta.fg}"></span>${index<selectedSegments.length-1?'<i></i>':''}</div><div><div class="month-time">${seg.start_time} - ${seg.end_time}</div><div class="month-timeline-title">${statusBadgeHtml(seg.status_code,'month-mini-badge')} ${meta.label}</div><div class="month-timeline-note">${seg.note||meta.label}</div></div></div>`;
+        }).join(''):`<div class="selected-day-none">No status recorded on this date.</div>`}</div></div>
+        <div class="month-side-card"><h3>Day summary</h3><div class="status-side-list">${Object.entries(dayMinutes).length?Object.entries(dayMinutes).map(([code,mins])=>`<div class="status-side-item"><span>${STATUS_META[code]?.label||code}</span><strong>${Math.floor(mins/60)}h ${mins%60}m (${Math.round((mins/1440)*100)}%)</strong></div>`).join(''):`<div class="selected-day-none">No time split available.</div>`}</div><div class="summary-row"><div><strong>Final status</strong><div class="summary-note">Used for monthly totals</div></div>${selectedFinal?statusBadgeHtml(selectedFinal,'month-final-badge'):'-'}</div></div>
+        <div class="month-side-card"><h3>Monthly summary</h3><div class="status-side-list">${monthSummaryForCrew.length?monthSummaryForCrew.map(([code,total])=>`<div class="status-side-item"><span class="status-side-chip status-${code}">${code}</span><span>${total}</span></div>`).join(''):`<div class="selected-day-none">No monthly records yet.</div>`}</div></div>
+      </aside>
+    </div>
+  </div>`;
   safeSetInner('pbody', html);
 }
-
 /* ════════ REPORTS ═════════════════════════════════════════════════════════ */
 function renderReports(){
   safeSetText('phSub', 'Export and download crew data');
@@ -1664,28 +1704,29 @@ function buildMonthlyFromStatusSegments(item){
   return monthly;
 }
 function getDaySegmentCode(item, day){
-  if(item?.status_segments?.length){
-    const seg = item.status_segments.find(x=>x.day===day);
-    if(seg) return seg.status_code || '';
-  }
-  return item?.monthly?.[`d${day}`] || '';
+  return getFinalStatusForDay(item, day);
 }
 function buildStatusSegmentsForDay(item, day, status){
   const segments = Array.isArray(item?.status_segments) ? [...item.status_segments] : [];
-  const idx = segments.findIndex(x=>x.day===day);
+  const idx = segments.findIndex(x=>x.day===day && (x.sort_order||100)===100);
   if(status===''){
-    if(idx!==-1) segments.splice(idx,1);
-    return segments;
+    return segments.filter(x=>x.day!==day);
   }
-  const newSeg = {day,sort_order:100,status_code:status};
+  const newSeg = {day,sort_order:100,status_code:status,status,start_time:'00:00',end_time:'23:59',note:STATUS_META[status]?.label||status};
   if(idx===-1) segments.push(newSeg);
   else segments[idx] = {...segments[idx], ...newSeg};
   return segments;
 }
 
 function getDaySegments(item, day){
-  const segments = Array.isArray(item?.status_segments) ? item.status_segments.filter(x => x && x.day === day) : [];
-  return segments.sort((a,b)=>(a.sort_order||100)-(b.sort_order||100));
+  const segments = Array.isArray(item?.status_segments) ? item.status_segments.filter(x => x && Number(x.day) === Number(day)) : [];
+  if(!segments.length){
+    const code = item?.monthly?.[`d${day}`] || '';
+    return code ? [{day,sort_order:100,status_code:code,status:code,start_time:'00:00',end_time:'23:59',note:STATUS_META[code]?.label||code}] : [];
+  }
+  return segments
+    .map((seg,index)=>normalizeDaySegment(seg, day, index))
+    .sort((a,b)=>(a.sort_order||100)-(b.sort_order||100)||timeToMinutes(a.start_time)-timeToMinutes(b.start_time));
 }
 
 function getFinalStatusForDay(item, day){
@@ -1694,6 +1735,152 @@ function getFinalStatusForDay(item, day){
     return segments[segments.length - 1].status_code || segments[segments.length - 1].status || '';
   }
   return item?.monthly?.[`d${day}`] || '';
+}
+
+function timeToMinutes(value){
+  const match=String(value||'').match(/^(\d{1,2}):(\d{2})$/);
+  if(!match) return 0;
+  return Math.max(0,Math.min(1439,Number(match[1])*60+Number(match[2])));
+}
+
+function minutesToTime(minutes){
+  const safe=Math.max(0,Math.min(1439,Number(minutes)||0));
+  return `${String(Math.floor(safe/60)).padStart(2,'0')}:${String(safe%60).padStart(2,'0')}`;
+}
+
+function normalizeDaySegment(seg, day, index=0){
+  const code=seg.status_code||seg.status||'';
+  return {
+    ...seg,
+    day:Number(seg.day||day),
+    sort_order:Number(seg.sort_order||((index+1)*100)),
+    status_code:code,
+    status:seg.status||code,
+    start_time:seg.start_time||seg.start||'00:00',
+    end_time:seg.end_time||seg.end||'23:59',
+    note:seg.note||seg.notes||STATUS_META[code]?.label||code,
+  };
+}
+
+function segmentDurationMinutes(seg){
+  const start=timeToMinutes(seg.start_time);
+  const end=seg.end_time==='23:59'?1440:timeToMinutes(seg.end_time);
+  return Math.max(1,end-start);
+}
+
+function buildStatusSegmentsForDayList(item, day, daySegments){
+  const existing = Array.isArray(item?.status_segments) ? item.status_segments.filter(seg=>Number(seg?.day)!==Number(day)) : [];
+  const cleaned = (daySegments||[])
+    .map((seg,index)=>normalizeDaySegment(seg, day, index))
+    .filter(seg=>seg.status_code)
+    .sort((a,b)=>timeToMinutes(a.start_time)-timeToMinutes(b.start_time))
+    .map((seg,index)=>({
+      day:Number(day),
+      sort_order:(index+1)*100,
+      status_code:seg.status_code,
+      status:seg.status_code,
+      start_time:seg.start_time,
+      end_time:seg.end_time,
+      note:seg.note||STATUS_META[seg.status_code]?.label||seg.status_code,
+    }));
+  return [...existing,...cleaned];
+}
+
+function renderMonthDayCell(segments, code){
+  if(!segments.length) return '';
+  if(segments.length===1) return `<span class="month-status-code">${code||''}</span>`;
+  const title=segments.map(seg=>`${seg.status_code} ${seg.start_time}-${seg.end_time}`).join(' -> ');
+  return `<span class="month-segment-stack" title="${title}">${segments.map(seg=>{
+    const status=STATUS_META[seg.status_code]||{};
+    const pct=Math.max(8,Math.round((segmentDurationMinutes(seg)/1440)*100));
+    return `<span class="month-segment-slice" style="flex-basis:${pct}%;background:${status.bg||'#CBD5E1'};border-color:${status.fg||'#64748B'}"></span>`;
+  }).join('')}</span>`;
+}
+
+function statusBadgeHtml(code, extraClass=''){
+  const meta=STATUS_META[code]||{label:code,bg:'#ECEFF1',fg:'#37474F'};
+  return `<span class="${extraClass}" style="background:${meta.bg};color:${meta.fg};border-color:${meta.fg}55">${code}</span>`;
+}
+
+function ensureDaySegmentEditor(){
+  let editor=document.getElementById('daySegmentEditor');
+  if(editor) return editor;
+  const notes=document.getElementById('mNotes');
+  if(!notes) return null;
+  editor=document.createElement('div');
+  editor.id='daySegmentEditor';
+  editor.className='day-segment-editor';
+  editor.style.display='none';
+  editor.innerHTML=`
+    <div class="segment-editor-head">
+      <div>
+        <label style="margin:0">Daily status segments</label>
+        <div class="segment-editor-note">Add each same-day status in order. The final segment becomes the monthly code.</div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="addDaySegmentRow()">Add segment</button>
+    </div>
+    <div id="daySegmentRows" class="day-segment-rows"></div>`;
+  notes.parentNode.insertBefore(editor, notes);
+  return editor;
+}
+
+function setDaySegmentEditorVisible(visible){
+  const editor=ensureDaySegmentEditor();
+  if(editor) editor.style.display=visible?'block':'none';
+}
+
+function addDaySegmentRow(segment={}){
+  const rows=document.getElementById('daySegmentRows');
+  if(!rows) return;
+  const index=rows.children.length;
+  const code=segment.status_code||segment.status||document.getElementById('mStatus')?.value||'SB';
+  const start=segment.start_time||segment.start||minutesToTime(Math.min(index*480, 1439));
+  const end=segment.end_time||segment.end||(index===0?'23:59':'23:59');
+  const note=String(segment.note||segment.notes||STATUS_META[code]?.label||code).replace(/"/g,'&quot;');
+  const row=document.createElement('div');
+  row.className='day-segment-row';
+  row.innerHTML=`
+    <select class="day-seg-status" onchange="syncPrimaryStatusFromSegments();onStatusChange()">${buildStatusOptions(code)}</select>
+    <input class="day-seg-start" type="time" value="${start}">
+    <input class="day-seg-end" type="time" value="${end}">
+    <input class="day-seg-note" type="text" value="${note}" placeholder="Duty note">
+    <button type="button" class="day-seg-remove" title="Remove segment" onclick="removeDaySegmentRow(this)">x</button>`;
+  rows.appendChild(row);
+  syncPrimaryStatusFromSegments();
+}
+
+function removeDaySegmentRow(button){
+  const row=button?.closest('.day-segment-row');
+  if(row) row.remove();
+  syncPrimaryStatusFromSegments();
+}
+
+function syncPrimaryStatusFromSegments(){
+  const rows=[...document.querySelectorAll('#daySegmentRows .day-segment-row')];
+  const last=rows[rows.length-1]?.querySelector('.day-seg-status')?.value;
+  const statusEl=document.getElementById('mStatus');
+  if(last && statusEl) statusEl.value=last;
+}
+
+function loadDaySegmentEditor(segments){
+  const editor=ensureDaySegmentEditor();
+  if(!editor) return;
+  const rows=document.getElementById('daySegmentRows');
+  rows.innerHTML='';
+  (segments.length?segments:[{status_code:document.getElementById('mStatus')?.value||'SB',start_time:'00:00',end_time:'23:59'}]).forEach(seg=>addDaySegmentRow(seg));
+  setDaySegmentEditorVisible(true);
+}
+
+function readDaySegmentEditor(day){
+  const rows=[...document.querySelectorAll('#daySegmentRows .day-segment-row')];
+  return rows.map((row,index)=>({
+    day,
+    sort_order:(index+1)*100,
+    status_code:row.querySelector('.day-seg-status')?.value||'',
+    start_time:row.querySelector('.day-seg-start')?.value||'00:00',
+    end_time:row.querySelector('.day-seg-end')?.value||'23:59',
+    note:row.querySelector('.day-seg-note')?.value||'',
+  })).filter(seg=>seg.status_code);
 }
 function windowLabel(windowKey){
   switch(windowKey){
@@ -2749,6 +2936,7 @@ function openUpdate(depot,id){
   editKey={depot,id,day:null};
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   currentModalGrade=c.grade;
+  setDaySegmentEditorVisible(false);
   populateStatusSelects(c.status||'SB');
   populateTrainTypeSelect(c.trainType||'');
   document.getElementById('mTitle').textContent='Update crew status';
@@ -2775,13 +2963,17 @@ function openUpdate(depot,id){
 function openDayEdit(depot,id,day){
   editKey={depot,id,day};
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
+  selectedMonthCrewKey = `${depot}::${id}`;
+  selectedMonthDay = day;
   currentModalGrade=c.grade;
-  populateStatusSelects(getDaySegmentCode(c,day)||'SB');
+  const daySegments=getDaySegments(c,day);
+  const finalStatus=getFinalStatusForDay(c,day)||'SB';
+  populateStatusSelects(finalStatus);
   populateTrainTypeSelect('');
   const dt=new Date(CY,CM,day);
   document.getElementById('mTitle').textContent='Edit daily position';
   document.getElementById('mSub').textContent=`${c.name} · ${DAY_NAMES[dt.getDay()]} ${day} ${MONTH_NAME.split(' ')[0]}`;
-  document.getElementById('mStatus').value=getDaySegmentCode(c,day)||'SB';
+  document.getElementById('mStatus').value=finalStatus;
   document.getElementById('mTrainType').value='';document.getElementById('mBookTime').value='';
   document.getElementById('mRoute').value=c.route||'';
   const staffNumberEl=document.getElementById('mStaffNumber');
@@ -2791,12 +2983,13 @@ function openDayEdit(depot,id,day){
   document.getElementById('mRestLocation').value='home';
   setAwayDepotOptions(depot,'');
   onStatusChange();
+  loadDaySegmentEditor(daySegments);
   document.getElementById('mRemoveBtn').style.display='none';
   updateStatusValidation();
   document.getElementById('modal').classList.add('open');
 }
 
-function closeModal(){document.getElementById('modal').classList.remove('open');editKey=null;currentModalGrade=null;}
+function closeModal(){document.getElementById('modal').classList.remove('open');setDaySegmentEditorVisible(false);editKey=null;currentModalGrade=null;}
 
 async function saveModal(){
   if(!editKey)return;
@@ -2813,14 +3006,30 @@ async function saveModal(){
 
     if(editKey.day){
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
-      const monthly={...(c.monthly||{})};monthly[`d${editKey.day}`]=newStatus;
-      const status_segments = buildStatusSegmentsForDay(c, editKey.day, newStatus);
+      const daySegments=readDaySegmentEditor(editKey.day);
+      if(!daySegments.length){alert('Add at least one status segment for this day.');return;}
+      if(daySegments.some(seg=>seg.status_code==='R') && !isRestAllowedForGrade(currentModalGrade)){
+        alert('Resting can only be applied to locomotive driver designations. Change the status before saving.');
+        return;
+      }
+      for(const seg of daySegments){
+        if(timeToMinutes(seg.end_time) <= timeToMinutes(seg.start_time) && seg.end_time!=='23:59'){
+          alert('Each status segment must end after it starts.');
+          return;
+        }
+      }
+      const finalSegment=daySegments[daySegments.length-1];
+      const finalStatus=finalSegment.status_code;
+      const finalTrainType=finalStatus==='BK'?document.getElementById('mTrainType').value:'';
+      const finalBookTime=finalStatus==='BK'?document.getElementById('mBookTime').value:'';
+      const monthly={...(c.monthly||{})};monthly[`d${editKey.day}`]=finalStatus;
+      const status_segments = buildStatusSegmentsForDayList(c, editKey.day, daySegments);
       const restLocation=document.getElementById('mRestLocation').value;
-      const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
+      const awayDepot = finalStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
       const upd={monthly,status_segments,awayDepot};
-      if(editKey.day===CD){upd.status=newStatus;upd.trainType=trainType;upd.bookTime=bookTime;upd.since=fmtTime(new Date());upd.updatedBy=currentUser.username;if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);upd.restStarted=rs.toISOString();}else if(newStatus!=='R')upd.restStarted=null;}
+      if(editKey.day===CD){upd.status=finalStatus;upd.trainType=finalTrainType;upd.bookTime=finalBookTime;upd.since=fmtTime(new Date());upd.updatedBy=currentUser.username;if(finalStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);upd.restStarted=rs.toISOString();}else if(finalStatus!=='R')upd.restStarted=null;}
       await writeCrewDoc(editKey.depot,editKey.id,upd);
-      setLog(`${c.name} Day ${editKey.day} → ${STATUS_META[newStatus]?.label}`);
+      setLog(`${c.name} Day ${editKey.day} saved with ${daySegments.length} segment${daySegments.length===1?'':'s'}.`);
     } else {
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
       const monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
@@ -3062,6 +3271,11 @@ window.openAddModal = openAddModal;
 window.saveAddCrew = saveAddCrew;
 window.openUpdate = openUpdate;
 window.openDayEdit = openDayEdit;
+window.selectMonthDay = selectMonthDay;
+window.selectMonthlyCrewDay = selectMonthlyCrewDay;
+window.addDaySegmentRow = addDaySegmentRow;
+window.removeDaySegmentRow = removeDaySegmentRow;
+window.syncPrimaryStatusFromSegments = syncPrimaryStatusFromSegments;
 window.onStatusChange = onStatusChange;
 window.exportCSV = exportCSV;
 window.exportMonthlyCSV = exportMonthlyCSV;

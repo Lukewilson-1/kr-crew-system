@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class StatsOverview extends StatsOverviewWidget
 {
+    protected static bool $isDiscovered = false;
+
     protected function getStats(): array
     {
         $totalCrew = 0;

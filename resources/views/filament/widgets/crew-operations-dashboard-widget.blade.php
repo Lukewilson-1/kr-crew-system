@@ -1,164 +1,613 @@
 <x-filament-widgets::widget>
-    <x-filament::section>
-        <div class="grid gap-4 md:grid-cols-4">
-            @foreach ($this->getViewData()['summary'] as $item)
-                <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div class="text-sm font-medium text-gray-500">{{ $item['label'] }}</div>
-                    <div class="mt-2 text-2xl font-semibold text-gray-900">{{ $item['value'] }}</div>
-                    <div class="mt-1 text-xs text-gray-500">{{ $item['hint'] }}</div>
-                </div>
-            @endforeach
-        </div>
+    <style>
+        .kr-admin-dashboard {
+            --kr-bg: #f6f7f9;
+            --kr-panel: #ffffff;
+            --kr-ink: #111827;
+            --kr-muted: #667085;
+            --kr-line: #d9dee7;
+            --kr-rail: #111827;
+            --kr-gold: #d69a16;
+            --kr-green: #16a34a;
+            --kr-blue: #2563eb;
+            --kr-orange: #f59e0b;
+            color: var(--kr-ink);
+            display: grid;
+            gap: 20px;
+        }
 
-        <div class="mt-6 grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
-            <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div class="flex items-center justify-between gap-4">
-                    <div>
-                        <div class="text-sm font-semibold text-gray-900">Utilization snapshot</div>
-                        <div class="text-sm text-gray-500">Booked days across the current month</div>
-                    </div>
-                    <div class="rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">{{ $this->getViewData()['utilizationPercent'] }}%</div>
-                </div>
-                <div class="mt-5 overflow-hidden rounded-full bg-gray-100">
-                    <div class="h-3 rounded-full bg-emerald-500 transition-all duration-300" style="width: {{ min(100, $this->getViewData()['utilizationPercent']) }}%"></div>
-                </div>
-                <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div class="rounded-2xl bg-slate-50 p-4">
-                        <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Booked days</div>
-                        <div class="mt-3 text-2xl font-semibold text-slate-900">{{ $this->getViewData()['bookedDays'] }}</div>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 p-4">
-                        <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Standby days</div>
-                        <div class="mt-3 text-2xl font-semibold text-slate-900">{{ $this->getViewData()['standbyDays'] }}</div>
-                    </div>
-                </div>
-            </div>
+        .kr-admin-dashboard * {
+            box-sizing: border-box;
+        }
 
-            <div class="grid gap-4">
-                <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm font-semibold text-gray-900">Report activity</div>
-                            <div class="text-sm text-gray-500">Access recent builder reports</div>
-                        </div>
-                        <div class="rounded-full bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-700">{{ $this->getViewData()['reportCount'] }} reports</div>
-                    </div>
-                    <div class="mt-4 space-y-3">
-                        @forelse ($this->getViewData()['recentReports'] as $report)
-                            <div class="rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">
-                                <div class="font-medium text-slate-900">{{ $report['name'] }}</div>
-                                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ $report['type'] }}</div>
-                            </div>
-                        @empty
-                            <div class="rounded-2xl bg-slate-50 p-3 text-sm text-slate-500">No reports created yet. Start with the Builder page.</div>
-                        @endforelse
-                    </div>
-                </div>
+        .kr-admin-hero {
+            background: linear-gradient(135deg, #111827 0%, #1f2937 55%, #3d2b05 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            color: #fff;
+            display: grid;
+            gap: 24px;
+            grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+            overflow: hidden;
+            padding: 28px;
+        }
 
-                <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div class="text-sm font-semibold text-gray-900">Top standby leaders</div>
-                    <div class="mt-3 space-y-2">
-                        @forelse ($this->getViewData()['standbyLeaders'] as $leader)
-                            <div class="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm">
-                                <div>
-                                    <div class="font-medium text-slate-900">{{ $leader['name'] }}</div>
-                                    <div class="text-xs text-slate-500">{{ $leader['depot'] }}</div>
-                                </div>
-                                <div class="font-semibold text-amber-600">{{ $leader['standby_days'] }}d</div>
-                            </div>
-                        @empty
-                            <div class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No standby leaders yet.</div>
-                        @endforelse
-                    </div>
-                </div>
-            </div>
-        </div>
+        .kr-admin-eyebrow {
+            color: #f7c65f;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
 
-        <div class="mt-6 grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-            <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div class="flex items-center justify-between gap-4">
-                    <div>
-                        <div class="text-sm font-semibold text-gray-900">Depot booking mix</div>
-                        <div class="text-sm text-gray-500">Current crew counts, booked and standby spread by depot.</div>
-                    </div>
-                    <div class="rounded-full bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700">{{ count($this->getViewData()['depotBreakdown']) }} depots</div>
-                </div>
-                <div class="mt-4 space-y-4">
-                    @foreach ($this->getViewData()['depotBreakdown'] as $item)
-                        <div class="rounded-2xl bg-slate-50 p-4">
-                            <div class="flex items-center justify-between gap-4 text-sm">
-                                <div>
-                                    <div class="font-medium text-slate-900">{{ $item['depot'] }}</div>
-                                    <div class="text-xs text-slate-500">{{ $item['crew'] }} crew</div>
-                                </div>
-                                <div class="text-sm text-slate-500">{{ $item['booked'] }} booked · {{ $item['standby'] }} standby</div>
-                            </div>
-                            <div class="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
-                                <div class="h-2 rounded-full bg-emerald-500" style="width: {{ $item['pct'] }}%"></div>
-                            </div>
-                        </div>
+        .kr-admin-title {
+            font-size: 30px;
+            font-weight: 800;
+            line-height: 1.15;
+            margin: 8px 0 8px;
+        }
+
+        .kr-admin-copy {
+            color: #cbd5e1;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 0;
+            max-width: 680px;
+        }
+
+        .kr-admin-actions {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 22px;
+        }
+
+        .kr-admin-action {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 10px;
+            color: #fff;
+            display: block;
+            padding: 13px 14px;
+            text-decoration: none;
+        }
+
+        .kr-admin-action strong {
+            display: block;
+            font-size: 14px;
+        }
+
+        .kr-admin-action span {
+            color: #cbd5e1;
+            display: block;
+            font-size: 12px;
+            margin-top: 3px;
+        }
+
+        .kr-admin-stat-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .kr-admin-stat {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            min-height: 122px;
+            padding: 16px;
+        }
+
+        .kr-admin-stat-label {
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .kr-admin-stat-value {
+            color: #fff;
+            font-size: 34px;
+            font-weight: 800;
+            line-height: 1;
+            margin-top: 14px;
+        }
+
+        .kr-admin-stat-hint {
+            color: #d8dee9;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .kr-admin-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .kr-admin-grid-two {
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+        }
+
+        .kr-admin-grid-three {
+            grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr) minmax(280px, 0.85fr);
+        }
+
+        .kr-admin-card {
+            background: var(--kr-panel);
+            border: 1px solid var(--kr-line);
+            border-radius: 14px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            padding: 20px;
+        }
+
+        .kr-admin-card-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 16px;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+
+        .kr-admin-card-title {
+            font-size: 17px;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .kr-admin-card-subtitle {
+            color: var(--kr-muted);
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 4px 0 0;
+        }
+
+        .kr-admin-pill {
+            background: #f1f5f9;
+            border-radius: 999px;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 6px 10px;
+            white-space: nowrap;
+        }
+
+        .kr-admin-table {
+            border: 1px solid var(--kr-line);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .kr-admin-table-row {
+            align-items: center;
+            display: grid;
+            gap: 14px;
+            grid-template-columns: minmax(0, 1.2fr) 90px minmax(150px, 1fr);
+            padding: 14px 16px;
+        }
+
+        .kr-admin-table-row + .kr-admin-table-row {
+            border-top: 1px solid #edf0f5;
+        }
+
+        .kr-admin-table-head {
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .kr-admin-name {
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .kr-admin-meta {
+            color: var(--kr-muted);
+            font-size: 12px;
+            margin-top: 3px;
+        }
+
+        .kr-admin-bar {
+            background: #e8edf4;
+            border-radius: 999px;
+            height: 9px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .kr-admin-bar-fill {
+            background: var(--kr-green);
+            border-radius: inherit;
+            height: 100%;
+        }
+
+        .kr-admin-status-layout {
+            align-items: center;
+            display: grid;
+            gap: 18px;
+            grid-template-columns: 180px minmax(0, 1fr);
+        }
+
+        .kr-admin-donut {
+            align-items: center;
+            aspect-ratio: 1;
+            border-radius: 999px;
+            display: flex;
+            justify-content: center;
+            margin: 0 auto;
+            max-width: 180px;
+            position: relative;
+            width: 100%;
+        }
+
+        .kr-admin-donut::after {
+            background: #fff;
+            border-radius: 999px;
+            content: "";
+            height: 58%;
+            position: absolute;
+            width: 58%;
+        }
+
+        .kr-admin-donut-center {
+            position: relative;
+            text-align: center;
+            z-index: 1;
+        }
+
+        .kr-admin-donut-center strong {
+            display: block;
+            font-size: 28px;
+            line-height: 1;
+        }
+
+        .kr-admin-donut-center span {
+            color: var(--kr-muted);
+            display: block;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            margin-top: 5px;
+            text-transform: uppercase;
+        }
+
+        .kr-admin-status-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .kr-admin-status-row {
+            display: grid;
+            gap: 10px;
+        }
+
+        .kr-admin-status-top {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .kr-admin-status-label {
+            align-items: center;
+            display: flex;
+            gap: 9px;
+            min-width: 0;
+        }
+
+        .kr-admin-dot {
+            border-radius: 999px;
+            height: 10px;
+            width: 10px;
+        }
+
+        .kr-admin-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .kr-admin-list-item {
+            align-items: center;
+            background: #f8fafc;
+            border: 1px solid #edf0f5;
+            border-radius: 10px;
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            padding: 12px;
+        }
+
+        .kr-admin-system {
+            display: grid;
+            gap: 10px;
+        }
+
+        .kr-admin-system-card {
+            background: #f8fafc;
+            border: 1px solid #edf0f5;
+            border-radius: 10px;
+            padding: 14px;
+        }
+
+        .kr-admin-system-card span {
+            color: var(--kr-muted);
+            display: block;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .kr-admin-system-card strong {
+            display: block;
+            font-size: 25px;
+            line-height: 1;
+            margin-top: 10px;
+        }
+
+        .kr-admin-report-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .kr-admin-report {
+            background: #f8fafc;
+            border: 1px solid #e5eaf1;
+            border-radius: 12px;
+            min-height: 120px;
+            padding: 15px;
+        }
+
+        .kr-admin-empty {
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 10px;
+            color: var(--kr-muted);
+            font-size: 14px;
+            padding: 18px;
+            text-align: center;
+        }
+
+        .kr-admin-link {
+            color: #b77908;
+            font-size: 13px;
+            font-weight: 800;
+            text-decoration: none;
+        }
+
+        @media (max-width: 1180px) {
+            .kr-admin-hero,
+            .kr-admin-grid-two,
+            .kr-admin-grid-three {
+                grid-template-columns: 1fr;
+            }
+
+            .kr-admin-report-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 720px) {
+            .kr-admin-hero {
+                padding: 20px;
+            }
+
+            .kr-admin-actions,
+            .kr-admin-stat-grid,
+            .kr-admin-report-grid,
+            .kr-admin-status-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .kr-admin-table-head {
+                display: none;
+            }
+
+            .kr-admin-table-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    @php
+        $gradientParts = [];
+        $cursor = 0;
+        foreach ($statusRows as $row) {
+            $next = $cursor + (int) $row['percent'];
+            $gradientParts[] = "{$row['color']} {$cursor}% {$next}%";
+            $cursor = $next;
+        }
+        $donutGradient = count($gradientParts) ? 'conic-gradient(' . implode(', ', $gradientParts) . ')' : '#e5e7eb';
+    @endphp
+
+    <div class="kr-admin-dashboard">
+        <section class="kr-admin-hero">
+            <div>
+                <div class="kr-admin-eyebrow">Admin operations</div>
+                <h2 class="kr-admin-title">Crew control dashboard</h2>
+                <p class="kr-admin-copy">
+                    Monitor roster strength, depot readiness, status mix, and reporting setup for {{ $periodLabel }}.
+                </p>
+                <div class="kr-admin-actions">
+                    @foreach ($quickActions as $action)
+                        <a href="{{ $action['href'] }}" class="kr-admin-action">
+                            <strong>{{ $action['label'] }}</strong>
+                            <span>{{ $action['description'] }}</span>
+                        </a>
                     @endforeach
                 </div>
             </div>
 
-            <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div class="text-sm font-semibold text-gray-900">Status composition</div>
-                <div class="mt-4 flex gap-4">
-                    <div class="relative h-48 w-48 rounded-full bg-slate-50 p-6 shadow-inner">
-                        <svg viewBox="0 0 120 120" class="h-full w-full">
-                            @php
-                                $status = $this->getViewData()['statusCounts'];
-                                $total = array_sum($status) ?: 1;
-                                $angles = [];
-                                $start = 0;
-                                $colors = [
-                                    'BK' => '#059669',
-                                    'SB' => '#2563eb',
-                                    'R' => '#7c3aed',
-                                    'L' => '#ea580c',
-                                    'SK' => '#dc2626',
-                                    'NTB' => '#334155',
-                                    'TO' => '#0f766e',
-                                ];
-                            @endphp
-                            @foreach ($status as $code => $count)
-                                @php
-                                    $percent = $count / $total;
-                                    $angle = $percent * 360;
-                                    $end = $start + $angle;
-                                    $largeArc = $angle > 180 ? 1 : 0;
-                                    $startX = 60 + 40 * cos(deg2rad($start - 90));
-                                    $startY = 60 + 40 * sin(deg2rad($start - 90));
-                                    $endX = 60 + 40 * cos(deg2rad($end - 90));
-                                    $endY = 60 + 40 * sin(deg2rad($end - 90));
-                                @endphp
-                                @if ($count > 0)
-                                    <path d="M60,20 A40,40 0 {{ $largeArc }},1 {{ $endX }},{{ $endY }} L60,60 Z" fill="{{ $colors[$code] ?? '#94a3b8' }}" opacity="0.9" />
-                                @endif
-                                @php $start = $end; @endphp
-                            @endforeach
-                            <circle cx="60" cy="60" r="22" fill="#fff" />
-                        </svg>
-                        <div class="pointer-events-none absolute inset-0 grid place-items-center text-center">
-                            <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Status</div>
-                            <div class="text-2xl font-semibold text-slate-900">{{ $total }}</div>
+            <div class="kr-admin-stat-grid">
+                @foreach ($heroStats as $stat)
+                    <article class="kr-admin-stat">
+                        <div class="kr-admin-stat-label">{{ $stat['label'] }}</div>
+                        <div class="kr-admin-stat-value">{{ $stat['value'] }}</div>
+                        <div class="kr-admin-stat-hint">{{ $stat['hint'] }}</div>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <div class="kr-admin-grid kr-admin-grid-two">
+            <section class="kr-admin-card">
+                <div class="kr-admin-card-header">
+                    <div>
+                        <h3 class="kr-admin-card-title">Depot readiness</h3>
+                        <p class="kr-admin-card-subtitle">Largest depots by roster size and active profile coverage.</p>
+                    </div>
+                    <span class="kr-admin-pill">{{ count($depotRows) }} shown</span>
+                </div>
+
+                <div class="kr-admin-table">
+                    <div class="kr-admin-table-row kr-admin-table-head">
+                        <div>Depot</div>
+                        <div>Crew</div>
+                        <div>Active coverage</div>
+                    </div>
+                    @forelse ($depotRows as $depot)
+                        <div class="kr-admin-table-row">
+                            <div>
+                                <div class="kr-admin-name">{{ $depot['name'] }}</div>
+                                <div class="kr-admin-meta">{{ $depot['code'] }}</div>
+                            </div>
+                            <div class="kr-admin-name">{{ $depot['crew'] }}</div>
+                            <div>
+                                <div class="kr-admin-meta">{{ $depot['active'] }} active / {{ $depot['percent'] }}%</div>
+                                <div class="kr-admin-bar">
+                                    <div class="kr-admin-bar-fill" style="width: {{ $depot['percent'] }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="kr-admin-empty">No depot data is available yet.</div>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="kr-admin-card">
+                <div class="kr-admin-card-header">
+                    <div>
+                        <h3 class="kr-admin-card-title">Status composition</h3>
+                        <p class="kr-admin-card-subtitle">Current status entries grouped by code.</p>
+                    </div>
+                    <span class="kr-admin-pill">{{ $statusTotal }} entries</span>
+                </div>
+
+                <div class="kr-admin-status-layout">
+                    <div class="kr-admin-donut" style="background: {{ $donutGradient }}">
+                        <div class="kr-admin-donut-center">
+                            <strong>{{ $statusTotal }}</strong>
+                            <span>Status</span>
                         </div>
                     </div>
-                </div>
-                <div class="mt-4 grid gap-2">
-                    @foreach ($this->getViewData()['statusCounts'] as $code => $count)
-                        @if ($count > 0)
-                            <div class="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm">
-                                <div class="flex items-center gap-3">
-                                    <span class="inline-flex h-3 w-3 rounded-full" style="background: {{ ['BK' => '#059669','SB' => '#2563eb','R' => '#7c3aed','L' => '#ea580c','SK' => '#dc2626','NTB' => '#334155','TO' => '#0f766e'][$code] ?? '#94a3b8' }}"></span>
-                                    <span class="font-medium text-slate-900">{{ $code }}</span>
+                    <div class="kr-admin-status-list">
+                        @forelse ($statusRows as $status)
+                            <div class="kr-admin-status-row">
+                                <div class="kr-admin-status-top">
+                                    <div class="kr-admin-status-label">
+                                        <span class="kr-admin-dot" style="background: {{ $status['color'] }}"></span>
+                                        <strong>{{ $status['label'] }}</strong>
+                                    </div>
+                                    <span>{{ $status['count'] }}</span>
                                 </div>
-                                <span class="text-slate-500">{{ $count }}</span>
+                                <div class="kr-admin-bar">
+                                    <div class="kr-admin-bar-fill" style="background: {{ $status['color'] }}; width: {{ $status['percent'] }}%"></div>
+                                </div>
                             </div>
-                        @endif
+                        @empty
+                            <div class="kr-admin-empty">No status activity has been recorded yet.</div>
+                        @endforelse
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="kr-admin-grid kr-admin-grid-three">
+            <section class="kr-admin-card">
+                <div class="kr-admin-card-header">
+                    <div>
+                        <h3 class="kr-admin-card-title">Recent crew records</h3>
+                        <p class="kr-admin-card-subtitle">Latest profiles added to the roster.</p>
+                    </div>
+                    <a href="{{ \App\Filament\Resources\CrewMemberResource::getUrl('index') }}" class="kr-admin-link">View all</a>
+                </div>
+                <div class="kr-admin-list">
+                    @forelse ($recentCrew as $crew)
+                        <div class="kr-admin-list-item">
+                            <div>
+                                <div class="kr-admin-name">{{ $crew['name'] }}</div>
+                                <div class="kr-admin-meta">{{ $crew['meta'] }}</div>
+                            </div>
+                            <div class="kr-admin-meta">{{ $crew['time'] }}</div>
+                        </div>
+                    @empty
+                        <div class="kr-admin-empty">No crew records have been created yet.</div>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="kr-admin-card">
+                <div class="kr-admin-card-header">
+                    <div>
+                        <h3 class="kr-admin-card-title">System setup</h3>
+                        <p class="kr-admin-card-subtitle">Configured operational data.</p>
+                    </div>
+                </div>
+                <div class="kr-admin-system">
+                    @foreach ($systemCards as $card)
+                        <div class="kr-admin-system-card">
+                            <span>{{ $card['label'] }}</span>
+                            <strong>{{ $card['value'] }}</strong>
+                            <div class="kr-admin-meta">{{ $card['meta'] }}</div>
+                        </div>
                     @endforeach
                 </div>
-            </div>
+            </section>
+
+            <section class="kr-admin-card">
+                <div class="kr-admin-card-header">
+                    <div>
+                        <h3 class="kr-admin-card-title">Operational balance</h3>
+                        <p class="kr-admin-card-subtitle">Quick visual scan of availability and configured locations.</p>
+                    </div>
+                </div>
+                <div class="kr-admin-list">
+                    @foreach ($heroStats as $stat)
+                        <div class="kr-admin-list-item">
+                            <div>
+                                <div class="kr-admin-name">{{ $stat['label'] }}</div>
+                                <div class="kr-admin-meta">{{ $stat['hint'] }}</div>
+                            </div>
+                            <strong>{{ $stat['value'] }}</strong>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
         </div>
-    </x-filament::section>
+
+        <section class="kr-admin-card">
+            <div class="kr-admin-card-header">
+                <div>
+                    <h3 class="kr-admin-card-title">Report activity</h3>
+                    <p class="kr-admin-card-subtitle">Recent report definitions available to administrators.</p>
+                </div>
+                <a href="{{ \App\Filament\Resources\ReportResource::getUrl('index') }}" class="kr-admin-link">Manage reports</a>
+            </div>
+            <div class="kr-admin-report-grid">
+                @forelse ($recentReports as $report)
+                    <article class="kr-admin-report">
+                        <div class="kr-admin-meta">{{ $report['category'] }}</div>
+                        <div class="kr-admin-name" style="margin-top: 10px;">{{ $report['name'] }}</div>
+                        <span class="kr-admin-pill" style="display: inline-block; margin-top: 16px;">{{ $report['type'] }}</span>
+                    </article>
+                @empty
+                    <div class="kr-admin-empty">No report definitions have been created yet.</div>
+                @endforelse
+            </div>
+        </section>
+    </div>
 </x-filament-widgets::widget>

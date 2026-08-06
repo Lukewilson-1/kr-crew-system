@@ -60,11 +60,7 @@ class AdminPanelProvider extends PanelProvider
 
             ->widgets([
                 Widgets\AccountWidget::class,
-                \App\Filament\Widgets\StatsOverview::class,
-                \App\Filament\Widgets\CompactStatsWidget::class,
-                \App\Filament\Widgets\CrewDepotChartWidget::class,
-                \App\Filament\Widgets\TimelineWidget::class,
-                \App\Filament\Widgets\ReportsActivityWidget::class,
+                \App\Filament\Widgets\CrewOperationsDashboardWidget::class,
             ])
 
             ->middleware([

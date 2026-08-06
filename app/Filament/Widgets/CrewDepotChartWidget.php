@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class CrewDepotChartWidget extends ChartWidget
 {
+    protected static bool $isDiscovered = false;
+
     protected ?string $heading = 'Crew by Depot';
     protected int | string | array $columnSpan = ['sm' => 1, 'lg' => 2];
 

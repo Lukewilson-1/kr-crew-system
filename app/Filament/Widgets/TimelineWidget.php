@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 
 class TimelineWidget extends Widget
 {
+    protected static bool $isDiscovered = false;
+
     protected string $view = 'filament.widgets.timeline-widget';
 
     protected int | string | array $columnSpan = 1;

@@ -1266,16 +1266,14 @@ function goPage(p){
     const titles={dashboard:'Dashboard',roster:'Crew Roster',rest:'Rest Countdowns',monthly:'Monthly View',reports:'Reports'};
     document.getElementById('phTitle').textContent=titles[p]||p;
     document.title = `KR Crew System - ${titles[p]||p}`;
-    // Try to lazy-load a small page module for faster UX
-    const moduleMap = {dashboard:'/js/pages/dashboard.js', roster:'/js/pages/roster.js', rest:'/js/pages/rest.js', monthly:'/js/pages/monthly.js', reports:'/js/pages/reports.js'};
+    // Use the already-loaded page module map to avoid per-navigation network fetches.
     try{
-      if(moduleMap[p]){
-        const mod = await import(moduleMap[p]);
-        if(mod && typeof mod.init === 'function'){
-          await mod.init();
-          persistSession();
-          return;
-        }
+      const { getPageModule } = await import('./pageModules.mjs');
+      const mod = getPageModule(p);
+      if(mod && typeof mod.init === 'function'){
+        await mod.init();
+        persistSession();
+        return;
       }
     }catch(err){console.warn('Page module load failed',err);}
     try{ refreshPage(); }catch(err){ console.warn('refreshPage failed',err); }

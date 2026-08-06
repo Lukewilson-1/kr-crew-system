@@ -1,16 +1,25 @@
 {
+  "public/js/pageModules.mjs": {
+    "file": "assets/pageModules-CJKmCe_0.js",
+    "name": "pageModules",
+    "src": "public/js/pageModules.mjs",
+    "isDynamicEntry": true
+  },
   "resources/css/app.css": {
-    "file": "assets/app-gRA0qlpR.css",
+    "file": "assets/app-Df0c3nwv.css",
     "src": "resources/css/app.css",
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-BYBvT6ar.js",
+    "file": "assets/app-BWnXKcc9.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
+    "dynamicImports": [
+      "public/js/pageModules.mjs"
+    ],
     "css": [
-      "assets/app-gRA0qlpR.css"
+      "assets/app-Df0c3nwv.css"
     ]
   }
 }

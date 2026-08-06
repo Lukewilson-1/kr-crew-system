@@ -7,6 +7,14 @@ const DIRECT_META_COLLECTIONS = new Set(['depotMeta', 'statusMeta', 'trainTypeMe
 export const db = { provider: 'mysql' };
 export let demoMode = false;
 
+let adminMetaCache = null;
+let adminMetaPromise = null;
+
+function invalidateAdminMetaCache() {
+  adminMetaCache = null;
+  adminMetaPromise = null;
+}
+
 export function setDemoMode(value) {
   demoMode = false;
   return value;
@@ -73,10 +81,26 @@ function createQuerySnapshot(rows) {
   };
 }
 
-async function fetchAdminMeta() {
-  const resp = await fetch(ADMIN_META_ENDPOINT, { cache: 'no-store' });
-  if (!resp.ok) throw new Error(`Admin meta fetch failed (${resp.status})`);
-  return resp.json();
+async function fetchAdminMeta(forceRefresh = false) {
+  if (!forceRefresh && adminMetaCache) {
+    return adminMetaCache;
+  }
+
+  if (!forceRefresh && adminMetaPromise) {
+    return adminMetaPromise;
+  }
+
+  adminMetaPromise = (async () => {
+    const resp = await fetch(ADMIN_META_ENDPOINT, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`Admin meta fetch failed (${resp.status})`);
+    const data = await resp.json();
+    adminMetaCache = data;
+    return data;
+  })().finally(() => {
+    adminMetaPromise = null;
+  });
+
+  return adminMetaPromise;
 }
 
 async function fetchDirectMetaCollection(collectionName) {
@@ -109,11 +133,11 @@ async function loadCollection(source) {
   }
 
   if (isMetaCollection(source)) {
+    const data = await fetchAdminMeta();
     if (DIRECT_META_COLLECTIONS.has(source.name)) {
-      return fetchDirectMetaCollection(source.name);
+      return Array.isArray(data[source.name]) ? data[source.name] : [];
     }
 
-    const data = await fetchAdminMeta();
     return Array.isArray(data[source.name]) ? data[source.name] : [];
   }
 
@@ -149,8 +173,9 @@ export async function getDoc(docRef) {
   }
 
   if (DIRECT_META_COLLECTIONS.has(docRef.collectionName)) {
-    const rows = await fetchDirectMetaCollection(docRef.collectionName);
-    const row = Array.isArray(rows) ? rows.find(item => String(item.id) === String(docRef.id)) : null;
+    const data = await fetchAdminMeta();
+    const rows = Array.isArray(data[docRef.collectionName]) ? data[docRef.collectionName] : [];
+    const row = rows.find(item => String(item.id) === String(docRef.id));
     return row ? createDocSnapshot(docRef.id, row) : createEmptyDocSnapshot();
   }
 
@@ -263,7 +288,9 @@ export async function setDoc(docRef, payload, options = {}) {
       }
     }
 
-    return saveDirectMetaRecord(docRef.collectionName, docRef.id, next);
+    const result = await saveDirectMetaRecord(docRef.collectionName, docRef.id, next);
+    invalidateAdminMetaCache();
+    return result;
   }
 
   if (options?.merge) {
@@ -273,7 +300,9 @@ export async function setDoc(docRef, payload, options = {}) {
     }
   }
 
-  return saveMetaRecord(docRef.collectionName, docRef.id, next);
+  const result = await saveMetaRecord(docRef.collectionName, docRef.id, next);
+  invalidateAdminMetaCache();
+  return result;
 }
 
 export async function deleteDoc(docRef) {
@@ -282,10 +311,14 @@ export async function deleteDoc(docRef) {
   }
 
   if (DIRECT_META_COLLECTIONS.has(docRef.collectionName)) {
-    return deleteDirectMetaRecord(docRef.collectionName, docRef.id);
+    const result = await deleteDirectMetaRecord(docRef.collectionName, docRef.id);
+    invalidateAdminMetaCache();
+    return result;
   }
 
-  return deleteMetaRecord(docRef.collectionName, docRef.id);
+  const result = await deleteMetaRecord(docRef.collectionName, docRef.id);
+  invalidateAdminMetaCache();
+  return result;
 }
 
 export function writeBatch() {

@@ -50,6 +50,7 @@ return new class extends Migration
                 ['status_code' => 'R', 'status_label' => 'Resting', 'sort_order' => 300, 'is_terminal' => false, 'metadata' => json_encode(['bg' => '#F3F5FF', 'fg' => '#4A148C', 'active' => true])],
                 ['status_code' => 'L', 'status_label' => 'Leave', 'sort_order' => 400, 'is_terminal' => false, 'metadata' => json_encode(['bg' => '#FFF3E0', 'fg' => '#E65100', 'active' => true])],
                 ['status_code' => 'SK', 'status_label' => 'Sick', 'sort_order' => 500, 'is_terminal' => false, 'metadata' => json_encode(['bg' => '#FFEBEE', 'fg' => '#B71C1C', 'active' => true])],
+                ['status_code' => 'ABS', 'status_label' => 'Absent', 'sort_order' => 550, 'is_terminal' => false, 'metadata' => json_encode(['bg' => '#FEF2F2', 'fg' => '#991B1B', 'active' => true])],
                 ['status_code' => 'T', 'status_label' => 'Training', 'sort_order' => 600, 'is_terminal' => false, 'metadata' => json_encode(['bg' => '#E0F2F1', 'fg' => '#00695C', 'active' => true])],
                 ['status_code' => 'NTB', 'status_label' => 'NTB', 'sort_order' => 700, 'is_terminal' => false, 'metadata' => json_encode(['bg' => '#ECEFF1', 'fg' => '#37474F', 'active' => true])],
                 ['status_code' => 'TO', 'status_label' => 'Trip Off', 'sort_order' => 800, 'is_terminal' => false, 'metadata' => json_encode(['bg' => '#FCE4EC', 'fg' => '#AD1457', 'active' => true])],

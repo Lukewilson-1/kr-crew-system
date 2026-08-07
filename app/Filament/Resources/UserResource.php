@@ -9,7 +9,6 @@ use App\Permission;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\Hash;
 use Filament\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -65,16 +64,8 @@ class UserResource extends Resource
                 ->password()
                 ->revealable()
                 ->maxLength(255)
-                ->helperText('Leave blank to keep the existing password. You can view or replace it here.')
-                ->dehydrated(fn ($state) => filled($state))
-                ->dehydrateStateUsing(fn (?string $state) => $state ? Hash::make($state) : null),
-
-            Forms\Components\TextInput::make('pw')
-                ->label('Password (raw / legacy)')
-                ->password()
-                ->revealable()
-                ->maxLength(255)
-                ->helperText('Optional legacy field. Leave blank to keep the existing stored hash.'),
+                ->helperText('Leave blank to keep the existing password.')
+                ->dehydrated(fn ($state) => filled($state)),
 
             Forms\Components\Toggle::make('is_hq')
                 ->label('HQ User'),

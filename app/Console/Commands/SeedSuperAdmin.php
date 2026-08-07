@@ -34,6 +34,8 @@ class SeedSuperAdmin extends Command
             return self::FAILURE;
         }
 
+        $passwordHash = Hash::make($password);
+
         DB::table('admin_meta')->updateOrInsert(
             ['collection' => 'users', 'record_id' => $username],
             [
@@ -42,7 +44,7 @@ class SeedSuperAdmin extends Command
                     'name' => 'Super Admin',
                     'depot' => 'HQ',
                     'role' => 'super_admin',
-                    'pw' => Hash::make($password),
+                    'password' => $passwordHash,
                     'isHQ' => true,
                     'isSuperAdmin' => true,
                 ]),
@@ -59,7 +61,8 @@ class SeedSuperAdmin extends Command
                     'depot_code' => 'HQ',
                     'role_code' => 'super_admin',
                     'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports']),
-                    'pw' => Hash::make($password),
+                    'password' => $passwordHash,
+                    'pw' => $passwordHash,
                     'is_hq' => true,
                     'is_super_admin' => true,
                     'is_active' => true,

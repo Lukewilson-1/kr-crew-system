@@ -34,6 +34,7 @@ class DepotUserSeeder extends Seeder
 
         foreach ($users as $u) {
             $password = $defaultPassword ?: strtolower($u['depot_code']) . 'shred';
+            $passwordHash = Hash::make($password);
 
             DB::table('admin_meta')->updateOrInsert(
                 ['collection' => 'users', 'record_id' => $u['username']],
@@ -43,7 +44,7 @@ class DepotUserSeeder extends Seeder
                         'name' => $u['name'],
                         'depot' => $u['depot_code'],
                         'role' => $u['role_code'],
-                        'pw' => Hash::make($password),
+                        'password' => $passwordHash,
                         'isHQ' => false,
                         'isSuperAdmin' => false,
                     ]),
@@ -51,8 +52,6 @@ class DepotUserSeeder extends Seeder
                     'created_at' => now(),
                 ]
             );
-
-            $password = $defaultPassword ?: strtolower($u['depot_code']) . 'shred';
 
             if (Schema::hasTable('users')) {
                 DB::table('users')->updateOrInsert(
@@ -63,7 +62,8 @@ class DepotUserSeeder extends Seeder
                         'depot_code' => $u['depot_code'],
                         'role_code' => $u['role_code'],
                         'permissions' => json_encode([]),
-                        'pw' => Hash::make($password),
+                        'password' => $passwordHash,
+                        'pw' => $passwordHash,
                         'is_hq' => false,
                         'is_super_admin' => false,
                         'is_active' => true,

@@ -83,7 +83,7 @@ function selectMonthlyCrewDay(depot,id,day){
 }
 
 function buildMonthlyTotals(allCrew, maxDay){
-  const totals = {BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
+  const totals = {BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
   allCrew.forEach(c=>{
     for(let d=1;d<=maxDay;d++){
       const code = getFinalStatusForDay(c,d) || '';
@@ -94,7 +94,7 @@ function buildMonthlyTotals(allCrew, maxDay){
 }
 
 function buildDayTotals(allCrew, day){
-  const totals = {BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
+  const totals = {BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
   allCrew.forEach(c=>{
     const code = getFinalStatusForDay(c,day) || '';
     if (totals[code] !== undefined) totals[code]++;
@@ -662,6 +662,7 @@ async function seedStatusMetaIfEmpty(){
     { id: 'R', label: 'Resting', bg: '#F3F5FF', fg: '#4A148C', order: 300, active: true },
     { id: 'L', label: 'Leave', bg: '#FFF3E0', fg: '#E65100', order: 400, active: true },
     { id: 'SK', label: 'Sick', bg: '#FFEBEE', fg: '#B71C1C', order: 500, active: true },
+    { id: 'ABS', label: 'Absent', bg: '#FEF2F2', fg: '#991B1B', order: 550, active: true },
     { id: 'T', label: 'Training', bg: '#E0F2F1', fg: '#00695C', order: 600, active: true },
     { id: 'NTB', label: 'NTB', bg: '#ECEFF1', fg: '#37474F', order: 700, active: true },
     { id: 'TO', label: 'Trip Off', bg: '#FCE4EC', fg: '#AD1457', order: 800, active: true },
@@ -1332,7 +1333,7 @@ function renderDashboard(){
   safeSetText('phSub', `Live booking board · ${MONTH_NAME}`);
   safeSetInner('phActions', '');
 
-  let html=kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]]);
+  let html=kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['ABS','Absent',c.ABS||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]]);
 
   const restingDrivers=all.filter(x=>x.status==='R'&&isDesignationRestEligible(x.grade)&&restSecondsLeft(x)!==null&&restSecondsLeft(x)<3600);
   if(restingDrivers.length>0){
@@ -1345,12 +1346,12 @@ function renderDashboard(){
     html+=`<div class="sec-hdr"><span class="sec-title">Depot overview</span></div><div class="depot-grid">`;
     getActiveDepots().forEach(depot=>{
       const crew=Object.values(state[depot]||[]);const dc=cts(crew);const tot=crew.length||1;
-      const col=DEPOT_COLORS[depot];const hasSick=(dc.SK||0)>0||(dc.NTB||0)>0;
+      const col=DEPOT_COLORS[depot];const hasIssue=(dc.SK||0)>0||(dc.ABS||0)>0||(dc.NTB||0)>0;
       const lastUpd=crew.length?fmtLastUpd(crew.reduce((a,b)=>(a.lastUpdated||'')>(b.lastUpdated||'')?a:b).lastUpdated):'-';
       html+=`<div class="depot-card" onclick="setHqDepotView('${depot}');goPage('roster')">
-        <div class="dc-hdr"><span class="dc-name" style="color:${col}">${depot}</span><div class="dc-alert-dot" style="background:${hasSick?'#E53935':'#43A047'}"></div></div>
+        <div class="dc-hdr"><span class="dc-name" style="color:${col}">${depot}</span><div class="dc-alert-dot" style="background:${hasIssue?'#E53935':'#43A047'}"></div></div>
         <div class="dc-bars">`;
-      [['BK','Booked',DEPOT_COLORS.Changamwe],['SB','Standby','#1565C0'],['R','Resting','#6A1B9A'],['L','Leave','#E65100'],['SK','Sick','#B71C1C'],['T','Training','#00695C'],['NTB','NTB','#37474F']].forEach(([code,lbl,col2])=>{
+      [['BK','Booked',DEPOT_COLORS.Changamwe],['SB','Standby','#1565C0'],['R','Resting','#6A1B9A'],['L','Leave','#E65100'],['SK','Sick','#B71C1C'],['ABS','Absent','#991B1B'],['T','Training','#00695C'],['NTB','NTB','#37474F']].forEach(([code,lbl,col2])=>{
         const n=dc[code]||0;const pct=Math.round((n/tot)*100);
         html+=`<div class="dc-bar-row"><span class="dc-bar-lbl">${lbl}</span><div class="dc-bar-track"><div class="dc-bar-fill" style="width:${pct}%;background:${col2}"></div></div><span class="dc-bar-val">${n}</span></div>`;
       });
@@ -1380,7 +1381,7 @@ function renderRoster(){
       ${getActiveDepots().map(d=>`<button class="pill" onclick="setHqDepotView('${d}')" style="color:${DEPOT_COLORS[d]}">${d}</button>`).join('')}
     </div>`;
   }
-  html+=kpiHtml([['TOT','Total',allCrew.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]],'repeat(auto-fit,minmax(80px,1fr))');
+  html+=kpiHtml([['TOT','Total',allCrew.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','Leave',c.L||0],['SK','Sick',c.SK||0],['ABS','Absent',c.ABS||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]],'repeat(auto-fit,minmax(80px,1fr))');
   const showDepot=currentUser.isHQ&&hqDepotView==='all';
   html+=crewTableHtml(hqDepotView==='all'&&currentUser.isHQ?'all':depots[0],showDepot,true);
   safeSetInner('pbody', html);
@@ -1579,13 +1580,13 @@ function renderMonthly(){
     const isSelected=d===selectedDay;
     html+=`<th class="${isSelected?'selected-header':''}" style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}" onclick="selectMonthDay(${d})"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;
   });
-  html+=`<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3F2F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>`;
+  html+=`<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3F2F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#FEF2F2;color:#991B1B">ABS</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>`;
 
   allCrew.forEach(c=>{
     const activeRow = selectedCrew && selectedCrew.id===c.id && selectedCrew.depot===c.depot;
     html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name">${c.name}</td>`;
     if(showDepot)html+=`<td class="mc-dep" style="color:${DEPOT_COLORS[c.depot]};font-weight:700">${c.depot}</td>`;
-    const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
+    const sm={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
     days.forEach(d=>{
       const daySegments = getDaySegments(c, d);
       const code=getFinalStatusForDay(c,d)||'';
@@ -1603,7 +1604,7 @@ function renderMonthly(){
       const edAtt=`class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" title="${daySegments.length>1?'Multiple statuses - click to view':'Click to view'}" onclick="${cellClick}"`;
       html+=`<td ${edAtt}>${renderMonthDayCell(daySegments, code)}</td>`;
     });
-    html+=`<td class="mc-sBK">${sm.BK}</td><td class="mc-sSB">${sm.SB}</td><td class="mc-sR">${sm.R}</td><td class="mc-sL">${sm.L}</td><td class="mc-sSK">${sm.SK}</td><td class="mc-sNTB">${sm.NTB}</td><td class="mc-sTO">${sm.TO}</td></tr>`;
+    html+=`<td class="mc-sBK">${sm.BK}</td><td class="mc-sSB">${sm.SB}</td><td class="mc-sR">${sm.R}</td><td class="mc-sL">${sm.L}</td><td class="mc-sSK">${sm.SK}</td><td class="mc-sABS">${sm.ABS}</td><td class="mc-sNTB">${sm.NTB}</td><td class="mc-sTO">${sm.TO}</td></tr>`;
   });
 
   html+=`<tr style="background:#0F172A"><td class="mc-name" style="color:#E0E0E0;font-weight:700;font-size:10px">BOOKED / DAY</td>${showDepot?'<td style="background:#0F172A"></td>':''}`;
@@ -1669,7 +1670,7 @@ function renderReports(){
   </div>
   <hr class="divider">
   <div class="sec-hdr"><span class="sec-title">${MONTH_NAME} - snapshot</span></div>
-  ${kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]])}`);
+  ${kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['ABS','Absent',c.ABS||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]])}`);
   updateReportSummary();
 }
 
@@ -1969,17 +1970,17 @@ async function exportMonthlyCSV(monthKey=MONTH_KEY){
   const maxDay = monthKey===MONTH_KEY ? CD : Math.max(...crew.map(c=>Object.keys(buildMonthlyFromStatusSegments(c)).length), 0);
   let hdr='ID,Name,Designation,Depot';
   for(let i=1;i<=maxDay;i++) hdr+=`,${i}`;
-  hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
+  hdr+=',BK,SB,R,L,SK,ABS,T,NTB,TO\n';
   let csv=hdr;
   crew.sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
     let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;
-    const counts={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};
+    const counts={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
     for(let i=1;i<=maxDay;i++){
       const code=getDaySegmentCode(c,i)||'';
       if(counts[code]!==undefined) counts[code]++;
       row+=`,"${code}"`;
     }
-    row+=`,`+counts.BK+','+counts.SB+','+counts.R+','+counts.L+','+counts.SK+','+counts.T+','+counts.NTB+','+counts.TO+'\n';
+    row+=`,`+counts.BK+','+counts.SB+','+counts.R+','+counts.L+','+counts.SK+','+counts.ABS+','+counts.T+','+counts.NTB+','+counts.TO+'\n';
     csv+=row;
   });
   dlCSV(csv,`KR_Monthly_${monthKey.replace('-','_')}.csv`);
@@ -2502,7 +2503,7 @@ async function renderAdmin(){
       <input value="${user.depot||''}" data-admin-user-depot="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot" ${disabled}>
       <select data-admin-user-role="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" ${disabled}>${roleOptions}</select>
       <input value="${permissionsValue}" data-admin-user-permissions="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Permissions comma-separated" ${disabled}>
-      <input type="password" value="${user.pw||''}" data-admin-user-pw="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Password" ${disabled}>
+      <input type="password" value="" data-admin-user-password="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="New password" autocomplete="new-password" ${disabled}>
       ${locked?'<span style="font-size:11px;color:var(--text2)">Full access (locked)</span>':`<button class="btn btn-primary btn-sm" onclick="saveUserAccount('${user.username}')">Save</button>`}
       <label style="grid-column:1 / -1;font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${user.isHQ?'checked':''} data-admin-user-hq="${user.username}" ${disabled}> HQ / global access</label>
     </div>`;
@@ -2514,7 +2515,7 @@ async function renderAdmin(){
       <input value="HQ" data-admin-user-depot="newUser" class="admin-field" placeholder="Depot">
       <select data-admin-user-role="newUser" class="admin-field">${getRoleSelectOptions('booking_officer')}</select>
       <input value="" data-admin-user-permissions="newUser" class="admin-field" placeholder="Permissions comma-separated">
-      <input type="password" value="" data-admin-user-pw="newUser" class="admin-field" placeholder="Password">
+      <input type="password" value="" data-admin-user-password="newUser" class="admin-field" placeholder="Password" autocomplete="new-password">
       <button class="btn btn-primary btn-sm" onclick="saveUserAccount('newUser')">Add user</button>
       <label style="grid-column:1 / -1;font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" data-admin-user-hq="newUser"> HQ / global access</label>
     </div>`;
@@ -2907,7 +2908,7 @@ async function saveUserAccount(username){
   const depotEl=document.querySelector(`[data-admin-user-depot="${username}"]`);
   const roleEl=document.querySelector(`[data-admin-user-role="${username}"]`);
   const permissionsEl=document.querySelector(`[data-admin-user-permissions="${username}"]`);
-  const pwEl=document.querySelector(`[data-admin-user-pw="${username}"]`);
+  const passwordEl=document.querySelector(`[data-admin-user-password="${username}"]`);
   const hqEl=document.querySelector(`[data-admin-user-hq="${username}"]`);
   const role=roleEl?.value||'booking_officer';
   const permissions=String(permissionsEl?.value||'').split(',').map(item=>item.trim()).filter(Boolean);
@@ -2918,10 +2919,17 @@ async function saveUserAccount(username){
     depot:(depotEl?.value||'HQ').trim(),
     role,
     permissions,
-    pw:(pwEl?.value||'').trim(),
     isHQ,
     isSuperAdmin:role==='super_admin',
   };
+  const password=(passwordEl?.value||'').trim();
+  if(username==='newUser' && !password){
+    alert('Password is required for a new user.');
+    return;
+  }
+  if(password){
+    payload.password=password;
+  }
   if(!db){
     try{
       await saveLocalAdminRecord('users',targetUsername,payload);
@@ -3309,14 +3317,14 @@ function exportCSV(){
 }
 function exportMonthlyCSVLegacy(){
   const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
-  let hdr='ID,Name,Designation,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,T,NTB,TO\n';
+  let hdr='ID,Name,Designation,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,ABS,T,NTB,TO\n';
   let csv=hdr;
-  all.forEach(c=>{let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;const sm={BK:0,SB:0,R:0,L:0,SK:0,T:0,NTB:0,TO:0};for(let i=1;i<=DAYS_IN_MON;i++){const code=getDaySegmentCode(c,i)||'';if(sm[code]!==undefined)sm[code]++;row+=`,"${code}"`;}row+=`,${sm.BK},${sm.SB},${sm.R},${sm.L},${sm.SK},${sm.T},${sm.NTB},${sm.TO}`;csv+=row+'\n';});
+  all.forEach(c=>{let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;const sm={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};for(let i=1;i<=DAYS_IN_MON;i++){const code=getDaySegmentCode(c,i)||'';if(sm[code]!==undefined)sm[code]++;row+=`,"${code}"`;}row+=`,${sm.BK},${sm.SB},${sm.R},${sm.L},${sm.SK},${sm.ABS},${sm.T},${sm.NTB},${sm.TO}`;csv+=row+'\n';});
   dlCSV(csv,`KR_Monthly_${MONTH_NAME.replace(' ','_')}.csv`);
 }
 function exportAbsenceCSV(){
-  const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).filter(c=>['SK','L','NTB'].includes(c.status));
-  let csv='ID,Name,Designation,Depot,Status,NTB Reason/Notes,Last Updated\n';
+  const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).filter(c=>['SK','L','ABS','NTB'].includes(c.status));
+  let csv='ID,Name,Designation,Depot,Status,Reason/Notes,Last Updated\n';
   all.forEach(c=>{csv+=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${STATUS_META[c.status]?.label}","${(c.notes||'').replace(/"/g,"'")}","${c.lastUpdated||''}"\n`;});
   dlCSV(csv,`KR_Absences_${todayStr()}.csv`);
 }

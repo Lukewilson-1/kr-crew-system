@@ -49,7 +49,7 @@ class ReportDefinitionSeeder extends Seeder
             [
                 'name' => 'Absence / NTB Report',
                 'slug' => 'absence-ntb-report',
-                'description' => 'Export staff who are currently on leave, sick, or marked NTB.',
+                'description' => 'Export staff currently on leave, sick, absent, or marked NTB.',
                 'icon' => '⚠️',
                 'type' => 'export',
                 'route_name' => 'reports.absence',

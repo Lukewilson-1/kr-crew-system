@@ -122,10 +122,9 @@ class User extends Authenticatable implements FilamentUser
 
     public function passwordMatches(string $plainPassword): bool
     {
-        $candidateHashes = array_filter([
-            (string) ($this->getAttribute('password') ?? ''),
-            (string) ($this->getAttribute('pw') ?? ''),
-        ]);
+        $canonicalHash = (string) ($this->getAttribute('password') ?? '');
+        $legacyHash = (string) ($this->getAttribute('pw') ?? '');
+        $candidateHashes = array_values(array_filter([$canonicalHash, $legacyHash]));
 
         foreach ($candidateHashes as $stored) {
             if ($stored === '') {
@@ -133,11 +132,17 @@ class User extends Authenticatable implements FilamentUser
             }
 
             if (Hash::check($plainPassword, $stored)) {
+                if ($canonicalHash === '' && $legacyHash !== '') {
+                    $this->forceFill(['password' => $stored, 'pw' => $stored]);
+                    $this->saveQuietly();
+                }
+
                 return true;
             }
 
             if ($stored === $plainPassword) {
-                $this->forceFill(['password' => Hash::make($plainPassword), 'pw' => Hash::make($plainPassword)]);
+                $hashed = Hash::make($plainPassword);
+                $this->forceFill(['password' => $hashed, 'pw' => $hashed]);
                 $this->saveQuietly();
 
                 return true;
@@ -153,8 +158,9 @@ class User extends Authenticatable implements FilamentUser
             return;
         }
 
-        $this->attributes['password'] = Hash::make($value);
-        $this->attributes['pw'] = Hash::make($value);
+        $hashed = $this->isPasswordHash($value) ? $value : Hash::make($value);
+        $this->attributes['password'] = $hashed;
+        $this->attributes['pw'] = $hashed;
     }
 
     public function setPwAttribute(?string $value): void
@@ -163,16 +169,23 @@ class User extends Authenticatable implements FilamentUser
             return;
         }
 
-        if (str_starts_with($value, '$2y$') || str_starts_with($value, '$argon2i$') || str_starts_with($value, '$argon2id$')) {
+        if ($this->isPasswordHash($value)) {
             $this->attributes['pw'] = $value;
-            $this->attributes['password'] = $value;
+            $this->attributes['password'] ??= $value;
 
             return;
         }
 
         $hashed = Hash::make($value);
         $this->attributes['pw'] = $hashed;
-        $this->attributes['password'] = $hashed;
+        $this->attributes['password'] ??= $hashed;
+    }
+
+    private function isPasswordHash(string $value): bool
+    {
+        return str_starts_with($value, '$2y$')
+            || str_starts_with($value, '$argon2i$')
+            || str_starts_with($value, '$argon2id$');
     }
 
     public function getRememberTokenName(): ?string

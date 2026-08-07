@@ -37,6 +37,8 @@ class AdminMetaController extends Controller
             return;
         }
 
+        $passwordHash = $this->normalizePassword($password);
+
         DB::table('admin_meta')->updateOrInsert(
             ['collection' => 'users', 'record_id' => $username],
             [
@@ -45,7 +47,7 @@ class AdminMetaController extends Controller
                     'name' => 'Super Admin',
                     'depot' => 'HQ',
                     'role' => 'super_admin',
-                    'pw' => Hash::make($password),
+                    'password' => $passwordHash,
                     'isHQ' => true,
                     'isSuperAdmin' => true,
                 ]),
@@ -62,7 +64,8 @@ class AdminMetaController extends Controller
                     'depot_code' => 'HQ',
                     'role_code' => 'super_admin',
                     'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports']),
-                    'pw' => $this->normalizePassword($password),
+                    'password' => $passwordHash,
+                    'pw' => $passwordHash,
                     'is_hq' => true,
                     'is_super_admin' => true,
                     'is_active' => true,
@@ -168,7 +171,6 @@ class AdminMetaController extends Controller
                 'depot' => $row->depot_code,
                 'role' => $row->role_code,
                 'permissions' => json_decode($row->permissions ?? '[]', true) ?: [],
-                'pw' => $row->pw,
                 'isHQ' => (bool) $row->is_hq,
                 'isSuperAdmin' => (bool) $row->is_super_admin,
                 'is_active' => (bool) $row->is_active,
@@ -377,8 +379,10 @@ class AdminMetaController extends Controller
                 'created_at' => now(),
             ];
 
-            if (isset($payload['pw']) && trim((string) $payload['pw']) !== '') {
-                $updateData['pw'] = $this->normalizePassword((string) $payload['pw']);
+            if (isset($payload['password']) && trim((string) $payload['password']) !== '') {
+                $passwordHash = $this->normalizePassword((string) $payload['password']);
+                $updateData['password'] = $passwordHash;
+                $updateData['pw'] = $passwordHash;
             }
 
             DB::table($table)->updateOrInsert(
@@ -523,7 +527,8 @@ class AdminMetaController extends Controller
                     'isHQ' => (bool) $row->is_hq,
                     'isSuperAdmin' => (bool) $row->is_super_admin,
                     'is_active' => (bool) $row->is_active,
-                    'pw' => $row->pw,
+                    'password' => $row->password ?? '',
+                    'legacy_pw' => $row->pw ?? '',
                 ];
             }
         }
@@ -540,7 +545,8 @@ class AdminMetaController extends Controller
                     'isHQ' => !empty($payload['isHQ']),
                     'isSuperAdmin' => !empty($payload['isSuperAdmin']),
                     'is_active' => $payload['is_active'] ?? true,
-                    'pw' => $payload['pw'] ?? '',
+                    'password' => $payload['password'] ?? '',
+                    'legacy_pw' => $payload['pw'] ?? '',
                 ];
             }
         }
@@ -553,7 +559,7 @@ class AdminMetaController extends Controller
             return response()->json(['error' => 'Account is inactive.'], 403);
         }
 
-        $hash = $user['pw'] ?? '';
+        $hash = $user['password'] ?: ($user['legacy_pw'] ?? '');
         $valid = $hash !== '' && Hash::check($password, $hash);
         if (!$valid && $hash === $password) {
             $valid = true;
@@ -563,7 +569,18 @@ class AdminMetaController extends Controller
             return response()->json(['error' => 'Invalid credentials.'], 401);
         }
 
-        unset($user['pw']);
+        if ((($user['password'] ?? '') === '' && ($user['legacy_pw'] ?? '') !== '') || $hash === $password) {
+            $passwordHash = $hash === $password ? Hash::make($password) : $hash;
+            if (Schema::hasTable('users')) {
+                DB::table('users')->where('username', $username)->update([
+                    'password' => $passwordHash,
+                    'pw' => $passwordHash,
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        unset($user['password'], $user['legacy_pw']);
         return response()->json($user);
     }
 

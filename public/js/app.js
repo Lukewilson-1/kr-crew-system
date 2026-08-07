@@ -1,6 +1,6 @@
 import { initBackend, loadBackendConfig, db, demoMode, setDemoMode } from './mysql.js';
 import { getRestHours, restSecondsLeft, fmtCountdown, cdClass, getAllCrew, cts, initials, fmtTime, todayStr, fmtLastUpd, kpiHtml, dlCSV } from './helpers.js';
-import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, getDesignationRegistry, isDesignationRestEligible, normalizeDesignation, setDesignationRegistry, setDepotConfig, setStatusConfig, setTrainTypeConfig, setShiftConfig } from './constants.js';
+import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, getDesignationRegistry, isDesignationRestEligible, normalizeDesignation, normalizeDesignationKey, setDesignationRegistry, setDepotConfig, setStatusConfig, setTrainTypeConfig, setShiftConfig } from './constants.js';
 import { collection, query, where, onSnapshot, getDocs, getDoc, doc, setDoc, deleteDoc, writeBatch, serverTimestamp } from './mysql.js';
 /* ════════ CONSTANTS ════════════════════════════════════════════════════════ */
 const HOME_REST_HOURS=12;
@@ -14,10 +14,11 @@ const REPORT_TYPES=[
   {id:'print',label:'Printable register'},
 ];
 const DEFAULT_DESIGNATION_DEFINITIONS=[
-  {id:'driver',label:'Driver',aliases:['locomotive_driver','train_driver'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:10},
+  {id:'locomotive_driver',label:'Locomotive Driver',aliases:['driver','train_driver'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:10},
   {id:'guard',label:'Guard',aliases:['train_guard'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:20},
   {id:'conductor',label:'Conductor',aliases:['conductor'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:30},
-  {id:'shunter',label:'Shunter',aliases:['shunting'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:40},
+  {id:'shunter_driver',label:'Shunter Driver',aliases:['shunter','shunting'],restEligible:false,canLogin:true,isCrewMember:true,isUser:false,order:40},
+  {id:'lio',label:'LIO',aliases:['loco_inspection_officer'],restEligible:false,canLogin:true,isCrewMember:true,isUser:false,order:45},
   {id:'inspector',label:'Inspector',aliases:['inspector'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:50},
   {id:'station_officer',label:'Station Officer',aliases:['station officer'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:60},
   {id:'booking_officer',label:'Booking Officer',aliases:['booking officer'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:70},
@@ -324,6 +325,8 @@ function buildShiftOptions(selected=''){
 function populateShiftSelects(selected=''){
   const shiftSelect=document.getElementById('mShift');
   if(shiftSelect) shiftSelect.innerHTML = buildShiftOptions(selected);
+  const addShiftSelect=document.getElementById('addShift');
+  if(addShiftSelect) addShiftSelect.innerHTML = buildShiftOptions(selected);
 }
 
 function getTrainTypeBadgeStyle(trainType){
@@ -408,6 +411,11 @@ function isRestAllowedForGrade(grade){
   return isDesignationRestEligible(grade);
 }
 
+function isForcedNonRestDesignation(idOrLabel){
+  const key = normalizeDesignationKey(idOrLabel);
+  return key === 'shunter_driver' || key === 'shunter' || key === 'lio';
+}
+
 function updateStatusValidation(){
   const grade=currentModalGrade;
   const statusEl=document.getElementById('mStatus');
@@ -424,7 +432,7 @@ function updateStatusValidation(){
   if(restOption)restOption.disabled=!allowed;
   if(statusEl.value==='R' && !allowed){
     if(hintEl){
-      hintEl.textContent='Only locomotive driver designations may be placed in Resting. Please select Standby or another status.';
+      hintEl.textContent='This designation does not qualify for Resting. Use Stand By, Booked, shift work, or another status.';
       hintEl.style.display='block';
     }
     if(saveBtn)saveBtn.disabled=true;
@@ -839,7 +847,7 @@ function normalizeDesignationMetaRecord(docSnapOrData){
     id,
     label:String(data.label||id),
     aliases:Array.isArray(data.aliases)?data.aliases:data.aliases?String(data.aliases).split(',').map(v=>v.trim()).filter(Boolean):[],
-    restEligible:data.restEligible!==false,
+    restEligible:!isForcedNonRestDesignation(id) && !isForcedNonRestDesignation(data.label) && data.restEligible!==false,
     canLogin:data.canLogin!==false,
     isCrewMember:!!data.isCrewMember,
     isUser:!!data.isUser,
@@ -2728,7 +2736,7 @@ async function saveDesignationMetaRecord(designationId){
     id: nextId,
     label: (labelEl?.value||currentMeta.label||nextId).trim(),
     aliases: Array.isArray(currentMeta.aliases) ? currentMeta.aliases : [],
-    restEligible:!!restEl?.checked,
+    restEligible:!isForcedNonRestDesignation(nextId) && !isForcedNonRestDesignation(labelEl?.value) && !!restEl?.checked,
     canLogin:!!loginEl?.checked,
     isCrewMember:!!crewEl?.checked,
     isUser:!!userEl?.checked,
@@ -3139,6 +3147,7 @@ function openAddModal(){
   }
   populateDesignationSelect();
   populateTrainTypeSelect();
+  populateShiftSelects();
   switchAddTab('single');
   document.getElementById('addStatus').value='SB';
   document.getElementById('addModal').classList.add('open');
@@ -3183,10 +3192,10 @@ function normalizeCsvHeader(value){
 function downloadCrewUploadTemplate(){
   const depot = currentUser?.isHQ ? (hqDepotView !== 'all' ? hqDepotView : getActiveDepots()[0] || 'HQ') : currentUser?.depot || 'HQ';
   const csv = [
-    'Name,Staff Number,Designation,Depot,Route,Status,Train Type,Notes',
-    `"Ali Hassan","STAFF-001","locomotive_driver","${depot}","Mombasa-Nairobi","SB","Freight","Ready for mass upload"`,
-    `"Amina Njeri","STAFF-002","train_guard","${depot}","Nairobi-Kisumu","BK","Passenger","Booked example row"`,
-    `"Peter Ochieng","STAFF-003","shunter_driver","${depot}","Changamwe Yard","R","Shunting","Resting example row"`,
+    'Name,Staff Number,Designation,Depot,Route,Status,Train Type,Shift,Notes',
+    `"Ali Hassan","STAFF-001","locomotive_driver","${depot}","Mombasa-Nairobi","SB","Freight","Day shift","Ready for mass upload"`,
+    `"Amina Njeri","STAFF-002","train_guard","${depot}","Nairobi-Kisumu","BK","Passenger","Day shift","Booked example row"`,
+    `"Peter Ochieng","STAFF-003","shunter_driver","${depot}","Changamwe Yard","SB","Shunting","Day shift","Shift-work example row"`,
   ].join('\n');
   dlCSV(csv, 'KR_Crew_Upload_Template.csv');
 }
@@ -3211,7 +3220,7 @@ async function saveAddCrew(){
     const grade=document.getElementById('addGrade').value;
     const initStatus=document.getElementById('addStatus').value;
     if(initStatus==='R' && !isRestAllowedForGrade(grade)){
-      alert('Only locomotive driver designations may be added with Resting status. Please choose another status.');
+      alert('This designation does not qualify for Resting. Please choose another status.');
       return;
     }
   }
@@ -3237,9 +3246,14 @@ async function saveAddCrew(){
         const rowDepot=getBulkRowValue(parts, headerMap, ['depot'], 3, depot) || depot;
         const route=getBulkRowValue(parts, headerMap, ['route','assignment'], 4, '');
         const status=getBulkRowValue(parts, headerMap, ['status'], 5, 'SB') || 'SB';
+        if(status==='R' && !isRestAllowedForGrade(grade)){
+          setLog(`${name} skipped: ${grade} does not qualify for Resting.`);
+          continue;
+        }
         const trainType=getBulkRowValue(parts, headerMap, ['traintype','traintype'], 6, '');
-        const notes=getBulkRowValue(parts, headerMap, ['notes','note'], 7, '');
-        await addSingleCrew(rowDepot,name,grade,route,status,trainType,'',notes,staffNumber);
+        const shift=getBulkRowValue(parts, headerMap, ['shift'], 7, '');
+        const notes=getBulkRowValue(parts, headerMap, ['notes','note'], 8, '');
+        await addSingleCrew(rowDepot,name,grade,route,status,trainType,shift,notes,staffNumber);
         added++;
       }
       if(!added){alert('No valid crew rows were found. Each row requires a name.');return;}
@@ -3247,7 +3261,7 @@ async function saveAddCrew(){
     } else {
       const name=document.getElementById('addName').value.trim();
       if(!name){alert('Please enter a name.');return;}
-      await addSingleCrew(depot,name,document.getElementById('addGrade').value,document.getElementById('addRoute').value,document.getElementById('addStatus').value,'','',document.getElementById('addNotes')?.value||'',document.getElementById('addStaffNumber')?.value||'');
+      await addSingleCrew(depot,name,document.getElementById('addGrade').value,document.getElementById('addRoute').value,document.getElementById('addStatus').value,'',document.getElementById('addShift')?.value||'',document.getElementById('addNotes')?.value||'',document.getElementById('addStaffNumber')?.value||'');
       setLog(`${name} added to ${depot}.`);
     }
     setSyncStatus('ok','Saved');

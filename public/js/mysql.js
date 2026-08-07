@@ -2,7 +2,7 @@ const ADMIN_META_ENDPOINT = '/admin/meta';
 const DIRECT_META_ENDPOINT = '/mysql/meta';
 const DIRECT_USERS_ENDPOINT = '/mysql/users';
 const CREW_ENDPOINT = '/mysql/crew-view';
-const DIRECT_META_COLLECTIONS = new Set(['depotMeta', 'statusMeta', 'trainTypeMeta', 'shiftMeta', 'users', 'roles', 'permissions']);
+const DIRECT_META_COLLECTIONS = new Set(['depotMeta', 'designationMeta', 'statusMeta', 'trainTypeMeta', 'shiftMeta', 'users', 'roles', 'permissions']);
 
 export const db = { provider: 'mysql' };
 export let demoMode = false;

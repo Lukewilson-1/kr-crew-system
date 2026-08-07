@@ -306,6 +306,70 @@ class CrewDataController extends Controller
         return trim((string) $value);
     }
 
+    protected function normalizeDesignationKey(mixed $value): string
+    {
+        $key = strtolower($this->normalizeText($value));
+        $key = str_replace(["'", "\u{2019}"], '', $key);
+        $key = preg_replace('/[^a-z0-9]+/', '_', $key) ?: '';
+        return trim($key, '_');
+    }
+
+    protected function isDesignationRestEligible(mixed $designation): bool
+    {
+        $key = $this->normalizeDesignationKey($designation);
+        if ($key === '') {
+            return false;
+        }
+
+        if (in_array($key, ['shunter_driver', 'shunter', 'lio'], true)) {
+            return false;
+        }
+
+        if (! Schema::hasTable('designations')) {
+            return true;
+        }
+
+        $row = DB::table('designations')
+            ->whereRaw('LOWER(designation_code) = ?', [strtolower((string) $designation)])
+            ->orWhereRaw('LOWER(designation_name) = ?', [strtolower((string) $designation)])
+            ->first();
+
+        if (! $row) {
+            return true;
+        }
+
+        if ($this->normalizeDesignationKey($row->designation_code) === 'shunter_driver'
+            || $this->normalizeDesignationKey($row->designation_name) === 'shunter_driver'
+            || in_array($this->normalizeDesignationKey($row->designation_code), ['shunter', 'lio'], true)
+            || in_array($this->normalizeDesignationKey($row->designation_name), ['shunter', 'lio'], true)) {
+            return false;
+        }
+
+        $metadata = json_decode($row->metadata ?? '{}', true) ?: [];
+        return data_get($metadata, 'restEligible', true) !== false;
+    }
+
+    protected function payloadIncludesRestStatus(array $payload): bool
+    {
+        if (($payload['status'] ?? null) === 'R') {
+            return true;
+        }
+
+        foreach (($payload['status_segments'] ?? []) as $segment) {
+            if (($segment['status_code'] ?? null) === 'R') {
+                return true;
+            }
+        }
+
+        foreach (($payload['monthly'] ?? []) as $status) {
+            if ($status === 'R') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     protected function buildDisplayName(array $payload): string
     {
         $displayName = $this->normalizeText($payload['display_name'] ?? $payload['displayName'] ?? $payload['name'] ?? '');
@@ -791,6 +855,9 @@ class CrewDataController extends Controller
         $merged['monthKey'] = $merged['monthKey'] ?? $payload['monthKey'] ?? null;
         $merged['lastUpdated'] = $merged['lastUpdated'] ?? $payload['lastUpdated'] ?? now()->toIso8601String();
         $this->authorizeCrewDepot($request, (string) $merged['depot']);
+        if ($this->payloadIncludesRestStatus($merged) && ! $this->isDesignationRestEligible($merged['grade'] ?? '')) {
+            return response()->json(['error' => 'This designation does not qualify for Resting. Use shift work, Stand By, Booked, or another status.'], 422);
+        }
         $shift = trim((string) ($merged['shift'] ?? ''));
         unset($merged['shift'], $merged['shift_assignment']);
 

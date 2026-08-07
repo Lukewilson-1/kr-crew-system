@@ -12,10 +12,11 @@ use Illuminate\Support\Facades\Schema;
 class AdminMetaController extends Controller
 {
     protected array $collections = ['depotMeta', 'designationMeta', 'statusMeta', 'reportMeta', 'trainTypeMeta', 'shiftMeta', 'users'];
-    protected array $directCollections = ['depotMeta', 'statusMeta', 'trainTypeMeta', 'shiftMeta', 'users', 'roles', 'permissions'];
+    protected array $directCollections = ['depotMeta', 'designationMeta', 'statusMeta', 'trainTypeMeta', 'shiftMeta', 'users', 'roles', 'permissions'];
 
     protected array $normalizedCollections = [
         'depotMeta' => 'depots',
+        'designationMeta' => 'designations',
         'statusMeta' => 'status_codes',
         'trainTypeMeta' => 'train_types',
         'shiftMeta' => 'shift_templates',
@@ -122,6 +123,17 @@ class AdminMetaController extends Controller
                 'bg' => data_get(json_decode($row->metadata ?? '{}', true), 'bg'),
                 'fg' => data_get(json_decode($row->metadata ?? '{}', true), 'fg'),
             ],
+            'designationMeta' => [
+                'id' => $row->designation_code,
+                'label' => $row->designation_name,
+                'aliases' => data_get(json_decode($row->metadata ?? '{}', true), 'aliases', []),
+                'restEligible' => data_get(json_decode($row->metadata ?? '{}', true), 'restEligible', true),
+                'canLogin' => data_get(json_decode($row->metadata ?? '{}', true), 'canLogin', true),
+                'isCrewMember' => data_get(json_decode($row->metadata ?? '{}', true), 'isCrewMember', true),
+                'isUser' => data_get(json_decode($row->metadata ?? '{}', true), 'isUser', false),
+                'order' => (int) $row->sort_order,
+                'active' => (bool) $row->is_active && is_null($row->deleted_at),
+            ],
             'trainTypeMeta' => [
                 'id' => $row->train_type_code,
                 'label' => $row->train_type_name,
@@ -214,6 +226,7 @@ class AdminMetaController extends Controller
         $column = match ($collection) {
             'depotMeta' => 'depot_code',
             'statusMeta' => 'status_code',
+            'designationMeta' => 'designation_code',
             'trainTypeMeta' => 'train_type_code',
             'shiftMeta' => 'shift_code',
             'users' => 'username',
@@ -272,6 +285,29 @@ class AdminMetaController extends Controller
                     'metadata' => json_encode([
                         'bg' => $payload['bg'] ?? null,
                         'fg' => $payload['fg'] ?? null,
+                        'active' => $active,
+                    ]),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+            $this->applySoftDeleteState($collection, $table, $id, $active);
+            return;
+        }
+
+        if ($collection === 'designationMeta') {
+            DB::table($table)->updateOrInsert(
+                ['designation_code' => $id],
+                [
+                    'designation_name' => trim((string) ($payload['label'] ?? $id)) ?: $id,
+                    'sort_order' => (int) ($payload['order'] ?? 999),
+                    'is_active' => $active,
+                    'metadata' => json_encode([
+                        'aliases' => $payload['aliases'] ?? [],
+                        'restEligible' => !empty($payload['restEligible']),
+                        'canLogin' => array_key_exists('canLogin', $payload) ? !empty($payload['canLogin']) : true,
+                        'isCrewMember' => array_key_exists('isCrewMember', $payload) ? !empty($payload['isCrewMember']) : true,
+                        'isUser' => !empty($payload['isUser']),
                         'active' => $active,
                     ]),
                     'updated_at' => now(),
@@ -421,6 +457,7 @@ class AdminMetaController extends Controller
         $column = match ($collection) {
             'depotMeta' => 'depot_code',
             'statusMeta' => 'status_code',
+            'designationMeta' => 'designation_code',
             'trainTypeMeta' => 'train_type_code',
             'shiftMeta' => 'shift_code',
             'users' => 'username',

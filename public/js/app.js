@@ -213,6 +213,16 @@ function getAllDepotMetadata(){
   return Object.values(depotMetadataCache).sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
 }
 
+function normalizeCrewDepot(depot){
+  const value=String(depot||'').trim();
+  if(!value)return value;
+  const lower=value.toLowerCase();
+  const match=getAllDepotMetadata().find(item=>
+    String(item.id||'').toLowerCase()===lower || String(item.label||'').toLowerCase()===lower
+  );
+  return match?.id||value;
+}
+
 function getAllDesignationMetadata(){
   return Object.values(designationMetadataCache).sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id)));
 }
@@ -384,6 +394,10 @@ function hasGlobalAccess(){
   return !!currentUser && (currentUser.isHQ || currentUser.isSuperAdmin);
 }
 
+function canManageCrew(depot){
+  return hasGlobalAccess() || String(currentUser?.depot||'').toLowerCase()===String(depot||'').toLowerCase();
+}
+
 function getTopAccessLabel(){
   if(currentUser?.isSuperAdmin) return 'Super Admin - All Depots';
   if(currentUser?.isHQ) return 'HQ - All Depots';
@@ -479,20 +493,20 @@ async function restoreSession(){
       saved = null;
     }
   }
-  if(!saved || !saved.username || !saved.depot || !saved.name){
-    const serverUser = getServerUser();
-    if(!serverUser) return false;
-    saved = {
-      username: serverUser.username,
-      depot: serverUser.depot,
-      name: serverUser.name,
-      isHQ: serverUser.isHQ,
-      isSuperAdmin: serverUser.isSuperAdmin,
-      role: serverUser.role,
-      hqDepotView: serverUser.isHQ ? 'all' : 'all',
-      currentPage: 'monthly',
-    };
-  }
+  // Laravel authentication is authoritative. Local storage only retains UI
+  // preferences, never the identity or permissions of a previous user.
+  const serverUser = getServerUser();
+  if(!serverUser) return false;
+  saved = {
+    username: serverUser.username,
+    depot: serverUser.depot,
+    name: serverUser.name,
+    isHQ: serverUser.isHQ,
+    isSuperAdmin: serverUser.isSuperAdmin,
+    role: serverUser.role,
+    hqDepotView: saved?.hqDepotView || 'all',
+    currentPage: saved?.currentPage || 'monthly',
+  };
   const normalized = normalizeCurrentUser(saved);
   if(!normalized) return false;
   currentUser = normalized;
@@ -1075,7 +1089,7 @@ async function ensureRestCountdownSample(){
 function attachListeners(depots){
   listeners.forEach(u=>u());listeners=[];
   setSyncStatus('spin','Connecting…');
-  depots.forEach(depot=>{
+  /*depots.forEach(depot=>{
     if(!state[depot])state[depot]={};
     const unsub=onSnapshot(query(collection(db,'crew'), where('depot','==',depot)), snap=>{
       snap.docChanges().forEach(ch=>{const d=ch.doc.data();const id=d.id||ch.doc.id;if(ch.type==='removed')delete state[depot][id];else state[depot][id]=d;});
@@ -1083,7 +1097,23 @@ function attachListeners(depots){
       syncCurrentPageFromLiveData();
     },err=>{setSyncStatus('err','Sync error');setLog('Error: '+err.message);});
     listeners.push(unsub);
-  });
+  });*/
+  // A single request avoids six simultaneous polling calls for HQ users.
+  const source=hasGlobalAccess()
+    ? collection(db,'crew')
+    : query(collection(db,'crew'),where('depot','==',depots[0]||currentUser?.depot));
+  const unsub=onSnapshot(source,snap=>{
+    snap.docChanges().forEach(ch=>{
+      const d=ch.doc.data();const id=d.id||ch.doc.id;const depot=normalizeCrewDepot(d.depot||currentUser?.depot);
+      if(!depot)return;
+      d.depot=depot;
+      if(!state[depot])state[depot]={};
+      if(ch.type==='removed')delete state[depot][id];else state[depot][id]=d;
+    });
+    setSyncStatus('ok','Live');
+    syncCurrentPageFromLiveData();
+  },err=>{setSyncStatus('err','Sync error');setLog('Error: '+err.message);});
+  listeners.push(unsub);
 }
 
 function syncCurrentPageFromLiveData(){
@@ -1103,7 +1133,8 @@ async function writeCrewDoc(depot,id,updates){
   refreshPage();
   if(demoMode||!db){return;}
   try {
-    await setDoc(doc(db,'crew',`${depot}_${id}`),{...updates,lastUpdated:serverTimestamp()},{merge:true});
+    const recordId=state[depot]?.[id]?.record_id||`${depot}_${id}`;
+    await setDoc(doc(db,'crew',recordId),{...updates,lastUpdated:serverTimestamp()},{merge:true});
   } catch(err) {
     if(previous) state[depot][id] = previous;
     throw err;
@@ -1215,14 +1246,14 @@ async function doLogout(){
 /* ════════ HELPERS ═════════════════════════════════════════════════════════ */
 function setLog(m){const el=document.getElementById('logText');if(el)el.textContent=fmtTime(new Date())+' - '+m;}
 function updateClock(){const el=document.getElementById('tbClock');if(el)el.textContent=fmtTime(new Date());}
-function refreshPage(){
+function refreshPage(force=false){
   // Skip refresh if a modal is open (user is editing)
   const modalOpen = document.getElementById('modal')?.classList.contains('open') || document.getElementById('addModal')?.classList.contains('open');
   if(modalOpen) return;
   
   // Debounce rapid refreshes
   const now = Date.now();
-  if(now - lastRefreshTime < MIN_REFRESH_INTERVAL) return;
+  if(!force && now - lastRefreshTime < MIN_REFRESH_INTERVAL) return;
   lastRefreshTime = now;
   
   const p={dashboard:renderDashboard,roster:renderRoster,rest:renderRest,monthly:renderMonthly,reports:renderReports,admin:renderAdmin};
@@ -1249,7 +1280,7 @@ function goPage(p){
     return;
   }
   console.log('goPage called', p);
-  (async function(){
+  (function(){
     currentPage=p;if(p!=='roster')activeFilter='all';
     const path = PAGE_PATHS[p] || '/';
     try{
@@ -1266,17 +1297,10 @@ function goPage(p){
     const titles={dashboard:'Dashboard',roster:'Crew Roster',rest:'Rest Countdowns',monthly:'Monthly View',reports:'Reports'};
     document.getElementById('phTitle').textContent=titles[p]||p;
     document.title = `KR Crew System - ${titles[p]||p}`;
-    // Use the already-loaded page module map to avoid per-navigation network fetches.
-    try{
-      const { getPageModule } = await import('./pageModules.mjs');
-      const mod = getPageModule(p);
-      if(mod && typeof mod.init === 'function'){
-        await mod.init();
-        persistSession();
-        return;
-      }
-    }catch(err){console.warn('Page module load failed',err);}
-    try{ refreshPage(); }catch(err){ console.warn('refreshPage failed',err); }
+    // Render directly: this file is already part of the main Vite bundle. A
+    // dynamic import here resolved relative to the hashed bundle and caused a
+    // failed network request before every navigation.
+    try{ refreshPage(true); }catch(err){ console.warn('refreshPage failed',err); }
     persistSession();
   })();
 }
@@ -1289,7 +1313,7 @@ window.addEventListener('popstate', event => {
     currentPage = page;
     document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
     const el=document.getElementById('sb-'+page);if(el)el.classList.add('active');
-    refreshPage();
+    refreshPage(true);
   }
 });
 
@@ -1350,7 +1374,7 @@ function renderRoster(){
   }
   html+=kpiHtml([['TOT','Total',allCrew.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','Leave',c.L||0],['SK','Sick',c.SK||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]],'repeat(auto-fit,minmax(80px,1fr))');
   const showDepot=currentUser.isHQ&&hqDepotView==='all';
-  html+=crewTableHtml(hqDepotView==='all'&&currentUser.isHQ?'all':depots[0],showDepot,!currentUser.isHQ);
+  html+=crewTableHtml(hqDepotView==='all'&&currentUser.isHQ?'all':depots[0],showDepot,true);
   safeSetInner('pbody', html);
   updatePills();
 }
@@ -1565,7 +1589,9 @@ function renderMonthly(){
       const cls=code?(code==='BK' ? (isEngineeringBooking ? 'day-BK day-BK-eng' : 'day-BK') : `day-${code}`):(we?'day-we':'');
       if(sm[code]!==undefined)sm[code]++;
       const selectedClass = isSelected && activeRow ? ' selected-col' : '';
-      const cellClick=!currentUser.isHQ?`selectMonthlyCrewDay('${c.depot}','${c.id}',${d});openDayEdit('${c.depot}','${c.id}',${d})`:`selectMonthlyCrewDay('${c.depot}','${c.id}',${d})`;
+      const cellClick=canManageCrew(c.depot)
+        ? `selectMonthlyCrewDay('${c.depot}','${c.id}',${d});openDayEdit('${c.depot}','${c.id}',${d})`
+        : `selectMonthlyCrewDay('${c.depot}','${c.id}',${d})`;
       const edAtt=`class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" title="${daySegments.length>1?'Multiple statuses - click to view':'Click to view'}" onclick="${cellClick}"`;
       html+=`<td ${edAtt}>${renderMonthDayCell(daySegments, code)}</td>`;
     });
@@ -1710,7 +1736,12 @@ function buildStatusSegmentsForDay(item, day, status){
   if(status===''){
     return segments.filter(x=>x.day!==day);
   }
-  const newSeg = {day,sort_order:100,status_code:status,status,start_time:'00:00',end_time:'23:59',note:STATUS_META[status]?.label||status};
+  const restStart = status==='R' && item?.restStarted ? new Date(item.restStarted) : null;
+  const startTime = restStart && !isNaN(restStart.getTime()) ? fmtTime(restStart) : '00:00';
+  const endTime = status==='R' && restStart && !isNaN(restStart.getTime())
+    ? minutesToTime(Math.min(1439, timeToMinutes(startTime) + getRestHours(item) * 60))
+    : '23:59';
+  const newSeg = {day,sort_order:100,status_code:status,status,start_time:startTime,end_time:endTime,note:STATUS_META[status]?.label||status};
   if(idx===-1) segments.push(newSeg);
   else segments[idx] = {...segments[idx], ...newSeg};
   return segments;
@@ -1722,9 +1753,19 @@ function getDaySegments(item, day){
     const code = item?.monthly?.[`d${day}`] || '';
     return code ? [{day,sort_order:100,status_code:code,status:code,start_time:'00:00',end_time:'23:59',note:STATUS_META[code]?.label||code}] : [];
   }
-  return segments
+  const normalized = segments
     .map((seg,index)=>normalizeDaySegment(seg, day, index))
     .sort((a,b)=>(a.sort_order||100)-(b.sort_order||100)||timeToMinutes(a.start_time)-timeToMinutes(b.start_time));
+  // Old records saved Resting as a full 24-hour status. Display the actual
+  // rest window when a rest start time exists, without changing historic data.
+  if(normalized.length===1 && normalized[0].status_code==='R' && normalized[0].start_time==='00:00' && normalized[0].end_time==='23:59' && item?.restStarted){
+    const started=new Date(item.restStarted);
+    if(!isNaN(started.getTime()) && started.getDate()===Number(day) && started.getMonth()===CM && started.getFullYear()===CY){
+      normalized[0].start_time=fmtTime(started);
+      normalized[0].end_time=minutesToTime(Math.min(1439,timeToMinutes(normalized[0].start_time)+getRestHours(item)*60));
+    }
+  }
+  return normalized;
 }
 
 function getFinalStatusForDay(item, day){
@@ -2049,6 +2090,7 @@ function normalizeAccessMetaRecord(docSnapOrData){
     canLogin: data?.canLogin ?? data?.can_login ?? metadata?.can_login ?? metadata?.canLogin ?? false,
     isCrewMember: data?.isCrewMember ?? data?.is_crew_member ?? metadata?.is_crew_member ?? metadata?.isCrewMember ?? false,
     isUser: data?.isUser ?? data?.is_user ?? metadata?.is_user ?? metadata?.isUser ?? false,
+    permissions: Array.isArray(data?.permissions) ? data.permissions : [],
   };
 }
 
@@ -2096,21 +2138,24 @@ function buildAccessMetaSection(key, records){
   const config = getAccessMetaConfig(key);
   const title = config?.title || key;
   const singular = title.endsWith('s') ? title.slice(0, -1) : title;
-  const rows = sortAccessMetaRecords(records).map(meta=>`
-    <div class="admin-row" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 120px 90px;">
+  const rows = sortAccessMetaRecords(records).map(meta=>{
+    const locked=key==='roles'&&meta.id==='super_admin';
+    const disabled=locked?'disabled':'';
+    return `
+    <div class="admin-row" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 140px 120px 90px;">
       <input value="${meta.id}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="${singular} code">
-      <input value="${meta.label}" data-admin-${key}-label="${meta.id}" class="admin-field" placeholder="${singular} name">
-      <label class="admin-checkbox-label"><input type="checkbox" ${meta.active!==false?'checked':''} data-admin-${key}-active="${meta.id}"> Active</label>
-      <label class="admin-checkbox-label"><input type="checkbox" ${meta.canLogin!==false?'checked':''} data-admin-${key}-login="${meta.id}"> Login</label>
-      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isCrewMember?'checked':''} data-admin-${key}-crew="${meta.id}"> Crew</label>
-      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isUser?'checked':''} data-admin-${key}-user="${meta.id}"> User</label>
-      <input value="${meta.description||''}" data-admin-${key}-description="${meta.id}" class="admin-field" placeholder="Description">
+      <input value="${meta.label}" data-admin-${key}-label="${meta.id}" class="admin-field" placeholder="${singular} name" ${disabled}>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.active!==false?'checked':''} data-admin-${key}-active="${meta.id}" ${disabled}> Active</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.canLogin!==false?'checked':''} data-admin-${key}-login="${meta.id}" ${disabled}> Login</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isCrewMember?'checked':''} data-admin-${key}-crew="${meta.id}" ${disabled}> Crew</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${meta.isUser?'checked':''} data-admin-${key}-user="${meta.id}" ${disabled}> User</label>
+      ${key==='roles'?`<input value="${(meta.permissions||[]).join(', ')}" data-admin-${key}-permissions="${meta.id}" class="admin-field" placeholder="Permissions (comma-separated)" ${disabled}>`:'<div></div>'}
+      <input value="${meta.description||''}" data-admin-${key}-description="${meta.id}" class="admin-field" placeholder="Description" ${disabled}>
       <div style="display:flex;gap:6px;justify-content:flex-end">
-        <button class="btn btn-primary btn-sm" onclick="saveAccessMetaRecord('${key}','${meta.id}')">Save</button>
-        <button class="btn btn-danger btn-sm" onclick="removeAccessMetaRecord('${key}','${meta.id}')">Delete</button>
+        ${locked?'<span style="font-size:11px;color:var(--text2)">Full access (locked)</span>':`<button class="btn btn-primary btn-sm" onclick="saveAccessMetaRecord('${key}','${meta.id}')">Save</button><button class="btn btn-danger btn-sm" onclick="removeAccessMetaRecord('${key}','${meta.id}')">Delete</button>`}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
   const newRow = `
     <div class="admin-row admin-row-add" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 120px 90px;">
       <input value="" data-admin-${key}-code="new" class="admin-field" placeholder="New ${singular.toLowerCase()} code">
@@ -2134,8 +2179,8 @@ function buildAccessMetaSection(key, records){
           <p class="admin-section-note">${config?.note || ''}</p>
         </div>
       </div>
-      <div class="admin-row-header" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 120px 90px;">
-        <div>Code</div><div>Name</div><div>Active</div><div>Login</div><div>Crew</div><div>User</div><div>Description</div><div></div>
+      <div class="admin-row-header" style="grid-template-columns:minmax(140px,1fr) minmax(170px,1.1fr) 90px 90px 90px 90px 140px 120px 90px;">
+        <div>Code</div><div>Name</div><div>Active</div><div>Login</div><div>Crew</div><div>User</div><div>Permissions</div><div>Description</div><div></div>
       </div>
       ${rows}${newRow}
     </div>
@@ -2159,6 +2204,7 @@ async function saveAccessMetaRecord(key, recordId){
   const loginEl = document.querySelector(loginSelector);
   const crewEl = document.querySelector(crewSelector);
   const userEl = document.querySelector(userSelector);
+  const permissionsEl = document.querySelector(`[data-admin-${key}-permissions="${recordId}"]`);
   const nextId = recordId === 'new' ? (codeEl?.value || '').trim() : recordId;
   if(!nextId){
     alert(`${config.title.slice(0, -1)} code cannot be blank`);
@@ -2172,6 +2218,7 @@ async function saveAccessMetaRecord(key, recordId){
     canLogin:!!loginEl?.checked,
     isCrewMember:!!crewEl?.checked,
     isUser:!!userEl?.checked,
+    permissions:String(permissionsEl?.value||'').split(',').map(item=>item.trim()).filter(Boolean),
     system:false,
   };
   try{
@@ -2439,15 +2486,17 @@ async function renderAdmin(){
     const userRole=user.role||'booking_officer';
     const roleOptions=getRoleSelectOptions(userRole);
     const permissionsValue=Array.isArray(user.permissions)?user.permissions.join(', '):String(user.permissions||'');
+    const locked=user.username==='superadmin';
+    const disabled=locked?'disabled':'';
     return `<div class="admin-row">
       <input value="${user.username}" disabled style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);background:#F7F9FC" placeholder="Username">
-      <input value="${user.name||''}" data-admin-user-name="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Display name">
-      <input value="${user.depot||''}" data-admin-user-depot="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot">
-      <select data-admin-user-role="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)">${roleOptions}</select>
-      <input value="${permissionsValue}" data-admin-user-permissions="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Permissions comma-separated">
-      <input type="password" value="${user.pw||''}" data-admin-user-pw="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Password">
-      <button class="btn btn-primary btn-sm" onclick="saveUserAccount('${user.username}')">Save</button>
-      <label style="grid-column:1 / -1;font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${user.isHQ?'checked':''} data-admin-user-hq="${user.username}"> HQ / global access</label>
+      <input value="${user.name||''}" data-admin-user-name="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Display name" ${disabled}>
+      <input value="${user.depot||''}" data-admin-user-depot="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Depot" ${disabled}>
+      <select data-admin-user-role="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" ${disabled}>${roleOptions}</select>
+      <input value="${permissionsValue}" data-admin-user-permissions="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Permissions comma-separated" ${disabled}>
+      <input type="password" value="${user.pw||''}" data-admin-user-pw="${user.username}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Password" ${disabled}>
+      ${locked?'<span style="font-size:11px;color:var(--text2)">Full access (locked)</span>':`<button class="btn btn-primary btn-sm" onclick="saveUserAccount('${user.username}')">Save</button>`}
+      <label style="grid-column:1 / -1;font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" ${user.isHQ?'checked':''} data-admin-user-hq="${user.username}" ${disabled}> HQ / global access</label>
     </div>`;
   }).join('');
 
@@ -3031,10 +3080,10 @@ async function saveModal(){
     } else {
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
       const monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
-      const status_segments = buildStatusSegmentsForDay(c, CD, newStatus);
       let restStarted=c.restStarted||null;
       if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);restStarted=rs.toISOString();}
       else if(newStatus!=='R')restStarted=null;
+      const status_segments = buildStatusSegmentsForDay({...c,restStarted}, CD, newStatus);
       const restLocation=document.getElementById('mRestLocation').value;
       const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
       const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,status_segments,awayDepot: newStatus==='R'?awayDepot:null};
@@ -3327,8 +3376,7 @@ async function bootApp(){
       }
         // mark app ready so lazy page modules can run
         window.__CREW_APP_READY = true;
-        // if server provided an initial page, navigate there
-        try{if(window.__INITIAL_PAGE__){setTimeout(()=>goPage(window.__INITIAL_PAGE__),0);}}catch(e){}
+        // restoreSession already renders the requested server page.
     } else {
       setSyncStatus('err','Backend initialization failed');
       setLoginHint(false);

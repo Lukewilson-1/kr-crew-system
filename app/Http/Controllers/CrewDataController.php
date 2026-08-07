@@ -17,27 +17,69 @@ class CrewDataController extends Controller
     protected string $historyTable = 'crew_status_history';
     protected string $segmentTable = 'crew_status_segments';
 
+    protected function hasGlobalCrewAccess(Request $request): bool
+    {
+        $user = $request->user();
+        return (bool) ($user?->is_hq) || (bool) ($user?->is_super_admin)
+            || in_array($user?->role_code, ['hq_admin', 'super_admin'], true)
+            || $user?->depot_code === 'HQ';
+    }
+
+    protected function depotMatches(string $left, string $right): bool
+    {
+        if (strcasecmp(trim($left), trim($right)) === 0) {
+            return true;
+        }
+
+        if (!Schema::hasTable('depots')) {
+            return false;
+        }
+
+        $values = [strtolower(trim($left)), strtolower(trim($right))];
+        $depot = DB::table('depots')
+            ->where(function ($query) use ($values) {
+                $query->whereIn(DB::raw('LOWER(depot_code)'), $values)
+                    ->orWhereIn(DB::raw('LOWER(depot_name)'), $values);
+            })
+            ->first();
+
+        return $depot && in_array(strtolower(trim($left)), [strtolower($depot->depot_code), strtolower($depot->depot_name)], true)
+            && in_array(strtolower(trim($right)), [strtolower($depot->depot_code), strtolower($depot->depot_name)], true);
+    }
+
+    protected function authorizeCrewDepot(Request $request, string $depot): void
+    {
+        if ($this->hasGlobalCrewAccess($request)) {
+            return;
+        }
+
+        $userDepot = (string) ($request->user()?->depot_code ?? '');
+        abort_unless($userDepot !== '' && $this->depotMatches($userDepot, $depot), 403, 'You may only manage crew at your depot.');
+    }
+
     protected function payloadFromRow(object $row): array
     {
         $payload = json_decode($row->payload ?? '{}', true);
         return is_array($payload) ? $payload : [];
     }
 
-    protected function buildCrewViewRecord(object $row): array
+    protected function payloadValue(array $payload, string $key, mixed $fallback = null): mixed
+    {
+        $value = $payload[$key] ?? null;
+        return $value === null || $value === '' ? $fallback : $value;
+    }
+
+    protected function buildCrewViewRecord(object $row, ?object $member = null, ?object $assignment = null, ?object $latestHistory = null, ?array $segments = null): array
     {
         $payload = $this->payloadFromRow($row);
-        $member = DB::table($this->memberTable)->where('record_id', $row->record_id)->first();
-        $assignment = DB::table($this->shiftTable)->where('crew_record_id', $row->record_id)->first();
-        $latestHistory = DB::table($this->historyTable)
-            ->where('crew_record_id', $row->record_id)
-            ->orderByDesc('effective_at')
-            ->orderByDesc('created_at')
-            ->first();
+        $member ??= DB::table($this->memberTable)->where('record_id', $row->record_id)->first();
+        $assignment ??= DB::table($this->shiftTable)->where('crew_record_id', $row->record_id)->first();
+        $latestHistory ??= DB::table($this->historyTable)->where('crew_record_id', $row->record_id)->orderByDesc('effective_at')->orderByDesc('created_at')->first();
         $monthKey = $payload['monthKey'] ?? null;
-        $segments = $this->fetchStatusSegments($row->record_id, $monthKey);
+        $segments ??= $this->fetchStatusSegments($row->record_id, $monthKey);
         $computedMonthly = !empty($segments) ? $this->buildDailyMonthlyFromSegments($segments) : [];
         $monthly = !empty($computedMonthly) ? $computedMonthly : ($payload['monthly'] ?? []);
-        $finalStatus = $payload['status'] ?? ($latestHistory?->status_code ?? '');
+        $finalStatus = $this->payloadValue($payload, 'status', $latestHistory?->status_code ?? '');
         if ($finalStatus === '' && !empty($segments)) {
             $finalStatus = $this->computeFinalStatusFromSegments($segments, (int) date('j')) ?? '';
         }
@@ -46,14 +88,14 @@ class CrewDataController extends Controller
         }
 
         return array_merge($payload, [
-            'id' => $payload['id'] ?? ($row->crew_id ?: $row->record_id),
+            'id' => $this->payloadValue($payload, 'id', $row->crew_id ?: $row->record_id),
             'record_id' => $row->record_id,
-            'name' => $payload['name'] ?? ($member?->display_name ?: trim((string) ($member?->first_name ?? '') . ' ' . (string) ($member?->last_name ?? '')) ?: $row->record_id),
-            'grade' => $payload['grade'] ?? ($member?->designation_code ?? ''),
-            'depot' => $payload['depot'] ?? ($member?->depot_code ?? $row->depot),
-            'staff_number' => $payload['staff_number'] ?? ($member?->staff_number ?? $row->staff_number ?? ''),
-            'shift' => $payload['shift'] ?? ($assignment?->shift ?? ''),
-            'status' => $payload['status'] ?? ($latestHistory?->status_code ?? ''),
+            'name' => $this->payloadValue($payload, 'name', $member?->display_name ?: trim((string) ($member?->first_name ?? '') . ' ' . (string) ($member?->last_name ?? '')) ?: $row->record_id),
+            'grade' => $this->payloadValue($payload, 'grade', $member?->designation_code ?? ''),
+            'depot' => $this->payloadValue($payload, 'depot', $member?->depot_code ?? $row->depot),
+            'staff_number' => $this->payloadValue($payload, 'staff_number', $member?->staff_number ?? $row->staff_number ?? ''),
+            'shift' => $this->payloadValue($payload, 'shift', $assignment?->shift ?? ''),
+            'status' => $finalStatus,
             'route' => $payload['route'] ?? '',
             'trainType' => $payload['trainType'] ?? '',
             'bookTime' => $payload['bookTime'] ?? '',
@@ -73,14 +115,60 @@ class CrewDataController extends Controller
     {
         $query = DB::table($this->table);
         if ($depot !== null && $depot !== '') {
-            $query->where('depot', $depot);
+            // Existing crew records may contain a depot name ("Changamwe")
+            // while users and metadata use its code ("CGW"). Accept either
+            // form so station users see the same records as HQ.
+            $depots = [$depot];
+            if (Schema::hasTable('depots')) {
+                $depotRow = DB::table('depots')
+                    ->whereRaw('LOWER(depot_code) = ?', [strtolower($depot)])
+                    ->orWhereRaw('LOWER(depot_name) = ?', [strtolower($depot)])
+                    ->first();
+                if ($depotRow) {
+                    $depots[] = $depotRow->depot_code;
+                    $depots[] = $depotRow->depot_name;
+                }
+            }
+            $query->whereIn('depot', array_values(array_unique($depots)));
         }
 
         $rows = $query->orderBy('depot')->orderBy('crew_id')->get();
+        $recordIds = $rows->pluck('record_id')->all();
+        if (empty($recordIds)) {
+            return [];
+        }
+
+        // Fetch related data in bulk. The prior implementation issued four extra
+        // queries per crew member, making each navigation increasingly slow.
+        $members = DB::table($this->memberTable)->whereIn('record_id', $recordIds)->get()->keyBy('record_id');
+        $assignments = DB::table($this->shiftTable)->whereIn('crew_record_id', $recordIds)->get()->keyBy('crew_record_id');
+        $histories = DB::table($this->historyTable)->whereIn('crew_record_id', $recordIds)
+            ->orderByDesc('effective_at')->orderByDesc('created_at')->get()
+            ->unique('crew_record_id')->keyBy('crew_record_id');
+        $segmentRows = DB::table($this->segmentTable)->whereIn('crew_record_id', $recordIds)
+            ->when($monthKey, fn ($query) => $query->where('month_key', $monthKey))
+            ->orderBy('day')->orderBy('sort_order')->orderBy('created_at')->get();
+        $segmentsByRecord = $segmentRows->groupBy('crew_record_id')->map(fn ($segments) => $segments->map(function ($row) {
+            return [
+                'segment_id' => $row->segment_id, 'crew_record_id' => $row->crew_record_id,
+                'crew_id' => $row->crew_id, 'depot_code' => $row->depot_code, 'month_key' => $row->month_key,
+                'day' => (int) $row->day, 'sort_order' => (int) $row->sort_order, 'status_code' => $row->status_code,
+                'train_type' => $row->train_type, 'route' => $row->route, 'book_time' => $row->book_time,
+                'rest_started_at' => $row->rest_started_at, 'away_depot' => $row->away_depot, 'notes' => $row->notes,
+                'metadata' => json_decode($row->metadata ?? 'null', true), 'created_at' => $row->created_at, 'updated_at' => $row->updated_at,
+            ];
+        })->all());
         $records = [];
 
         foreach ($rows as $row) {
-            $record = $this->buildCrewViewRecord($row);
+            $recordSegments = $segmentsByRecord->get($row->record_id, []);
+            if ($monthKey === null || $monthKey === '') {
+                $recordMonthKey = (string) ($this->payloadFromRow($row)['monthKey'] ?? '');
+                if ($recordMonthKey !== '') {
+                    $recordSegments = array_values(array_filter($recordSegments, fn (array $segment) => ($segment['month_key'] ?? '') === $recordMonthKey));
+                }
+            }
+            $record = $this->buildCrewViewRecord($row, $members->get($row->record_id), $assignments->get($row->record_id), $histories->get($row->record_id), $recordSegments);
             if ($monthKey !== null && $monthKey !== '') {
                 $recordMonthKey = (string) ($record['monthKey'] ?? '');
                 if ($recordMonthKey !== $monthKey) {
@@ -643,10 +731,10 @@ class CrewDataController extends Controller
 
     public function normalizedIndex(Request $request): JsonResponse
     {
-        $this->ensureTables();
-        $this->backfillNormalizedCrewTables();
-
         $depot = trim((string) $request->query('depot', ''));
+        if (!$this->hasGlobalCrewAccess($request)) {
+            $depot = (string) ($request->user()?->depot_code ?? '');
+        }
         $monthKey = trim((string) $request->query('monthKey', ''));
         $records = $this->loadCrewViewRows($depot, $monthKey);
 
@@ -662,6 +750,7 @@ class CrewDataController extends Controller
             return response()->json(['error' => 'Not found'], 404);
         }
 
+        $this->authorizeCrewDepot(request(), (string) ($record['depot'] ?? ''));
         return response()->json($record);
     }
 
@@ -701,6 +790,7 @@ class CrewDataController extends Controller
         $merged['monthly'] = $merged['monthly'] ?? $payload['monthly'] ?? [];
         $merged['monthKey'] = $merged['monthKey'] ?? $payload['monthKey'] ?? null;
         $merged['lastUpdated'] = $merged['lastUpdated'] ?? $payload['lastUpdated'] ?? now()->toIso8601String();
+        $this->authorizeCrewDepot($request, (string) $merged['depot']);
         $shift = trim((string) ($merged['shift'] ?? ''));
         unset($merged['shift'], $merged['shift_assignment']);
 
@@ -716,6 +806,10 @@ class CrewDataController extends Controller
         $this->ensureTables();
 
         $recordId = $this->normalizeRecordId($recordId);
+        $existing = DB::table($this->table)->where('record_id', $recordId)->first();
+        if ($existing) {
+            $this->authorizeCrewDepot(request(), (string) ($this->payloadFromRow($existing)['depot'] ?? $existing->depot));
+        }
         DB::table($this->shiftTable)->where('crew_record_id', $recordId)->delete();
         DB::table($this->memberTable)->where('record_id', $recordId)->delete();
         DB::table($this->table)->where('record_id', $recordId)->delete();

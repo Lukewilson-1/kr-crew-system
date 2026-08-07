@@ -22,8 +22,7 @@ export function setDemoMode(value) {
 
 export async function loadBackendConfig() {
   try {
-    const resp = await fetch(ADMIN_META_ENDPOINT, { cache: 'no-store' });
-    if (!resp.ok) return null;
+    await fetchAdminMeta();
     return { provider: 'mysql' };
   } catch (err) {
     console.error('MySQL backend check failed', err);

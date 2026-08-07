@@ -17,12 +17,11 @@ Route::get('/mysql/users', [AdminMetaController::class, 'usersIndex']);
 Route::post('/mysql/login', [AdminMetaController::class, 'mysqlLogin']);
 Route::post('/mysql/users/{id}', [AdminMetaController::class, 'usersSave']);
 Route::delete('/mysql/users/{id}', [AdminMetaController::class, 'usersDelete']);
-Route::get('/mysql/crew-view', [CrewDataController::class, 'normalizedIndex']);
-Route::get('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedShow']);
-Route::post('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedSave']);
-Route::delete('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedDelete']);
-
 Route::middleware('auth')->group(function () {
+    Route::get('/mysql/crew-view', [CrewDataController::class, 'normalizedIndex']);
+    Route::get('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedShow']);
+    Route::post('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedSave']);
+    Route::delete('/mysql/crew-view/{recordId}', [CrewDataController::class, 'normalizedDelete']);
     Route::get('/', [CrewController::class, 'index']);
     Route::get('/crew-dashboard', [CrewController::class, 'index']);
     Route::get('/crew-roster', [CrewController::class, 'index']);

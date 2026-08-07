@@ -170,6 +170,9 @@ class AdminMetaController extends Controller
                 'canLogin' => data_get(json_decode($row->metadata ?? '{}', true), 'canLogin', false),
                 'isCrewMember' => data_get(json_decode($row->metadata ?? '{}', true), 'isCrewMember', false),
                 'isUser' => data_get(json_decode($row->metadata ?? '{}', true), 'isUser', false),
+                'permissions' => Schema::hasTable('role_permissions')
+                    ? DB::table('role_permissions')->where('role_code', $row->role_code)->pluck('permission_code')->values()->all()
+                    : [],
             ],
             'permissions' => [
                 'id' => $row->permission_code,
@@ -314,6 +317,9 @@ class AdminMetaController extends Controller
         }
 
         if ($collection === 'users') {
+            if ($id === 'superadmin') {
+                return;
+            }
             $permissions = $payload['permissions'] ?? [];
             if (is_string($permissions)) {
                 $permissions = array_values(array_filter(array_map('trim', explode(',', $permissions))));
@@ -348,24 +354,10 @@ class AdminMetaController extends Controller
         }
 
         if ($collection === 'roles') {
-            DB::table($table)->updateOrInsert(
-                ['role_code' => $id],
-                [
-                    'role_name' => trim((string) ($payload['label'] ?? $id)) ?: $id,
-                    'description' => isset($payload['description']) ? trim((string) $payload['description']) : null,
-                    'is_system' => !empty($payload['system']),
-                    'metadata' => json_encode([
-                        'active' => $active,
-                    ]),
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
-            $this->applySoftDeleteState($collection, $table, $id, $active);
-            return;
-        }
-
-        if ($collection === 'roles') {
+            if ($id === 'super_admin') {
+                return;
+            }
+            $permissions = is_array($payload['permissions'] ?? null) ? $payload['permissions'] : [];
             DB::table($table)->updateOrInsert(
                 ['role_code' => $id],
                 [
@@ -382,6 +374,15 @@ class AdminMetaController extends Controller
                     'created_at' => now(),
                 ]
             );
+            if (Schema::hasTable('role_permissions')) {
+                DB::table('role_permissions')->where('role_code', $id)->delete();
+                $validPermissions = Schema::hasTable('permissions')
+                    ? DB::table('permissions')->whereIn('permission_code', $permissions)->pluck('permission_code')->all()
+                    : [];
+                foreach ($validPermissions as $permission) {
+                    DB::table('role_permissions')->insert(['role_code' => $id, 'permission_code' => $permission, 'created_at' => now(), 'updated_at' => now()]);
+                }
+            }
             $this->applySoftDeleteState($collection, $table, $id, $active);
             return;
         }
@@ -409,6 +410,9 @@ class AdminMetaController extends Controller
 
     protected function deleteNormalizedCollection(string $collection, string $id): void
     {
+        if (($collection === 'roles' && $id === 'super_admin') || ($collection === 'users' && $id === 'superadmin')) {
+            return;
+        }
         $table = $this->normalizedCollections[$collection] ?? null;
         if ($table === null || !Schema::hasTable($table)) {
             return;

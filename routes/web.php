@@ -3,6 +3,7 @@
 use App\Http\Controllers\CrewController;
 use App\Http\Controllers\CrewDataController;
 use App\Http\Controllers\AdminMetaController;
+use App\Http\Controllers\RunningRoomController;
 use Illuminate\Support\Facades\Route;
 
 require __DIR__.'/auth.php';
@@ -34,4 +35,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/utilization', [App\Http\Controllers\ReportController::class, 'utilization'])->name('reports.utilization');
     Route::get('/reports/absence', [App\Http\Controllers\ReportController::class, 'absence'])->name('reports.absence');
     Route::get('/reports/printable', [App\Http\Controllers\ReportController::class, 'printable'])->name('reports.printable');
+    Route::get('/running-rooms', [RunningRoomController::class, 'index'])->name('running-rooms.index');
+    Route::get('/running-rooms/monthly', [RunningRoomController::class, 'index'])->name('running-rooms.monthly');
+    Route::get('/running-rooms/challenges', [RunningRoomController::class, 'index'])->name('running-rooms.challenges');
+    Route::get('/running-rooms/settings', [RunningRoomController::class, 'index'])->name('running-rooms.settings');
+    Route::get('/running-rooms/api/data', [RunningRoomController::class, 'data']);
+    Route::get('/running-rooms/api/crew/{staffNo}', [RunningRoomController::class, 'crewLookup']);
+    Route::post('/running-rooms/api/records', [RunningRoomController::class, 'storeRecord']);
+    Route::post('/running-rooms/api/records/{id}/checkout', [RunningRoomController::class, 'checkoutRecord']);
+    Route::delete('/running-rooms/api/records/{id}', [RunningRoomController::class, 'deleteRecord']);
+    Route::post('/running-rooms/api/matters', [RunningRoomController::class, 'storeMatter']);
+    Route::put('/running-rooms/api/matters/{id}', [RunningRoomController::class, 'updateMatter']);
+    Route::delete('/running-rooms/api/matters/{id}', [RunningRoomController::class, 'deleteMatter']);
+    Route::post('/running-rooms/api/settings/beds', [RunningRoomController::class, 'updateBeds']);
+    Route::post('/running-rooms/api/settings/password', [RunningRoomController::class, 'resetRoomPassword']);
 });

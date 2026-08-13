@@ -16,12 +16,14 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Filters\SelectFilter;
 use BackedEnum;
+use UnitEnum;
 
 class RoleResource extends Resource
 {
     protected static ?string $model = Role::class;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-shield-check';
+    protected static UnitEnum|string|null $navigationGroup = 'User Management';
 
     protected static ?string $navigationLabel = 'Roles';
 

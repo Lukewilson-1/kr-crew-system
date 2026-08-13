@@ -10,6 +10,7 @@ use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -17,13 +18,16 @@ use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Illuminate\Support\Facades\DB;
 use BackedEnum;
+use UnitEnum;
 
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-user-group';
+    protected static UnitEnum|string|null $navigationGroup = 'User Management';
 
     protected static ?string $navigationLabel = 'Users';
 

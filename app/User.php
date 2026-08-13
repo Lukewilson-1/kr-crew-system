@@ -188,6 +188,22 @@ class User extends Authenticatable implements FilamentUser
             || str_starts_with($value, '$argon2id$');
     }
 
+    public function isAttendant(): bool
+    {
+        return $this->role === 'attendant' && filled($this->room_id);
+    }
+
+    public function isRoomAdmin(): bool
+    {
+        return $this->is_active && (
+            $this->is_super_admin ||
+            $this->is_hq ||
+            $this->role_code === 'hq_admin' ||
+            strtolower((string) $this->depot_code) === 'hq' ||
+            $this->role === 'admin'
+        );
+    }
+
     public function getRememberTokenName(): ?string
     {
         return null;

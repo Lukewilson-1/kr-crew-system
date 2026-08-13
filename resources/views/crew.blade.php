@@ -69,11 +69,16 @@
                             <div id="sbDepots"></div>
                         </div>
                     </div>
+                    <div class="sb-group">
+                        <div class="sb-sec">Running Rooms</div>
+                        <div class="sb-item" onclick="window.location.href='/running-rooms/monthly'"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly Report</div>
+                        <div class="sb-item" onclick="window.location.href='/running-rooms/challenges'"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>Challenges Summary</div>
+                        <div class="sb-item" onclick="window.location.href='/running-rooms/settings'"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
+                    </div>
                     <div class="sb-group" id="adminSection" style="display:none">
                         <div class="sb-sec">Admin</div>
-                        <div class="sb-item" onclick="window.location.href='/admin'" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
+                    <div class="sb-item" onclick="window.location.href='/admin'" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
                     </div>
-                    <div class="sb-bottom">v4.0 Live · Kenya Railways</div>
                 </div>
                 <div id="main">
                     <div id="phdr">
@@ -124,6 +129,7 @@
                     <option value="R">R - Resting</option>
                     <option value="L">L - On Leave</option>
                     <option value="SK">SK - Sick</option>
+                    <option value="ABS">ABS - Absent</option>
                     <option value="T">T - Training</option>
                     <option value="NTB">NTB - Not to be Booked</option>
                     <option value="TO">TO - Trip Off</option>

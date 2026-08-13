@@ -12,12 +12,14 @@ use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Illuminate\Database\Eloquent\Model;
+use UnitEnum;
 
 class ShiftTemplateResource extends Resource
 {
     protected static ?string $model = ShiftTemplate::class;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clock';
+    protected static UnitEnum|string|null $navigationGroup = 'Crew Operations';
     protected static ?string $navigationLabel = 'Shifts';
     protected static ?int $navigationSort = 6;
 

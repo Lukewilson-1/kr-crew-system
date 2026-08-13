@@ -13,6 +13,8 @@ class DatabaseSeeder extends Seeder
             DepotSeeder::class,
             ShiftTemplateSeeder::class,
             DepotUserSeeder::class,
+            RoomSeeder::class,
+            RunningRoomSampleSeeder::class,
         ]);
     }
 }

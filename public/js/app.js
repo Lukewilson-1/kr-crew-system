@@ -16,8 +16,7 @@ const REPORT_TYPES=[
 const DEFAULT_DESIGNATION_DEFINITIONS=[
   {id:'locomotive_driver',label:'Locomotive Driver',aliases:['driver','train_driver'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:10},
   {id:'guard',label:'Guard',aliases:['train_guard'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:20},
-  {id:'conductor',label:'Conductor',aliases:['conductor'],restEligible:true,canLogin:true,isCrewMember:true,isUser:false,order:30},
-  {id:'shunter_driver',label:'Shunter Driver',aliases:['shunter','shunting'],restEligible:false,canLogin:true,isCrewMember:true,isUser:false,order:40},
+    {id:'shunter_driver',label:'Shunter Driver',aliases:['shunter','shunting'],restEligible:false,canLogin:true,isCrewMember:true,isUser:false,order:40},
   {id:'lio',label:'LIO',aliases:['loco_inspection_officer'],restEligible:false,canLogin:true,isCrewMember:true,isUser:false,order:45},
   {id:'inspector',label:'Inspector',aliases:['inspector'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:50},
   {id:'station_officer',label:'Station Officer',aliases:['station officer'],restEligible:false,canLogin:true,isCrewMember:false,isUser:true,order:60},
@@ -80,6 +79,11 @@ function selectMonthDay(day){
 function selectMonthlyCrewDay(depot,id,day){
   selectedMonthCrewKey = `${depot}::${id}`;
   selectMonthDay(day);
+}
+
+function selectMonthlyCrew(depot,id){
+  selectedMonthCrewKey = `${depot}::${id}`;
+  renderMonthly();
 }
 
 function buildMonthlyTotals(allCrew, maxDay){
@@ -932,11 +936,47 @@ async function loadLocalDesignationMeta(){
 }
 
 function buildStatusOptions(selected='SB'){
-  return STATUSES.map(id=>{
-    const meta=STATUS_META[id]||{label:id};
+  const statusCodes = Array.isArray(STATUSES) && STATUSES.length
+    ? STATUSES.slice()
+    : Object.keys(STATUS_META).length
+      ? Object.keys(STATUS_META).sort((a,b)=>{
+          const aOrder = STATUS_META[a]?.order ?? 999;
+          const bOrder = STATUS_META[b]?.order ?? 999;
+          return aOrder - bOrder || String(a).localeCompare(String(b));
+        })
+      : ['BK','SB','R','L','SK','ABS','T','NTB','TO'];
+
+  return statusCodes.map(id=>{
+    const meta = STATUS_META[id] || { label: id };
     const label = id === 'SB' && (!meta.label || meta.label.toLowerCase() === 'standby') ? 'Stand By' : meta.label;
     return `<option value="${id}"${id===selected?' selected':''}>${id} - ${label}</option>`;
   }).join('');
+}
+
+function getStatusCodes(){
+  // Prefer configured STATUSES (ordered), fall back to metadata or legacy ordered list.
+  if (Array.isArray(STATUSES) && STATUSES.length) return STATUSES.slice();
+  if (Object.keys(STATUS_META).length) {
+    return Object.keys(STATUS_META).sort((a,b)=>{
+      const aOrder = STATUS_META[a]?.order ?? 999;
+      const bOrder = STATUS_META[b]?.order ?? 999;
+      return aOrder - bOrder || String(a).localeCompare(String(b));
+    });
+  }
+  return ['BK','SB','R','L','SK','ABS','T','NTB','TO'];
+}
+
+function getStatusMeta(code){
+  return STATUS_META && STATUS_META[code] ? STATUS_META[code] : { label: code, bg: '#ECEFF1', fg: '#37474F' };
+}
+
+function getAbsenceStatusCodes(){
+  // Dynamically derive absence-like statuses from metadata flag `isAbsence` if present.
+  const codes = getStatusCodes();
+  const fromMeta = codes.filter(c => STATUS_META[c] && STATUS_META[c].isAbsence === true);
+  if(fromMeta.length) return fromMeta;
+  // Fallback to historical absence codes
+  return codes.filter(c => ['SK','L','ABS','NTB'].includes(c));
 }
 
 function populateStatusSelects(selected='SB'){
@@ -1333,7 +1373,12 @@ function renderDashboard(){
   safeSetText('phSub', `Live booking board · ${MONTH_NAME}`);
   safeSetInner('phActions', '');
 
-  let html=kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['ABS','Absent',c.ABS||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]]);
+  // Build KPI list dynamically from status codes so new statuses propagate automatically.
+  const kpis = [['TOT','Total crew',all.length]];
+  getStatusCodes().forEach(code => {
+    kpis.push([code, getStatusMeta(code).label || code, c[code]||0]);
+  });
+  let html=kpiHtml(kpis);
 
   const restingDrivers=all.filter(x=>x.status==='R'&&isDesignationRestEligible(x.grade)&&restSecondsLeft(x)!==null&&restSecondsLeft(x)<3600);
   if(restingDrivers.length>0){
@@ -1351,8 +1396,12 @@ function renderDashboard(){
       html+=`<div class="depot-card" onclick="setHqDepotView('${depot}');goPage('roster')">
         <div class="dc-hdr"><span class="dc-name" style="color:${col}">${depot}</span><div class="dc-alert-dot" style="background:${hasIssue?'#E53935':'#43A047'}"></div></div>
         <div class="dc-bars">`;
-      [['BK','Booked',DEPOT_COLORS.Changamwe],['SB','Standby','#1565C0'],['R','Resting','#6A1B9A'],['L','Leave','#E65100'],['SK','Sick','#B71C1C'],['ABS','Absent','#991B1B'],['T','Training','#00695C'],['NTB','NTB','#37474F']].forEach(([code,lbl,col2])=>{
-        const n=dc[code]||0;const pct=Math.round((n/tot)*100);
+      // Render status bars dynamically using configured statuses and their colors.
+      getStatusCodes().forEach(code=>{
+        const meta = getStatusMeta(code);
+        const lbl = meta.label || code;
+        const col2 = meta.bg || '#ECEFF1';
+        const n = dc[code]||0; const pct = Math.round((n/tot)*100);
         html+=`<div class="dc-bar-row"><span class="dc-bar-lbl">${lbl}</span><div class="dc-bar-track"><div class="dc-bar-fill" style="width:${pct}%;background:${col2}"></div></div><span class="dc-bar-val">${n}</span></div>`;
       });
       html+=`</div><div class="dc-foot"><span>${crew.length} crew</span><span class="dc-online"><div class="dc-online-dot"></div>Updated ${lastUpd}</span></div></div>`;
@@ -1381,7 +1430,9 @@ function renderRoster(){
       ${getActiveDepots().map(d=>`<button class="pill" onclick="setHqDepotView('${d}')" style="color:${DEPOT_COLORS[d]}">${d}</button>`).join('')}
     </div>`;
   }
-  html+=kpiHtml([['TOT','Total',allCrew.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','Leave',c.L||0],['SK','Sick',c.SK||0],['ABS','Absent',c.ABS||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]],'repeat(auto-fit,minmax(80px,1fr))');
+  const rosterKpis = [['TOT','Total',allCrew.length]];
+  getStatusCodes().forEach(code=> rosterKpis.push([code,getStatusMeta(code).label||code,c[code]||0]));
+  html+=kpiHtml(rosterKpis,'repeat(auto-fit,minmax(80px,1fr))');
   const showDepot=currentUser.isHQ&&hqDepotView==='all';
   html+=crewTableHtml(hqDepotView==='all'&&currentUser.isHQ?'all':depots[0],showDepot,true);
   safeSetInner('pbody', html);
@@ -1551,6 +1602,7 @@ function renderMonthly(){
   const selectedCrew = allCrew.find(c=>`${c.depot}::${c.id}`===selectedMonthCrewKey) || allCrew[0] || null;
   const selectedSegments = selectedCrew ? getDaySegments(selectedCrew, selectedDay) : [];
   const selectedFinal = selectedSegments.length ? selectedSegments[selectedSegments.length-1].status_code : '';
+  const canEditToday = selectedCrew && selectedDay === CD && canManageCrew(selectedCrew.depot);
   const dayMinutes = selectedSegments.reduce((acc,seg)=>{acc[seg.status_code]=(acc[seg.status_code]||0)+segmentDurationMinutes(seg);return acc;},{});
   const days = Array.from({length:maxDay},(_,i)=>i+1);
   const monthSummaryForCrew = selectedCrew ? Object.entries(STATUS_META).map(([code])=>[
@@ -1584,7 +1636,7 @@ function renderMonthly(){
 
   allCrew.forEach(c=>{
     const activeRow = selectedCrew && selectedCrew.id===c.id && selectedCrew.depot===c.depot;
-    html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name">${c.name}</td>`;
+    html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name" onclick="selectMonthlyCrew('${c.depot}','${c.id}')" style="cursor:pointer" title="Click to load crew details"><strong>${c.name}</strong><div style="font-size:11px;color:var(--text2)">${getDesignationLabel(c.grade)}</div></td>`;
     if(showDepot)html+=`<td class="mc-dep" style="color:${DEPOT_COLORS[c.depot]};font-weight:700">${c.depot}</td>`;
     const sm={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
     days.forEach(d=>{
@@ -1598,11 +1650,12 @@ function renderMonthly(){
       const cls=code?(code==='BK' ? (isEngineeringBooking ? 'day-BK day-BK-eng' : 'day-BK') : `day-${code}`):(we?'day-we':'');
       if(sm[code]!==undefined)sm[code]++;
       const selectedClass = isSelected && activeRow ? ' selected-col' : '';
-      const cellClick=canManageCrew(c.depot)
-        ? `selectMonthlyCrewDay('${c.depot}','${c.id}',${d});openDayEdit('${c.depot}','${c.id}',${d})`
-        : `selectMonthlyCrewDay('${c.depot}','${c.id}',${d})`;
-      const edAtt=`class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" title="${daySegments.length>1?'Multiple statuses - click to view':'Click to view'}" onclick="${cellClick}"`;
-      html+=`<td ${edAtt}>${renderMonthDayCell(daySegments, code)}</td>`;
+      const cellClick = isTod && canManageCrew(c.depot)
+        ? `openDayEdit('${c.depot}','${c.id}',${d})`
+        : '';
+      const cellTitle = isTod ? 'Today - click to edit' : '';
+      const cellProps = cellClick ? `onclick="${cellClick}" title="${cellTitle}" style="cursor:pointer"` : '';
+      html+=`<td class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" ${cellProps}>${renderMonthDayCell(daySegments, code)}</td>`;
     });
     html+=`<td class="mc-sBK">${sm.BK}</td><td class="mc-sSB">${sm.SB}</td><td class="mc-sR">${sm.R}</td><td class="mc-sL">${sm.L}</td><td class="mc-sSK">${sm.SK}</td><td class="mc-sABS">${sm.ABS}</td><td class="mc-sNTB">${sm.NTB}</td><td class="mc-sTO">${sm.TO}</td></tr>`;
   });
@@ -1619,7 +1672,7 @@ function renderMonthly(){
         <div class="month-info-note">A crew member can carry several statuses in one day. The stacked cell segments are sized by time held; daily totals count the final status.</div>
       </div>
       <aside class="month-side">
-        <div class="month-side-card"><h3>Day timeline</h3><div class="summary-note">${selectedCrew?`${selectedCrew.name} - ${selectedDay} ${MONTH_NAME.split(' ')[0]}`:'No crew selected'}</div><div class="month-timeline">${selectedSegments.length?selectedSegments.map((seg,index)=>{
+        <div class="month-side-card"><h3>Day timeline</h3><div class="summary-note">${selectedCrew?`${selectedCrew.name} - ${selectedDay} ${MONTH_NAME.split(' ')[0]}`:'No crew selected'}</div>${canEditToday?`<div style="margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="openDayEdit('${selectedCrew.depot}','${selectedCrew.id}',${selectedDay})">Edit today</button></div>`:''}<div class="month-timeline">${selectedSegments.length?selectedSegments.map((seg,index)=>{
           const meta=STATUS_META[seg.status_code]||{label:seg.status_code,bg:'#ECEFF1',fg:'#37474F'};
           return `<div class="month-timeline-row"><div class="month-timeline-rail"><span style="background:${meta.fg}"></span>${index<selectedSegments.length-1?'<i></i>':''}</div><div><div class="month-time">${seg.start_time} - ${seg.end_time}</div><div class="month-timeline-title">${statusBadgeHtml(seg.status_code,'month-mini-badge')} ${meta.label}</div><div class="month-timeline-note">${seg.note||meta.label}</div></div></div>`;
         }).join(''):`<div class="selected-day-none">No status recorded on this date.</div>`}</div></div>
@@ -1664,13 +1717,16 @@ function renderReports(){
       </div>
     </div>`;
   }
+  // Build dynamic KPI block for reports page
+  const reportKpis = [['TOT','Total crew',all.length]];
+  getStatusCodes().forEach(code=> reportKpis.push([code,getStatusMeta(code).label||code,c[code]||0]));
   safeSetInner('pbody', `
   <div class="rep-grid">
     ${cards}
   </div>
   <hr class="divider">
   <div class="sec-hdr"><span class="sec-title">${MONTH_NAME} - snapshot</span></div>
-  ${kpiHtml([['TOT','Total crew',all.length],['BK','Booked',c.BK||0],['SB','Standby',c.SB||0],['R','Resting',c.R||0],['L','On Leave',c.L||0],['SK','Sick',c.SK||0],['ABS','Absent',c.ABS||0],['T','Training',c.T||0],['NTB','NTB',c.NTB||0],['TO','Trip Off',c.TO||0]])}`);
+  ${kpiHtml(reportKpis)}`);
   updateReportSummary();
 }
 
@@ -1950,13 +2006,31 @@ function getWindowMonthKeys(windowKey){
   }
 }
 async function fetchCrewByMonth(monthKey){
-  const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
-  if(monthKey===MONTH_KEY) return getAllCrew(state, depots);
-  if(!db) return [];
-  const list=[];
-  for(const depot of depots){
-    const snap = await getDocs(query(collection(db,'crew'), where('depot','==',depot), where('monthKey','==',monthKey)));
-    snap.forEach(docSnap=>{list.push(docSnap.data());});
+  const depots = currentUser.isHQ ? getActiveDepots() : [currentUser.depot];
+  // For current month, prefer server-side fetch when backend is available to avoid stale/empty in-memory state.
+  if (monthKey === MONTH_KEY) {
+    if (db) {
+      const list = [];
+      for (const depot of depots) {
+        try {
+          const snap = await getDocs(query(collection(db, 'crew'), where('depot', '==', depot), where('monthKey', '==', monthKey)));
+          snap.forEach(docSnap => { list.push(docSnap.data()); });
+        } catch (err) {
+          console.warn('fetchCrewByMonth server fetch failed for depot', depot, err && err.message);
+        }
+      }
+      // If server returned results, use them; otherwise fall back to in-memory state.
+      if (list.length) return list;
+      return getAllCrew(state, depots);
+    }
+    return getAllCrew(state, depots);
+  }
+
+  if (!db) return [];
+  const list = [];
+  for (const depot of depots) {
+    const snap = await getDocs(query(collection(db, 'crew'), where('depot', '==', depot), where('monthKey', '==', monthKey)));
+    snap.forEach(docSnap => { list.push(docSnap.data()); });
   }
   return list;
   await ensureCoreAccessUsers();
@@ -1970,17 +2044,19 @@ async function exportMonthlyCSV(monthKey=MONTH_KEY){
   const maxDay = monthKey===MONTH_KEY ? CD : Math.max(...crew.map(c=>Object.keys(buildMonthlyFromStatusSegments(c)).length), 0);
   let hdr='ID,Name,Designation,Depot';
   for(let i=1;i<=maxDay;i++) hdr+=`,${i}`;
-  hdr+=',BK,SB,R,L,SK,ABS,T,NTB,TO\n';
-  let csv=hdr;
+  const statusCols = getStatusCodes();
+  hdr += ',' + statusCols.join(',') + '\n';
+  let csv = hdr;
   crew.sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
     let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;
-    const counts={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
+    const counts = Object.fromEntries(statusCols.map(s => [s, 0]));
     for(let i=1;i<=maxDay;i++){
       const code=getDaySegmentCode(c,i)||'';
-      if(counts[code]!==undefined) counts[code]++;
+      if(Object.prototype.hasOwnProperty.call(counts, code)) counts[code]++;
       row+=`,"${code}"`;
     }
-    row+=`,`+counts.BK+','+counts.SB+','+counts.R+','+counts.L+','+counts.SK+','+counts.ABS+','+counts.T+','+counts.NTB+','+counts.TO+'\n';
+    // append counts in configured order
+    row += ',' + statusCols.map(s => counts[s]||0).join(',') + '\n';
     csv+=row;
   });
   dlCSV(csv,`KR_Monthly_${monthKey.replace('-','_')}.csv`);
@@ -3140,7 +3216,7 @@ async function removeCrewDoc(depot,id){
 }
 
 /* ════════ ADD CREW ════════════════════════════════════════════════════════ */
-function openAddModal(){
+async function openAddModal(){
   const canChooseDepot = hasGlobalAccess() || currentUser?.depot === 'HQ';
   const defaultDepot = hqDepotView !== 'all' ? hqDepotView : (currentUser?.depot || getActiveDepots()[0] || 'HQ');
   document.getElementById('addModalSub').textContent='Depot: '+(canChooseDepot?'Select below':currentUser.depot);
@@ -3153,6 +3229,18 @@ function openAddModal(){
     depotSelect.parentElement.style.display=canChooseDepot?'block':'none';
     depotSelect.innerHTML=getActiveDepots().map(d=>`<option value="${d}"${d===defaultDepot?' selected':''}>${d}</option>`).join('');
   }
+  // Ensure metadata is loaded so dropdowns show live DB values.
+  try{
+    if(!Object.keys(getDesignationRegistry()||{}).length) await loadDesignationMeta();
+    if(!STATUSES || !STATUSES.length) await loadStatusMeta();
+    if(!SHIFT_OPTIONS || !SHIFT_OPTIONS.length) await loadShiftMeta();
+    if(!TRAIN_TYPES || !TRAIN_TYPES.length) await loadTrainTypeMeta();
+    // Local depot meta may affect depot list display
+    if(!DEPOTS || !DEPOTS.length) await loadDepotMeta();
+  }catch(err){
+    console.warn('Failed to load admin metadata for add modal',err&&err.message);
+  }
+
   populateDesignationSelect();
   populateTrainTypeSelect();
   populateShiftSelects();
@@ -3316,16 +3404,34 @@ function exportCSV(){
   dlCSV(csv,`KR_Status_${todayStr()}.csv`);
 }
 function exportMonthlyCSVLegacy(){
-  const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
-  let hdr='ID,Name,Designation,Depot';for(let i=1;i<=DAYS_IN_MON;i++)hdr+=`,${i}`;hdr+=',BK,SB,R,L,SK,ABS,T,NTB,TO\n';
-  let csv=hdr;
-  all.forEach(c=>{let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;const sm={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};for(let i=1;i<=DAYS_IN_MON;i++){const code=getDaySegmentCode(c,i)||'';if(sm[code]!==undefined)sm[code]++;row+=`,"${code}"`;}row+=`,${sm.BK},${sm.SB},${sm.R},${sm.L},${sm.SK},${sm.ABS},${sm.T},${sm.NTB},${sm.TO}`;csv+=row+'\n';});
+  const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];
+  const all=getAllCrew(state, d).sort((a,b)=>a.name.localeCompare(b.name));
+  let hdr='ID,Name,Designation,Depot';
+  for(let i=1;i<=DAYS_IN_MON;i++) hdr+=`,${i}`;
+  const statusCols = getStatusCodes();
+  hdr += ',' + statusCols.join(',') + '\n';
+  let csv = hdr;
+  all.forEach(c=>{
+    let row=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}"`;
+    const sm = Object.fromEntries(statusCols.map(s=>[s,0]));
+    for(let i=1;i<=DAYS_IN_MON;i++){
+      const code=getDaySegmentCode(c,i)||'';
+      if(Object.prototype.hasOwnProperty.call(sm,code)) sm[code]++;
+      row+=`,"${code}"`;
+    }
+    row += ',' + statusCols.map(s=>sm[s]||0).join(',');
+    csv+=row+'\n';
+  });
   dlCSV(csv,`KR_Monthly_${MONTH_NAME.replace(' ','_')}.csv`);
 }
 function exportAbsenceCSV(){
-  const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];const all=getAllCrew(state, d).filter(c=>['SK','L','ABS','NTB'].includes(c.status));
+  const d=currentUser.isHQ?getActiveDepots():[currentUser.depot];
+  const absenceCodes = getAbsenceStatusCodes();
+  const all=getAllCrew(state, d).filter(c=>absenceCodes.includes(c.status));
   let csv='ID,Name,Designation,Depot,Status,Reason/Notes,Last Updated\n';
-  all.forEach(c=>{csv+=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${STATUS_META[c.status]?.label}","${(c.notes||'').replace(/"/g,"'")}","${c.lastUpdated||''}"\n`;});
+  all.forEach(c=>{
+    csv+=`"${c.id}","${c.name}","${getDesignationLabel(c.grade)}","${c.depot}","${getStatusMeta(c.status).label}","${(c.notes||'').replace(/"/g,"'")}","${c.lastUpdated||''}"\n`;
+  });
   dlCSV(csv,`KR_Absences_${todayStr()}.csv`);
 }
 window.doLogin = doLogin;

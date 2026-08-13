@@ -10,6 +10,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
+use UnitEnum;
 
 class DesignationResource extends Resource
 {
@@ -19,6 +20,7 @@ class DesignationResource extends Resource
         ;
 
     protected static ?string $navigationLabel = 'Designations';
+    protected static UnitEnum|string|null $navigationGroup = 'User Management';
 
     public static function form(Schema $schema): Schema
     {

@@ -24,6 +24,7 @@ use BackedEnum;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Str;
+use UnitEnum;
 
 class ReportResource extends Resource
 {
@@ -32,6 +33,7 @@ class ReportResource extends Resource
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
 
     protected static ?string $navigationLabel = 'Reports';
+    protected static UnitEnum|string|null $navigationGroup = 'Reports & Exports';
 
     protected static ?int $navigationSort = 25;
 

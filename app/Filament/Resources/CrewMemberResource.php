@@ -19,12 +19,14 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use BackedEnum;
+use UnitEnum;
 
 class CrewMemberResource extends Resource
 {
     protected static ?string $model = CrewMember::class;
 
     protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-users';
+    protected static UnitEnum|string|null $navigationGroup = 'Crew Management';
 
     protected static ?string $navigationLabel = 'Crew Members';
 

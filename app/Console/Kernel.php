@@ -13,6 +13,7 @@ class Kernel extends ConsoleKernel
      */
     protected $commands = [
         \App\Console\Commands\SeedDefaultReports::class,
+        \App\Console\Commands\CopyEndOfDayStatus::class,
     ];
 
     /**
@@ -23,7 +24,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule)
     {
-        //
+        // Run the end-of-day status copy one minute after midnight server time.
+        $schedule->command('crew:copy-end-of-day-status')->dailyAt('00:01');
     }
 
     /**

@@ -101,6 +101,7 @@
     <option value="R">R - Resting</option>
     <option value="L">L - On Leave</option>
     <option value="SK">SK - Sick</option>
+    <option value="ABS">ABS - Absent</option>
     <option value="T">T - Training</option>
     <option value="NTB">NTB - Not to be Booked</option>
     <option value="TO">TO - Trip Off</option>

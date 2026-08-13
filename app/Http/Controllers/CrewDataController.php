@@ -308,45 +308,12 @@ class CrewDataController extends Controller
 
     protected function normalizeDesignationKey(mixed $value): string
     {
-        $key = strtolower($this->normalizeText($value));
-        $key = str_replace(["'", "\u{2019}"], '', $key);
-        $key = preg_replace('/[^a-z0-9]+/', '_', $key) ?: '';
-        return trim($key, '_');
+        return \App\Support\CrewLookup::normalizeDesignationKey($value);
     }
 
     protected function isDesignationRestEligible(mixed $designation): bool
     {
-        $key = $this->normalizeDesignationKey($designation);
-        if ($key === '') {
-            return false;
-        }
-
-        if (in_array($key, ['shunter_driver', 'shunter', 'lio'], true)) {
-            return false;
-        }
-
-        if (! Schema::hasTable('designations')) {
-            return true;
-        }
-
-        $row = DB::table('designations')
-            ->whereRaw('LOWER(designation_code) = ?', [strtolower((string) $designation)])
-            ->orWhereRaw('LOWER(designation_name) = ?', [strtolower((string) $designation)])
-            ->first();
-
-        if (! $row) {
-            return true;
-        }
-
-        if ($this->normalizeDesignationKey($row->designation_code) === 'shunter_driver'
-            || $this->normalizeDesignationKey($row->designation_name) === 'shunter_driver'
-            || in_array($this->normalizeDesignationKey($row->designation_code), ['shunter', 'lio'], true)
-            || in_array($this->normalizeDesignationKey($row->designation_name), ['shunter', 'lio'], true)) {
-            return false;
-        }
-
-        $metadata = json_decode($row->metadata ?? '{}', true) ?: [];
-        return data_get($metadata, 'restEligible', true) !== false;
+        return \App\Support\CrewLookup::isDesignationRestEligible($designation);
     }
 
     protected function payloadIncludesRestStatus(array $payload): bool
@@ -855,6 +822,48 @@ class CrewDataController extends Controller
         $merged['monthKey'] = $merged['monthKey'] ?? $payload['monthKey'] ?? null;
         $merged['lastUpdated'] = $merged['lastUpdated'] ?? $payload['lastUpdated'] ?? now()->toIso8601String();
         $this->authorizeCrewDepot($request, (string) $merged['depot']);
+        // Prevent modifying past-day status segments or monthly entries for past months/days.
+        $today = new \DateTimeImmutable('now', new \DateTimeZone(config('app.timezone') ?: date_default_timezone_get()));
+        $currentMonthKey = $today->format('Y-m');
+        $currentDay = (int) $today->format('j');
+        // If caller is trying to modify segments or monthly entries for an earlier month, reject.
+        $attemptedMonthKey = trim((string) ($merged['monthKey'] ?? ''));
+        if ($attemptedMonthKey !== '') {
+            $parsed = preg_split('/[-\\/]/', $attemptedMonthKey) ?: [];
+            $attemptYear = (int) ($parsed[0] ?? 0);
+            $attemptMonth = (int) ($parsed[1] ?? 0);
+            if ($attemptYear && $attemptMonth) {
+                $attemptKey = sprintf('%04d-%02d', $attemptYear, $attemptMonth);
+                if (strcmp($attemptKey, $currentMonthKey) < 0) {
+                    return response()->json(['error' => 'Modifying historic monthly records is not allowed.'], 403);
+                }
+            }
+        }
+        // If monthly/day edits target this month, disallow changes to past days.
+        if (($merged['monthKey'] ?? '') === $currentMonthKey) {
+            // check monthly array keys like d1..d31
+            if (is_array($merged['monthly'])) {
+                foreach ($merged['monthly'] as $k => $v) {
+                    if (preg_match('/^d(\d+)$/', (string) $k, $m)) {
+                        $day = (int) $m[1];
+                        if ($day < $currentDay) {
+                            return response()->json(['error' => 'Modifying past-day statuses is not allowed.'], 403);
+                        }
+                    }
+                }
+            }
+            // check status_segments entries
+            if (is_array($merged['status_segments'])) {
+                foreach ($merged['status_segments'] as $seg) {
+                    if (is_array($seg) && isset($seg['day'])) {
+                        $day = (int) $seg['day'];
+                        if ($day < $currentDay) {
+                            return response()->json(['error' => 'Modifying past-day statuses is not allowed.'], 403);
+                        }
+                    }
+                }
+            }
+        }
         if ($this->payloadIncludesRestStatus($merged) && ! $this->isDesignationRestEligible($merged['grade'] ?? '')) {
             return response()->json(['error' => 'This designation does not qualify for Resting. Use shift work, Stand By, Booked, or another status.'], 422);
         }

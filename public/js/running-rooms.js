@@ -130,7 +130,9 @@
   /* ── API ──────────────────────────────────────────────────────────────── */
   async function api(path, method = 'GET', body = null) {
     const opts = { method, headers: { 'X-CSRF-TOKEN': CSRF(), 'Accept': 'application/json' } };
-    if (body) {
+    if (body instanceof FormData) {
+      opts.body = body;
+    } else if (body) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
     }
@@ -700,7 +702,95 @@
     if (printBtn) printBtn.addEventListener('click', () => window.print());
   }
 
+  /* ── rich text helpers ─────────────────────────────────────────────── */
+  function sanitizeHtml(html) {
+    const div = document.createElement('div');
+    div.innerHTML = String(html ?? '');
+    div.querySelectorAll('script,style,iframe,object,embed,link,meta,form').forEach((el) => el.remove());
+    div.querySelectorAll('*').forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+        if ((attr.name === 'href' || attr.name === 'src') && /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+      });
+    });
+    return div.innerHTML;
+  }
+
+  function richDesc(description) {
+    const raw = String(description ?? '').trim();
+    if (!raw) return '';
+    if (raw.indexOf('<') !== -1) return sanitizeHtml(raw);
+    return raw.split(/\r?\n/).map((line) => esc(line) || '<br>').join('<br>');
+  }
+
+  function richEditorMarkup(value) {
+    return `
+      <div class="rr-richtext">
+        <div class="rr-richtext-toolbar">
+          <button type="button" data-rt-cmd="bold" title="Bold"><b>B</b></button>
+          <button type="button" data-rt-cmd="italic" title="Italic"><i>I</i></button>
+          <button type="button" data-rt-cmd="insertUnorderedList" title="Bullet list">• List</button>
+          <button type="button" data-rt-cmd="insertOrderedList" title="Numbered list">1. List</button>
+        </div>
+        <div class="rr-richtext-area" contenteditable="true" data-placeholder="Describe the issue..."></div>
+        <textarea name="description" hidden>${esc(value || '')}</textarea>
+      </div>`;
+  }
+
+  function initRichText(container) {
+    $$('.rr-richtext', container).forEach((box) => {
+      if (box.dataset.rtInit) return;
+      box.dataset.rtInit = '1';
+      const area = $('.rr-richtext-area', box);
+      const input = $('textarea[name="description"]', box);
+      if (!area || !input) return;
+
+      if (input.value) {
+        const plain = input.value.indexOf('<') === -1;
+        area.innerHTML = plain ? esc(input.value).replace(/\r?\n/g, '<br>') : sanitizeHtml(input.value);
+      }
+
+      const sync = () => {
+        input.value = area.textContent.trim() === '' ? '' : area.innerHTML;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      area.addEventListener('input', sync);
+      area.addEventListener('blur', sync);
+
+      area.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          document.execCommand('insertText', false, '    ');
+        }
+      });
+
+      area.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        document.execCommand('insertText', false, text);
+      });
+
+      $$('[data-rt-cmd]', box).forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
+        btn.addEventListener('click', () => {
+          area.focus();
+          document.execCommand(btn.dataset.rtCmd, false, null);
+          sync();
+        });
+      });
+
+      sync();
+    });
+  }
+
   /* ═════════════════════════ MATTERS ARISING ════════════════════════════ */
+  function photoStrip(photos) {
+    if (!Array.isArray(photos) || photos.length === 0) return '';
+    return `<div class="rr-matter-photos">${photos.map((p) =>
+      `<a class="rr-matter-photo" href="${esc(p.url)}" target="_blank" rel="noopener" title="Open photo"><img src="${esc(p.url)}" alt="Matter photo" loading="lazy"></a>`
+    ).join('')}</div>`;
+  }
+
   function renderMatters() {
     const catOptions = state.categories.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
     const roomOptions = state.rooms.map((r) => `<option value="${r.id}">${esc(roomLabel(r))}</option>`).join('');
@@ -720,7 +810,8 @@
           <div class="rr-field"><label>Room *</label><select name="room_id" required>${roomOptions}</select></div>
           <div class="rr-field"><label>Category *</label><select name="category" required>${catOptions}</select></div>
           <div class="rr-field"><label>Reported By</label><input type="text" name="reported_by" maxlength="128" value="${esc(state.user?.name || '')}"></div>
-          <div class="rr-field" style="grid-column:1/-1"><label>Description *</label><textarea name="description" required></textarea></div>
+          <div class="rr-field" style="grid-column:1/-1"><label>Description *</label>${richEditorMarkup('')}</div>
+          <div class="rr-field" style="grid-column:1/-1"><label>Photos</label><input type="file" name="photos[]" accept="image/*" multiple></div>
           <div class="rr-form-actions" style="grid-column:1/-1">
             <button type="submit" class="rr-btn">Log matter</button>
           </div>
@@ -750,7 +841,8 @@
             <span class="rr-badge ${m.status}">${m.status}</span>
           </div>
           <div class="rr-matter-cat">${esc(m.category)} · ${roomSel}</div>
-          <div class="rr-matter-desc">${esc(m.description)}</div>
+          <div class="rr-matter-desc">${richDesc(m.description)}</div>
+          ${photoStrip(m.photos)}
           <div class="rr-matter-foot">
             <span>Reported by ${esc(m.reported_by || '—')}</span>
             <div class="rr-matter-actions">
@@ -766,11 +858,12 @@
   }
 
   function bindMatters(root) {
+    initRichText(root);
     const form = $('#rrMatterForm', root);
     if (form) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const payload = Object.fromEntries(new FormData(form).entries());
+        const payload = new FormData(form);
         try {
           const created = await api('/running-rooms/api/matters', 'POST', payload);
           toast('Matter logged as ' + (created.ticket_no || 'ticket').toUpperCase() + '.');
@@ -853,16 +946,22 @@
               <div class="rr-field"><label>Room</label><select name="room_id">${roomOptions}</select></div>
               <div class="rr-field"><label>Category</label><select name="category">${catOptions}</select></div>
               <div class="rr-field"><label>Reported By</label><input type="text" name="reported_by" value="${esc(m.reported_by || '')}"></div>
-              <div class="rr-field" style="grid-column:1/-1"><label>Description</label><textarea name="description" required>${esc(m.description)}</textarea></div>
+              <div class="rr-field" style="grid-column:1/-1"><label>Description</label>${richEditorMarkup(m.description)}</div>
+              ${Array.isArray(m.photos) && m.photos.length
+                ? `<div class="rr-field" style="grid-column:1/-1"><label>Existing photos (tick to remove)</label><div class="rr-matter-photos">${m.photos.map((p) => `
+                    <label class="rr-matter-photo rr-photo-remove"><img src="${esc(p.url)}" alt="" loading="lazy"><span><input type="checkbox" name="photo_deletes[]" value="${p.id}"> remove</span></label>`).join('')}</div></div>`
+                : ''}
+              <div class="rr-field" style="grid-column:1/-1"><label>Add photos</label><input type="file" name="photos[]" accept="image/*" multiple></div>
               <div class="rr-form-actions" style="grid-column:1/-1">
                 <button type="submit" class="rr-btn green">Save</button>
                 <button type="button" class="rr-btn ghost" data-m-cancel>Cancel</button>
               </div>
             </form>`;
+          initRichText(root);
           $('form[data-matter-edit]', root).addEventListener('submit', async (ev) => {
             ev.preventDefault();
-            const payload = Object.fromEntries(new FormData(ev.target).entries());
-            payload.status = m.status;
+            const payload = new FormData(ev.target);
+            payload.append('status', m.status);
             try {
               await api('/running-rooms/api/matters/' + m.id, 'PUT', payload);
               state.editingMatter = null;
@@ -912,7 +1011,8 @@
       <div class="rr-matter-card">
         <div class="rr-matter-head"><span class="rr-matter-date">${esc(m.ticket_no || '—')} · ${fmtDate(m.date)}</span><span class="rr-badge ${m.status}">${m.status}</span></div>
         <div class="rr-matter-cat">${esc(m.category)} · <b>${esc(roomName(m.room_id))}</b></div>
-        <div class="rr-matter-desc">${esc(m.description)}</div>
+        <div class="rr-matter-desc">${richDesc(m.description)}</div>
+        ${photoStrip(m.photos)}
         <div class="rr-matter-foot"><span>Reported by ${esc(m.reported_by || '—')}</span></div>
       </div>`).join('');
 

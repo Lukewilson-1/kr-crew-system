@@ -6,9 +6,10 @@ use App\Models\Matter;
 use App\Models\Room;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Str;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\BadgeColumn;
@@ -45,7 +46,13 @@ class MatterResource extends Resource
                     'Bedding & Supplies', 'Water/Power', 'Staffing', 'Other',
                 ])->mapWithKeys(fn ($c) => [$c => $c]))
                 ->required(),
-            Textarea::make('description')->required()->columnSpanFull(),
+            RichEditor::make('description')
+                ->toolbarButtons([
+                    'bold', 'italic', 'bulletList', 'orderedList',
+                    'h2', 'h3', 'link',
+                ])
+                ->required()
+                ->columnSpanFull(),
             TextInput::make('reported_by'),
         ]);
     }
@@ -64,7 +71,9 @@ class MatterResource extends Resource
                 TextColumn::make('room.name')->badge()->color('gray'),
                 TextColumn::make('date')->date()->fontFamily('mono'),
                 TextColumn::make('category'),
-                TextColumn::make('description')->limit(50),
+                TextColumn::make('description')
+                    ->label('Description')
+                    ->formatStateUsing(fn ($state) => Str::limit(strip_tags((string) $state), 50)),
                 TextColumn::make('reported_by'),
                 BadgeColumn::make('status')
                     ->colors([

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AttendanceRecord;
 use App\Models\Matter;
+use App\Models\MatterPhoto;
 use App\Models\Room;
 use App\Support\CrewLookup;
 use App\User;
@@ -72,6 +73,45 @@ class RunningRoomController extends Controller
     protected function categories(): array
     {
         return $this->optionValue('categories', static::CATEGORIES);
+    }
+
+    /**
+     * Photo uploads for a matter are stored directly under public/matter-photos
+     * (gitignored) so they are served by the web server without a symlink. Each
+     * row in matter_photos stores the web-relative path.
+     */
+    protected function storeMatterPhotoFiles(Matter $matter, array $photos): void
+    {
+        $dir = public_path('matter-photos');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        foreach ($photos as $photo) {
+            if (! $photo) {
+                continue;
+            }
+
+            $name = Str::uuid()->toString().'.'.strtolower($photo->getClientOriginalExtension());
+            $photo->move($dir, $name);
+
+            $matter->photos()->create(['filename' => 'matter-photos/'.$name]);
+        }
+    }
+
+    protected function deleteMatterPhotoFiles(Matter $matter): void
+    {
+        foreach ($matter->photos as $photo) {
+            $this->deletePhotoFile($photo);
+        }
+    }
+
+    protected function deletePhotoFile(MatterPhoto $photo): void
+    {
+        $path = public_path($photo->filename);
+        if (is_file($path)) {
+            @unlink($path);
+        }
     }
 
     public function index(Request $request)
@@ -186,6 +226,7 @@ class RunningRoomController extends Controller
             ->get();
 
         $matters = Matter::query()
+            ->with('photos')
             ->whereIn('room_id', $roomIds)
             ->where('date', '>=', $windowStart)
             ->orderBy('date', 'desc')
@@ -214,7 +255,21 @@ class RunningRoomController extends Controller
                     ->map(fn ($bed) => ['bed_no' => $bed->bed_no, 'is_usable' => $bed->is_usable]),
             ])->values(),
             'records' => $records,
-            'matters' => $matters,
+            'matters' => $matters->map(fn (Matter $matter) => [
+                'id' => $matter->id,
+                'room_id' => $matter->room_id,
+                'date' => $matter->date?->toDateString(),
+                'category' => $matter->category,
+                'description' => $matter->description,
+                'reported_by' => $matter->reported_by,
+                'status' => $matter->status,
+                'resolved_date' => $matter->resolved_date?->toDateString(),
+                'ticket_no' => $matter->ticket_no,
+                'photos' => $matter->photos->map(fn (MatterPhoto $photo) => [
+                    'id' => $photo->id,
+                    'url' => asset($photo->filename),
+                ])->values(),
+            ])->values(),
             'designations' => $this->designations(),
             'categories' => $this->categories(),
         ];
@@ -671,6 +726,8 @@ class RunningRoomController extends Controller
             'category' => 'required|string|in:' . implode(',', $this->categories()),
             'description' => 'required|string',
             'reported_by' => 'nullable|string|max:128',
+            'photos' => 'nullable|array',
+            'photos.*' => 'image|mimes:jpeg,jpg,png,gif,webp|max:5120',
         ]);
 
         if ($v->fails()) {
@@ -691,6 +748,13 @@ class RunningRoomController extends Controller
             'reported_by' => $data['reported_by'] ?? $user->name ?: $user->username,
             'status' => 'open',
         ]);
+
+        $photos = $request->file('photos', []);
+        if (! empty($photos)) {
+            $this->storeMatterPhotoFiles($matter, $photos);
+        }
+
+        $matter->load('photos');
 
         return response()->json($matter, 201);
     }
@@ -716,6 +780,10 @@ class RunningRoomController extends Controller
             'description' => 'required|string',
             'reported_by' => 'nullable|string|max:128',
             'status' => 'required|string|in:open,resolved',
+            'photos' => 'nullable|array',
+            'photos.*' => 'image|mimes:jpeg,jpg,png,gif,webp|max:5120',
+            'photo_deletes' => 'nullable|array',
+            'photo_deletes.*' => 'integer',
         ]);
 
         if ($v->fails()) {
@@ -740,6 +808,21 @@ class RunningRoomController extends Controller
                 : null,
         ]);
 
+        $deleteIds = array_map('intval', $data['photo_deletes'] ?? []);
+        if (! empty($deleteIds)) {
+            foreach ($matter->photos()->whereIn('id', $deleteIds)->get() as $photo) {
+                $this->deletePhotoFile($photo);
+                $photo->delete();
+            }
+        }
+
+        $photos = $request->file('photos', []);
+        if (! empty($photos)) {
+            $this->storeMatterPhotoFiles($matter, $photos);
+        }
+
+        $matter->load('photos');
+
         return response()->json($matter);
     }
 
@@ -756,6 +839,8 @@ class RunningRoomController extends Controller
         if (! $this->canManageRoom($user, $matter->room_id)) {
             return response()->json(['error' => 'You may only delete matters for rooms in your own depot.'], 403);
         }
+
+        $this->deleteMatterPhotoFiles($matter);
 
         $matter->delete();
 

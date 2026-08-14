@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon as CarbonInterface;
 
 class Matter extends Model
@@ -55,6 +56,11 @@ class Matter extends Model
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
+    }
+
+    public function photos(): HasMany
+    {
+        return $this->hasMany(MatterPhoto::class);
     }
 
     public function resolve(): void

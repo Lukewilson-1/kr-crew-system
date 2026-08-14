@@ -125,6 +125,28 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
 .rr-matter-desc{font-size:13px;line-height:1.5;color:var(--text)}
 .rr-matter-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--text3)}
 .rr-matter-actions{display:flex;gap:6px}
+.rr-matter-photos{display:flex;flex-wrap:wrap;gap:8px}
+.rr-matter-photo{width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:#F3EFE6;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.rr-matter-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.rr-matter-photo.rr-photo-remove{position:relative;cursor:pointer}
+.rr-matter-photo.rr-photo-remove span{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.62);color:#fff;font-size:9px;padding:2px 3px;display:flex;align-items:center;gap:3px}
+.rr-matter-photo.rr-photo-remove input{width:11px;height:11px;margin:0}
+.rr-matter-desc ul,.rr-matter-desc ol{margin:4px 0 4px 22px;padding-left:4px}
+.rr-matter-desc p{margin:0 0 6px}
+.rr-matter-desc h2,.rr-matter-desc h3,.rr-matter-desc strong{font-weight:700}
+.rr-matter-desc h2,.rr-matter-desc h3{font-size:inherit;margin:6px 0}
+.rr-matter-desc a{color:var(--link,#1a5f9c);text-decoration:underline}
+
+/* ── Rich text editor ──────────────────────────────────────────────────── */
+.rr-richtext{border:1px solid var(--border);border-radius:6px;background:#fff;overflow:hidden}
+.rr-richtext-toolbar{display:flex;gap:4px;padding:6px 8px;background:#F3EFE6;border-bottom:1px solid var(--border)}
+.rr-richtext-toolbar button{min-width:36px;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--dark);font:600 13px/1 system-ui,sans-serif;cursor:pointer}
+.rr-richtext-toolbar button:hover{background:#eae4d8}
+.rr-richtext-area{min-height:110px;padding:10px 12px;outline:none;font:inherit;line-height:1.6}
+.rr-richtext-area ul,.rr-richtext-area ol{margin:4px 0 4px 22px;padding-left:4px}
+.rr-richtext-area p{margin:0 0 6px}
+.rr-richtext-area h2,.rr-richtext-area h3{font-size:inherit;font-weight:700;margin:6px 0}
+.rr-richtext-area:empty::before{content:attr(data-placeholder);color:var(--text3);pointer-events:none}
 
 /* ── Settings ───────────────────────────────────────────────────────────── */
 .rr-set-row{display:grid;grid-template-columns:1fr 140px 120px;gap:10px;align-items:end;background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;margin-bottom:10px}

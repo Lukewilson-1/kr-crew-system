@@ -114,7 +114,7 @@ class RunningRoomOperationsWidget extends Widget
                 'room' => $row->room_name ?: 'Unassigned',
                 'category' => $row->category,
                 'status' => $row->status,
-                'description' => $row->description,
+                'description' => strip_tags((string) $row->description),
             ])
             ->toArray();
     }

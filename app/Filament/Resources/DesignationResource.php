@@ -20,7 +20,8 @@ class DesignationResource extends Resource
         ;
 
     protected static ?string $navigationLabel = 'Designations';
-    protected static UnitEnum|string|null $navigationGroup = 'User Management';
+    protected static UnitEnum|string|null $navigationGroup = 'Crew Management';
+    protected static ?int $navigationSort = 40;
 
     public static function form(Schema $schema): Schema
     {

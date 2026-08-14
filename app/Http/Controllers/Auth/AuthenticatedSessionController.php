@@ -28,6 +28,17 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        $user = $request->user();
+
+        if ($user !== null) {
+            $storedHash = $user->getAuthPassword();
+            if ($storedHash !== '' && password_needs_rehash($storedHash, PASSWORD_BCRYPT)) {
+                $user->password = $request->password;
+                $user->saveQuietly();
+            }
+            $user->forceFill(['last_login_at' => now()])->saveQuietly();
+        }
+
         return redirect()->intended('/');
     }
 

@@ -14,6 +14,7 @@ class ReportDefinition extends Model
         'description',
         'icon',
         'type',
+        'report_type',
         'route_name',
         'action_label',
         'category',

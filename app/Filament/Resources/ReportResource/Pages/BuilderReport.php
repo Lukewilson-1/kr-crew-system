@@ -17,6 +17,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use BackedEnum;
+use UnitEnum;
 
 class BuilderReport extends Page
 {
@@ -28,6 +29,10 @@ class BuilderReport extends Page
 
     protected static ?string $navigationLabel = 'Builder';
 
+    protected static UnitEnum | string | null $navigationGroup = 'Reports';
+
+    protected static ?int $navigationSort = 25;
+
     protected string $view = 'filament.pages.report-builder';
 
     public ?array $data = [];
@@ -38,6 +43,7 @@ class BuilderReport extends Page
             'name' => 'New report',
             'slug' => Str::slug('new-report'),
             'type' => 'report',
+            'report_type' => 'builder',
             'builder_layout' => 'table',
             'builder_columns' => [],
             'builder_filters' => [],
@@ -63,6 +69,19 @@ class BuilderReport extends Page
                             'report' => 'Report',
                             'view' => 'View',
                         ])->required(),
+                        Select::make('report_type')
+                            ->label('Report type (frontend handler)')
+                            ->options([
+                                'status' => 'Status',
+                                'monthly' => 'Monthly',
+                                'utilization' => 'Utilization',
+                                'absence' => 'Absence / NTB',
+                                'print' => 'Print',
+                                'builder' => 'Builder (custom table)',
+                            ])
+                            ->default('builder')
+                            ->helperText('Determines which handler the crew Reports page uses.')
+                            ->required(),
                     ])
                     ->columns(2),
                 Section::make('Builder configuration')
@@ -158,6 +177,7 @@ class BuilderReport extends Page
             'slug' => $data['slug'] ?? Str::slug('untitled-report'),
             'description' => $data['description'] ?? null,
             'type' => $data['type'] ?? 'report',
+            'report_type' => $data['report_type'] ?? 'builder',
             'builder_layout' => $data['builder_layout'] ?? 'table',
             'builder_group_by' => $data['builder_group_by'] ?? null,
             'builder_columns' => $data['builder_columns'] ?? [],

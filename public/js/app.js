@@ -169,6 +169,8 @@ let selectedMonthDay = new Date().getDate();
 let selectedMonthCrewKey = null;
 let cdInterval=null; // countdown ticker
 let currentModalGrade=null;
+let crewDetailsKey=null;
+let crewDetailsTimer=null;
 let lastRefreshTime=0; // prevent rapid refresh spamming
 const MIN_REFRESH_INTERVAL=2000; // minimum milliseconds between refreshes
 let depotMetadataCache={};
@@ -415,25 +417,20 @@ function isRestAllowedForGrade(grade){
   return isDesignationRestEligible(grade);
 }
 
-function isForcedNonRestDesignation(idOrLabel){
-  const key = normalizeDesignationKey(idOrLabel);
-  return key === 'shunter_driver' || key === 'shunter' || key === 'lio';
-}
-
 function updateStatusValidation(){
   const grade=currentModalGrade;
   const statusEl=document.getElementById('mStatus');
   const hintEl=document.getElementById('statusHint');
   const saveBtn=document.getElementById('mSaveBtn');
-  const restOption=statusEl.querySelector('option[value="R"]');
+  const rBtn=document.querySelector('#mStatusGrid .st-pick[data-status="R"]');
   if(!grade){
-    if(restOption)restOption.disabled=false;
+    if(rBtn)rBtn.classList.remove('disabled');
     if(hintEl)hintEl.style.display='none';
     if(saveBtn)saveBtn.disabled=false;
     return;
   }
   const allowed=isRestAllowedForGrade(grade);
-  if(restOption)restOption.disabled=!allowed;
+  if(rBtn)rBtn.classList.toggle('disabled',!allowed);
   if(statusEl.value==='R' && !allowed){
     if(hintEl){
       hintEl.textContent='This designation does not qualify for Resting. Use Stand By, Booked, shift work, or another status.';
@@ -566,10 +563,20 @@ async function checkRestExpirations(){
     const crew=Object.values(state[depot]||{});
     for(const c of crew){
       if(c.status==='R'&&isDesignationRestEligible(c.grade)){
+        // While a crew member is actually checked in to a running room, rest only
+        // ends at checkout (handled by the register) so the officer can still see
+        // the COMPLETE countdown and plan around the room stay.
+        if(c.rrRoomId && c.rrCheckedOut===false) continue;
         const sec=restSecondsLeft(c);
         if(sec!==null&&sec<=0){
           const hours = getRestHours(c);
-          const updates={status:'SB',since:fmtTime(new Date()),restStarted:null,updatedBy:'Auto-system',notes:`Auto-promoted from Resting after ${hours}h`};
+          const now = new Date();
+          const monthly={...(c.monthly||{})};monthly[`d${CD}`]='SB';
+          const status_segments = buildStatusSegmentsForDay({...c,status:'R'}, CD, 'SB', {
+            now,
+            note:`Auto-promoted from Resting after ${hours}h`,
+          });
+          const updates={status:'SB',since:fmtTime(now),restStarted:null,updatedBy:'Auto-system',notes:`Auto-promoted from Resting after ${hours}h`,monthly,status_segments};
           await writeCrewDoc(depot,c.id,updates);
           setLog(`${c.name} (${depot}) rest period complete - auto-promoted to Standby`);
         }
@@ -852,7 +859,8 @@ function normalizeDesignationMetaRecord(docSnapOrData){
     id,
     label:String(data.label||id),
     aliases:Array.isArray(data.aliases)?data.aliases:data.aliases?String(data.aliases).split(',').map(v=>v.trim()).filter(Boolean):[],
-    restEligible:!isForcedNonRestDesignation(id) && !isForcedNonRestDesignation(data.label) && data.restEligible!==false,
+    restEligible:data.restEligible!==false,
+    runningRoomEligible:data.runningRoomEligible!==undefined?data.runningRoomEligible!==false:data.restEligible!==false,
     canLogin:data.canLogin!==false,
     isCrewMember:!!data.isCrewMember,
     isUser:!!data.isUser,
@@ -984,6 +992,63 @@ function populateStatusSelects(selected='SB'){
   const addStatusSelect=document.getElementById('addStatus');
   if(statusSelect) statusSelect.innerHTML = buildStatusOptions(selected);
   if(addStatusSelect) addStatusSelect.innerHTML = buildStatusOptions('SB');
+  const grid=document.getElementById('mStatusGrid');
+  if(grid) grid.innerHTML = buildStatusButtons(selected);
+  updateStatusPicker();
+}
+
+function buildStatusButtons(selected='SB'){
+  const codes = getStatusCodes();
+  return codes.map(id=>{
+    const meta = STATUS_META[id] || { label: id };
+    const label = id === 'SB' && (!meta.label || meta.label.toLowerCase() === 'standby') ? 'Stand By' : meta.label;
+    return `<label class="st-pick${id===selected?' active':''}" data-status="${id}" style="--st-bg:${meta.bg||'#ECEFF1'};--st-fg:${meta.fg||'#37474F'}" onclick="setStatusFromGroup('${id}')">
+      <input type="radio" name="mStatusGroup" value="${id}"${id===selected?' checked':''}>
+      <span class="st-pick-code">${id}</span>
+      <span class="st-pick-label">${label}</span>
+    </label>`;
+  }).join('');
+}
+
+function setStatusFromGroup(value){
+  const select=document.getElementById('mStatus');
+  if(select) select.value=value;
+  updateStatusPicker();
+  onStatusChange();
+}
+
+function updateStatusPicker(){
+  const grid=document.getElementById('mStatusGrid');
+  const select=document.getElementById('mStatus');
+  if(!grid||!select) return;
+  const value=select.value||'SB';
+  grid.querySelectorAll('.st-pick').forEach(el=>{
+    const active=el.dataset.status===value;
+    el.classList.toggle('active',active);
+    const radio=el.querySelector('input');
+    if(radio) radio.checked=active;
+  });
+}
+
+function updateStatusChangeSummary(){
+  const el=document.getElementById('statusChangeSummary');
+  if(!el) return;
+  if(!editKey){el.innerHTML='';return;}
+  const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);
+  const select=document.getElementById('mStatus');
+  if(!c||!select){el.innerHTML='';return;}
+  const newStatus=select.value;
+  const cur = editKey.day ? getFinalStatusForDay(c,editKey.day)||'' : c.status||'';
+  if(cur===newStatus){
+    el.innerHTML=`<div class="stc-row"><span class="stc-same">Same status</span><span class="stc-note">Refreshes the trailing segment — timestamps are kept.</span></div>`;
+    return;
+  }
+  el.innerHTML=`<div class="stc-row">
+    <span class="stc-from">${statusBadgeHtml(cur,'month-mini-badge')}</span>
+    <span class="stc-arrow">→</span>
+    <span class="stc-to">${statusBadgeHtml(newStatus,'month-mini-badge')}</span>
+  </div>
+  <div class="stc-note">The new status is recorded on top of the current one — resting time is never overwritten, timestamps are kept in the summary.</div>`;
 }
 
 function populateDesignationSelect(selected='locomotive_driver'){
@@ -1459,11 +1524,10 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
         <th>Rest location</th>
         <th>Route</th><th>Shift</th><th>Status</th><th>Train Type</th><th>Depart</th>
         <th>Rest Countdown</th><th>Since</th><th>Notes</th>
-        ${editable?'<th class="no-print"></th>':''}
       </tr></thead>
       <tbody id="crewTbody">`;
 
-  if(allCrew.length===0){html+=`<tr><td colspan="${12 + (showDepotCol ? 1 : 0) + (editable ? 1 : 0)}" class="no-rows">No crew match this filter.</td></tr>`;}
+  if(allCrew.length===0){html+=`<tr><td colspan="${12 + (showDepotCol ? 1 : 0)}" class="no-rows">No crew match this filter.</td></tr>`;}
   else allCrew.forEach((c,i)=>{
     const [abg,afc]=AVT_PAL[i%AVT_PAL.length];
     const m=STATUS_META[c.status]||{label:c.status};
@@ -1478,9 +1542,9 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
     }
     html+=`<tr>
       <td style="font-size:11px;color:var(--text3);font-family:var(--mono)">${getCrewStaffNumberLabel(c)}</td>
-      <td><div class="nm"><div class="avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div><strong>${c.name}</strong><span>${getDesignationLabel(c.grade)}</span></div></div></td>
+      <td><div class="nm nm-click" onclick="openCrewDetails('${c.depot}','${c.id}')" title="View details & status history"><div class="avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div><strong>${c.name}</strong><span>${getDesignationLabel(c.grade)}</span></div></div></td>
       ${showDepotCol?`<td><span style="color:${dc};font-weight:700">${c.depot}</span></td>`:''}
-      <td style="font-size:11px;color:${c.awayDepot?'var(--kr-red)':'var(--text3)'}">${c.awayDepot?`${c.awayDepot} (away)`:'Home'}</td>
+      <td style="font-size:11px;color:${c.awayDepot?'var(--kr-red)':'var(--text3)'}">${c.awayDepot?`${c.awayDepot} (away)`:'Home'}${c.rrRoomName?` · <span style="font-size:10px;color:${c.rrCheckedOut?'var(--standby)':'var(--kr-red)'}">${c.rrRoomName}${c.rrRoomDepot&&c.rrRoomDepot!==c.depot?` (${c.rrRoomDepot})`:''} ${c.rrCheckedOut?'· out':'· in'}</span>`:''}</td>
       <td style="font-size:11px">${c.route||'-'}</td>
       <td style="color:var(--text3);font-size:10px">${getCrewShiftLabel(c)}</td>
       <td><span class="badge bd-${c.status}">${m.label}</span></td>
@@ -1489,7 +1553,6 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
       <td>${cdHtml}</td>
       <td style="color:var(--text3);font-size:11px">${c.since||'-'}</td>
       <td style="font-size:11px;color:var(--text2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.notes||''}">${c.notes||'-'}</td>
-      ${editable?`<td class="no-print" style="white-space:nowrap"><button class="tbl-act" onclick="openUpdate('${c.depot}','${c.id}')">✏ Edit</button></td>`:''}
     </tr>`;
   });
   html+=`</tbody></table></div></div>`;
@@ -1516,7 +1579,7 @@ function updateCountdownsInTable(){
 
 /* ════════ REST PAGE ═══════════════════════════════════════════════════════ */
 function renderRest(){
-  safeSetText('phSub', 'Live rest countdowns - drivers only');
+  safeSetText('phSub', 'Live rest countdowns');
   safeSetInner('phActions', '');
   const depots=currentUser.isHQ?getActiveDepots():[currentUser.depot];
   const all=getAllCrew(state, depots).filter(c=>isDesignationRestEligible(c.grade));
@@ -1525,9 +1588,9 @@ function renderRest(){
   const booked=all.filter(c=>c.status==='BK');
 
   let html=kpiHtml([['TOT','Total Drivers',all.length],['R','Resting',resting.length],['SB','Standby',standby.length],['BK','Booked',booked.length]],'repeat(4,1fr)');
-  html+=`<div class="sec-hdr"><span class="sec-title">Resting drivers - live countdown</span><span style="font-size:11px;color:var(--text2)">Auto-updates every 10s · Drivers auto-promoted to Standby on expiry</span></div>`;
+  html+=`<div class="sec-hdr"><span class="sec-title">Resting crew - live countdown</span><span style="font-size:11px;color:var(--text2)">Auto-updates every 10s · Crew auto-promoted to Standby on expiry</span></div>`;
 
-  if(resting.length===0){html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:30px;text-align:center;color:var(--text3)">No drivers currently resting.</div>`;}
+  if(resting.length===0){html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:30px;text-align:center;color:var(--text3)">No crew currently resting.</div>`;}
   else{
     html+=`<div class="rest-grid" id="restGrid">`;
     resting.sort((a,b)=>{const sa=restSecondsLeft(a)??999999;const sb=restSecondsLeft(b)??999999;return sa-sb;}).forEach((c,i)=>{
@@ -1544,7 +1607,7 @@ function renderRest(){
         <div class="rest-info">
           <div class="rest-name">${c.name}</div>
           <div class="rest-depot">${restLocation} · ${getDesignationLabel(c.grade)} · ${maxH}h rest</div>
-          <div style="font-size:10px;color:var(--text2);margin-top:2px">Started: ${c.restStarted?fmtTime(new Date(c.restStarted)):'-'}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px">Started: ${c.restStarted?fmtTime(new Date(c.restStarted)):'-'}${c.rrRoomName?` · Room: ${c.rrRoomName}${c.rrRoomDepot&&c.rrRoomDepot!==c.depot?` (${c.rrRoomDepot})`:''} (${c.rrCheckedOut?'checked out':'in room'})`:''}</div>
         </div>
         <div class="rest-cd">
           <div class="rest-cd-time" style="color:${colMap[cl]}" id="rcd-${c.depot}-${c.id}">${timeStr}</div>
@@ -1630,13 +1693,13 @@ function renderMonthly(){
     const we=dt.getDay()===0||dt.getDay()===6;
     const isTod=d===CD;
     const isSelected=d===selectedDay;
-    html+=`<th class="${isSelected?'selected-header':''}" style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}" onclick="selectMonthDay(${d})"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;
+    html+=`<th class="${isSelected?'selected-header':''}" style="${we?'color:#E53935':''}${isTod?';background:#FFF8E1;color:var(--kr-red)':''}"><div>${d}</div><div style="font-size:8px">${DAY_NAMES[dt.getDay()]}</div></th>`;
   });
   html+=`<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3F2F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#FEF2F2;color:#991B1B">ABS</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>`;
 
   allCrew.forEach(c=>{
     const activeRow = selectedCrew && selectedCrew.id===c.id && selectedCrew.depot===c.depot;
-    html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name" onclick="selectMonthlyCrew('${c.depot}','${c.id}')" style="cursor:pointer" title="Click to load crew details"><strong>${c.name}</strong><div style="font-size:11px;color:var(--text2)">${getDesignationLabel(c.grade)}</div></td>`;
+    html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name" onclick="openCrewDetails('${c.depot}','${c.id}')" style="cursor:pointer" title="View details & status history"><strong>${c.name}</strong><div style="font-size:11px;color:var(--text2)">${getDesignationLabel(c.grade)}</div></td>`;
     if(showDepot)html+=`<td class="mc-dep" style="color:${DEPOT_COLORS[c.depot]};font-weight:700">${c.depot}</td>`;
     const sm={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
     days.forEach(d=>{
@@ -1650,12 +1713,7 @@ function renderMonthly(){
       const cls=code?(code==='BK' ? (isEngineeringBooking ? 'day-BK day-BK-eng' : 'day-BK') : `day-${code}`):(we?'day-we':'');
       if(sm[code]!==undefined)sm[code]++;
       const selectedClass = isSelected && activeRow ? ' selected-col' : '';
-      const cellClick = isTod && canManageCrew(c.depot)
-        ? `openDayEdit('${c.depot}','${c.id}',${d})`
-        : '';
-      const cellTitle = isTod ? 'Today - click to edit' : '';
-      const cellProps = cellClick ? `onclick="${cellClick}" title="${cellTitle}" style="cursor:pointer"` : '';
-      html+=`<td class="${cls} day-ed${isTod?' today-col':''}${selectedClass}" ${cellProps}>${renderMonthDayCell(daySegments, code)}</td>`;
+      html+=`<td class="${cls} day-ed${isTod?' today-col':''}${selectedClass}">${renderMonthDayCell(daySegments, code)}</td>`;
     });
     html+=`<td class="mc-sBK">${sm.BK}</td><td class="mc-sSB">${sm.SB}</td><td class="mc-sR">${sm.R}</td><td class="mc-sL">${sm.L}</td><td class="mc-sSK">${sm.SK}</td><td class="mc-sABS">${sm.ABS}</td><td class="mc-sNTB">${sm.NTB}</td><td class="mc-sTO">${sm.TO}</td></tr>`;
   });
@@ -1753,9 +1811,52 @@ function runReport(reportId){
       goPage('monthly');
       setTimeout(()=>window.print(),500);
       break;
+    case 'builder':
+      runBuilderReport(report);
+      break;
     default:
       alert(`Unknown report type: ${report.reportType}`);
   }
+}
+
+async function runBuilderReport(report){
+  const target = document.getElementById('pbody');
+  if(!target) return;
+  safeSetInner('pbody', '<div class="rep-empty">Loading builder report…</div>');
+  try{
+    const resp = await fetch(`/reports/builder/${encodeURIComponent(report.id)}`, {cache:'no-store'});
+    if(!resp.ok){
+      let msg = `Builder report failed (${resp.status})`;
+      try{ const j = await resp.json(); if(j.error) msg = j.error; }catch(e){}
+      throw new Error(msg);
+    }
+    const data = await resp.json();
+    renderBuilderTable(report, data);
+  }catch(err){
+    console.error('Builder report failed', err);
+    safeSetInner('pbody', `<div class="rep-empty">${String(err?.message||'Failed to load report').replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch]))}</div>`);
+  }
+}
+
+function renderBuilderTable(report, data){
+  const cols = Array.isArray(data?.columns) ? data.columns : [];
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  if(!cols.length){
+    safeSetInner('pbody', '<div class="rep-empty">This report has no columns configured.</div>');
+    return;
+  }
+  const esc = v => String(v ?? '').replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch]));
+  const thead = `<tr>${cols.map(c=>`<th>${esc(c.label||c.key)}</th>`).join('')}</tr>`;
+  const tbody = rows.length
+    ? rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c.key])}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--text3)">No rows returned.</td></tr>`;
+  safeSetInner('pbody', `
+    <div class="rep-card" style="max-width:100%">
+      <h3>${esc(data.label || report.label || report.id)}</h3>
+      <p>${rows.length} row${rows.length===1?'':'s'} · generated ${new Date().toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'})}</p>
+      <div class="tbl-wrap" style="margin-top:10px"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+      <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="goPage('reports')">Back to reports</button></div>
+    </div>`);
 }
 
 function parseMonthKey(monthKey){
@@ -1795,21 +1896,39 @@ function buildMonthlyFromStatusSegments(item){
 function getDaySegmentCode(item, day){
   return getFinalStatusForDay(item, day);
 }
-function buildStatusSegmentsForDay(item, day, status){
+function buildStatusSegmentsForDay(item, day, status, opts = {}){
   const segments = Array.isArray(item?.status_segments) ? [...item.status_segments] : [];
-  const idx = segments.findIndex(x=>x.day===day && (x.sort_order||100)===100);
   if(status===''){
-    return segments.filter(x=>x.day!==day);
+    return segments.filter(x=>Number(x.day)!==Number(day));
   }
+  const daySegs = segments.filter(x=>Number(x.day)===Number(day));
+  const otherSegs = segments.filter(x=>Number(x.day)!==Number(day));
+  const now = opts.now || new Date();
+  const finalStatus = daySegs.length ? (daySegs[daySegs.length-1].status_code||daySegs[daySegs.length-1].status||'') : '';
   const restStart = status==='R' && item?.restStarted ? new Date(item.restStarted) : null;
-  const startTime = restStart && !isNaN(restStart.getTime()) ? fmtTime(restStart) : '00:00';
-  const endTime = status==='R' && restStart && !isNaN(restStart.getTime())
-    ? minutesToTime(Math.min(1439, timeToMinutes(startTime) + getRestHours(item) * 60))
-    : '23:59';
-  const newSeg = {day,sort_order:100,status_code:status,status,start_time:startTime,end_time:endTime,note:STATUS_META[status]?.label||status};
-  if(idx===-1) segments.push(newSeg);
-  else segments[idx] = {...segments[idx], ...newSeg};
-  return segments;
+  const restUsable = restStart && !isNaN(restStart.getTime());
+  const startMin = status==='R' && restUsable ? timeToMinutes(fmtTime(restStart)) : timeToMinutes(fmtTime(now));
+  const endMin = status==='R' && restUsable ? Math.min(1439, startMin + getRestHours(item)*60) : 1439;
+  const note = opts.note || STATUS_META[status]?.label || status;
+  // Same status again → refresh the trailing segment instead of stacking a duplicate.
+  if(finalStatus===status){
+    const last = daySegs[daySegs.length-1];
+    last.status_code=status; last.status=status;
+    last.end_time='23:59';
+    last.note=note;
+    return [...otherSegs,...daySegs];
+  }
+  const maxOrder = daySegs.reduce((m,s)=>Math.max(m,Number(s.sort_order)||100),100);
+  const newSeg = {day:Number(day),sort_order:maxOrder+100,status_code:status,status,start_time:minutesToTime(startMin),end_time:endMin>=1439?'23:59':minutesToTime(endMin),note};
+  // Clamp the previous segment so the timeline stays contiguous (rest is never erased).
+  if(daySegs.length){
+    const prev=daySegs[daySegs.length-1];
+    const prevEnd = prev.end_time==='23:59'?1440:timeToMinutes(prev.end_time);
+    if(prevEnd>startMin){
+      prev.end_time = startMin<=0 ? '00:00' : minutesToTime(Math.max(0,startMin));
+    }
+  }
+  return [...otherSegs,...daySegs,newSeg];
 }
 
 function getDaySegments(item, day){
@@ -2495,10 +2614,12 @@ async function renderAdmin(){
 
   const designationRecords = getAllDesignationMetadata().length ? getAllDesignationMetadata() : DEFAULT_DESIGNATION_DEFINITIONS;
   const designationRows = designationRecords.sort((a,b)=>(a.order||999)-(b.order||999)||String(a.label||a.id).localeCompare(String(b.label||b.id))).map(meta=>{
-    return `<div class="admin-row" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 90px 90px 90px 90px 100px 90px;">
+    const roomFlag = meta.runningRoomEligible!==undefined?meta.runningRoomEligible:meta.restEligible!==false;
+    return `<div class="admin-row" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 80px 80px 80px 80px 80px 100px 90px;">
       <input value="${meta.id}" data-admin-desig-id="${meta.id}" class="admin-field" placeholder="Designation id" disabled>
       <input value="${meta.label}" data-admin-desig-label="${meta.id}" class="admin-field" placeholder="Label" disabled>
       <label class="admin-checkbox-label"><input type="checkbox" ${meta.restEligible!==false?'checked':''} data-admin-desig-rest="${meta.id}"> Rest</label>
+      <label class="admin-checkbox-label"><input type="checkbox" ${roomFlag?'checked':''} data-admin-desig-room="${meta.id}"> Room</label>
       <label class="admin-checkbox-label"><input type="checkbox" ${meta.canLogin!==false?'checked':''} data-admin-desig-login="${meta.id}"> Login</label>
       <label class="admin-checkbox-label"><input type="checkbox" ${meta.isCrewMember?'checked':''} data-admin-desig-crew="${meta.id}"> Crew</label>
       <label class="admin-checkbox-label"><input type="checkbox" ${meta.isUser?'checked':''} data-admin-desig-user="${meta.id}"> User</label>
@@ -2509,10 +2630,11 @@ async function renderAdmin(){
       </div>
     </div>`;
   }).join('');
-  const newDesignationRow = `<div class="admin-row admin-row-add" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 90px 90px 90px 90px 100px 90px;">
+  const newDesignationRow = `<div class="admin-row admin-row-add" style="grid-template-columns:minmax(140px,1fr) minmax(180px,1.2fr) 80px 80px 80px 80px 80px 100px 90px;">
       <input value="" data-admin-desig-id="new" class="admin-field" placeholder="New designation id">
       <input value="" data-admin-desig-label="new" class="admin-field" placeholder="Label">
       <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-rest="new"> Rest</label>
+      <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-room="new"> Room</label>
       <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-login="new"> Login</label>
       <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-crew="new"> Crew</label>
       <label class="admin-checkbox-label"><input type="checkbox" checked data-admin-desig-user="new"> User</label>
@@ -2806,6 +2928,7 @@ async function saveDesignationMetaRecord(designationId){
   const currentMeta = getAllDesignationMetadata().find(item=>item.id===designationId) || DEFAULT_DESIGNATION_DEFINITIONS.find(item=>item.id===designationId) || {id:nextId,label:nextId,aliases:[]};
   const orderEl=document.querySelector(`[data-admin-desig-order="${designationId}"]`);
   const restEl=document.querySelector(`[data-admin-desig-rest="${designationId}"]`);
+  const roomEl=document.querySelector(`[data-admin-desig-room="${designationId}"]`);
   const loginEl=document.querySelector(`[data-admin-desig-login="${designationId}"]`);
   const crewEl=document.querySelector(`[data-admin-desig-crew="${designationId}"]`);
   const userEl=document.querySelector(`[data-admin-desig-user="${designationId}"]`);
@@ -2813,7 +2936,8 @@ async function saveDesignationMetaRecord(designationId){
     id: nextId,
     label: (labelEl?.value||currentMeta.label||nextId).trim(),
     aliases: Array.isArray(currentMeta.aliases) ? currentMeta.aliases : [],
-    restEligible:!isForcedNonRestDesignation(nextId) && !isForcedNonRestDesignation(labelEl?.value) && !!restEl?.checked,
+    restEligible:!!restEl?.checked,
+    runningRoomEligible:!!roomEl?.checked,
     canLogin:!!loginEl?.checked,
     isCrewMember:!!crewEl?.checked,
     isUser:!!userEl?.checked,
@@ -3027,6 +3151,8 @@ async function saveUserAccount(username){
 /* ════════ MODALS ══════════════════════════════════════════════════════════ */
 function onStatusChange(){
   const s=document.getElementById('mStatus').value;
+  updateStatusPicker();
+  updateStatusChangeSummary();
   document.getElementById('trainTypeRow').style.display=s==='BK'?'block':'none';
   document.getElementById('restHoursRow').style.display=s==='R'?'block':'none';
   document.getElementById('restLocationRow').style.display=s==='R'?'block':'none';
@@ -3069,6 +3195,115 @@ function setAwayDepotOptions(homeDepot,selectedAway=''){
   const awaySelect=document.getElementById('mAwayDepot');
   if(!awaySelect) return;
   awaySelect.innerHTML=getActiveDepots().filter(d=>d!==homeDepot).map(d=>`<option value="${d}"${d===selectedAway?' selected':''}>${d}</option>`).join('');
+}
+
+/* ════════ CREW DETAILS MODAL ════════════════════════════════════════════════ */
+function closeCrewDetails(){
+  if(crewDetailsTimer){clearInterval(crewDetailsTimer);crewDetailsTimer=null;}
+  crewDetailsKey=null;
+  const m=document.getElementById('crewModal');
+  if(m)m.classList.remove('open');
+}
+
+function openCrewDetails(depot,id){
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);
+  if(!c)return;
+  crewDetailsKey={depot,id};
+  selectedMonthCrewKey=`${depot}::${id}`;
+  const [abg,afc]=AVT_PAL[0];
+  const segs=getDaySegments(c, CD);
+  const finalStatus=getFinalStatusForDay(c,CD)||c.status||'';
+  const isDriver=isDesignationRestEligible(c.grade);
+  const sec=restSecondsLeft(c);
+  const maxH=getRestHours(c);
+  const restCd = finalStatus==='R'&&isDriver
+    ? (sec===null
+        ? '<div class="crew-cd" style="color:var(--text3)">No start time set</div>'
+        : `<div class="crew-cd ${sec<=0?'done':cdClass(sec,maxH)}" id="crewDetailsTick">${sec<=0?'→ Standby':fmtCountdown(sec)}</div>`)
+    : '';
+  const inRoom=!!(c.rrRoomId && c.rrCheckedOut===false);
+  let quickActions='';
+  if(inRoom){
+    quickActions=`<span class="qa-note">In running room (${c.rrRoomName||''}) — check out via the register first.</span>`;
+  }else if(c.status==='SB'){
+    quickActions=`<button class="qa qa-book" onclick="quickActionBook('${depot}','${id}')">Book</button><button class="qa qa-to" onclick="quickActionTripOff('${depot}','${id}')">Trip Off</button>`;
+  }else if(c.status==='BK'){
+    quickActions=`<button class="qa qa-bo" onclick="quickActionBookedOff('${depot}','${id}')">Booked Off</button>`;
+  }else if(c.status==='R'){
+    quickActions=`<button class="qa qa-sb" onclick="quickActionStandby('${depot}','${id}')">End Rest</button>`;
+  }else if(['L','SK','T'].includes(c.status)){
+    quickActions=`<button class="qa qa-sb" onclick="quickActionRecall('${depot}','${id}')">Recall to duty</button>`;
+  }else if(['TO','ABS','NTB'].includes(c.status)){
+    quickActions=`<button class="qa qa-sb" onclick="quickActionStandby('${depot}','${id}')">Set Stand By</button>`;
+  }
+  const days=Array.from({length:Math.max(1,CD)},(_,i)=>i+1);
+  const summary=Object.keys(STATUS_META).map(code=>{
+    const n=days.filter(d=>getFinalStatusForDay(c,d)===code).length;
+    return [code,n];
+  }).filter(([,n])=>n>0);
+  const todaySegs=segs.length
+    ? segs.map(seg=>{
+        const sm=STATUS_META[seg.status_code]||{label:seg.status_code,bg:'#ECEFF1',fg:'#37474F'};
+        return `<div class="cd-timeline-row">
+          <div class="cd-timeline-rail"><span style="background:${sm.fg}"></span></div>
+          <div class="cd-timeline-main">
+            <div class="cd-timeline-time">${seg.start_time} – ${seg.end_time}</div>
+            <div class="cd-timeline-status">${statusBadgeHtml(seg.status_code,'month-mini-badge')} ${sm.label}</div>
+            <div class="cd-timeline-note">${seg.note||sm.label}${seg.status_code==='R'&&c.restStarted?` · rest started ${fmtTime(new Date(c.restStarted))}`:''}</div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="selected-day-none">No status recorded today.</div>';
+
+  document.getElementById('crewModalTitle').textContent='Crew details';
+  document.getElementById('crewModalSub').textContent=`${c.name} · ${c.id} · ${depot}`;
+  document.getElementById('crewModalBody').innerHTML=`
+    <div class="crew-detail-head">
+      <div class="avt" style="background:${abg};color:${afc}">${initials(c.name)}</div>
+      <div>
+        <div class="crew-detail-name">${c.name}</div>
+        <div class="crew-detail-sub">${getDesignationLabel(c.grade)} · ${c.depot} · Staff No. ${c.staff_number||'-'}</div>
+      </div>
+    </div>
+    <div class="crew-detail-chips">
+      <div class="crew-chip"><span>Status</span><strong>${statusBadgeHtml(finalStatus,'month-mini-badge')}</strong></div>
+      <div class="crew-chip"><span>Route</span><strong>${c.route||'-'}</strong></div>
+      <div class="crew-chip"><span>Shift</span><strong>${getCrewShiftLabel(c)}</strong></div>
+      ${c.status==='BK'&&c.trainType?`<div class="crew-chip"><span>Train</span><strong>${getTrainTypeLabel(c.trainType)}</strong></div>`:''}
+      ${c.rrRoomName?`<div class="crew-chip"><span>Room</span><strong>${c.rrRoomName}${c.rrRoomDepot&&c.rrRoomDepot!==c.depot?` (${c.rrRoomDepot})`:''} · ${c.rrCheckedOut?'Checked out':'Checked in'}</strong></div>`:''}
+      <div class="crew-chip"><span>Since</span><strong>${c.since||'-'}</strong></div>
+      <div class="crew-chip"><span>Notes</span><strong>${c.notes||'-'}</strong></div>
+    </div>
+    <div class="crew-detail-actions">${quickActions}</div>
+    <div class="crew-detail-section">
+      <div class="crew-detail-title">Today's timeline <span class="cd-dow">${DAY_NAMES[new Date(CY,CM,CD).getDay()]} ${CD} ${MONTH_NAME.split(' ')[0]}</span>${restCd}</div>
+      <div class="cd-timeline">${todaySegs}</div>
+    </div>
+    <div class="crew-detail-section">
+      <div class="crew-detail-title">Month summary <span class="cd-dow">${MONTH_NAME}</span></div>
+      <div class="status-side-list">${summary.length?summary.map(([code,n])=>`<div class="status-side-item"><span class="status-side-chip status-${code}">${code}</span><span>${n} day${n===1?'':'s'}</span></div>`).join(''):'<div class="selected-day-none">No monthly records yet.</div>'}</div>
+    </div>`;
+  const m=document.getElementById('crewModal');
+  if(m)m.classList.add('open');
+  if(crewDetailsTimer)clearInterval(crewDetailsTimer);
+  if(finalStatus==='R'&&isDriver){
+    crewDetailsTimer=setInterval(()=>{
+      const cur=Object.values(state[depot]||{}).find(x=>x.id===id);
+      const el=document.getElementById('crewDetailsTick');
+      if(!cur||!el||!document.getElementById('crewModal')?.classList.contains('open')){closeCrewDetails();return;}
+      const s=restSecondsLeft(cur);
+      if(s===null){el.textContent='No start time set';el.style.color='var(--text3)';return;}
+      if(s<=0){el.textContent='→ Standby';el.className='crew-cd done';clearInterval(crewDetailsTimer);crewDetailsTimer=null;return;}
+      el.textContent=fmtCountdown(s);
+      el.className=`crew-cd ${cdClass(s,maxH)}`;
+    },1000);
+  }
+}
+
+function changeStatusFromDetails(){
+  const depot=crewDetailsKey?.depot,id=crewDetailsKey?.id;
+  closeCrewDetails();
+  if(depot&&id)openUpdate(depot,id);
 }
 
 function openUpdate(depot,id){
@@ -3130,6 +3365,21 @@ function openDayEdit(depot,id,day){
 
 function closeModal(){document.getElementById('modal').classList.remove('open');setDaySegmentEditorVisible(false);editKey=null;currentModalGrade=null;}
 
+function countTripOffDays(c){
+  const monthly=c.monthly||{};
+  return Object.keys(monthly).filter(k=>k.startsWith('d')&&monthly[k]==='TO').length;
+}
+
+function confirmTripOffDay(c,day){
+  const alreadyTo=!!(c.monthly&&c.monthly[`d${day}`]==='TO');
+  if(alreadyTo) return true;
+  const toDays=countTripOffDays(c);
+  if(toDays>=4){
+    return confirm(`${c.name} already has ${toDays} Trip Off day(s) this month (max 4). Give another Trip Off day anyway?`);
+  }
+  return true;
+}
+
 async function saveModal(){
   if(!editKey)return;
   setSyncStatus('spin','Saving…');
@@ -3139,7 +3389,7 @@ async function saveModal(){
     const bookTime=newStatus==='BK'?document.getElementById('mBookTime').value:'';
     const restStartInput=document.getElementById('mRestStart').value;
     if(newStatus==='R' && !isRestAllowedForGrade(currentModalGrade)){
-      alert('Resting can only be applied to locomotive driver designations. Change the status before saving.');
+      alert('This designation does not qualify for Resting. Change the status before saving.');
       return;
     }
 
@@ -3147,8 +3397,11 @@ async function saveModal(){
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
       const daySegments=readDaySegmentEditor(editKey.day);
       if(!daySegments.length){alert('Add at least one status segment for this day.');return;}
+      const finalSegment=daySegments[daySegments.length-1];
+      const finalStatus=finalSegment.status_code;
+      if(finalStatus==='TO' && !confirmTripOffDay(c,editKey.day)) return;
       if(daySegments.some(seg=>seg.status_code==='R') && !isRestAllowedForGrade(currentModalGrade)){
-        alert('Resting can only be applied to locomotive driver designations. Change the status before saving.');
+        alert('This designation does not qualify for Resting. Change the status before saving.');
         return;
       }
       for(const seg of daySegments){
@@ -3157,8 +3410,6 @@ async function saveModal(){
           return;
         }
       }
-      const finalSegment=daySegments[daySegments.length-1];
-      const finalStatus=finalSegment.status_code;
       const finalTrainType=finalStatus==='BK'?document.getElementById('mTrainType').value:'';
       const finalBookTime=finalStatus==='BK'?document.getElementById('mBookTime').value:'';
       const monthly={...(c.monthly||{})};monthly[`d${editKey.day}`]=finalStatus;
@@ -3171,6 +3422,7 @@ async function saveModal(){
       setLog(`${c.name} Day ${editKey.day} saved with ${daySegments.length} segment${daySegments.length===1?'':'s'}.`);
     } else {
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
+      if(newStatus==='TO' && !confirmTripOffDay(c,CD)) return;
       const monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
       let restStarted=c.restStarted||null;
       if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);restStarted=rs.toISOString();}
@@ -3185,6 +3437,95 @@ async function saveModal(){
     setSyncStatus('ok','Saved');
   }catch(err){setSyncStatus('err','Save failed');setLog('Error: '+err.message);}
   closeModal();
+  refreshPage();
+}
+
+/* ════════ QUICK STATUS ACTIONS ════════════════════════════════════════════ */
+async function applyQuickStatus(depot,id,status,opts={}){
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);
+  if(!c)return;
+  const now=new Date();
+  const restStarted = status==='R' ? (opts.restStarted ?? now.toISOString()) : null;
+  const status_segments=buildStatusSegmentsForDay({...c,restStarted}, CD, status, {note:opts.note||STATUS_META[status]?.label||status});
+  const monthly={...(c.monthly||{})};monthly[`d${CD}`]=status;
+  const actionNote=opts.notes?((c.notes?c.notes+'; ':'')+opts.notes):c.notes;
+  const upd={
+    status,
+    trainType:status==='BK'?(opts.trainType||c.trainType||''):'',
+    bookTime:status==='BK'?(opts.bookTime||c.bookTime||''):'',
+    route:c.route||'',
+    staff_number:c.staff_number||'',
+    shift:c.shift||'',
+    notes:actionNote,
+    since:fmtTime(now),
+    updatedBy:currentUser.username,
+    restStarted,
+    monthly,
+    status_segments,
+    awayDepot:status==='R'?(opts.awayDepot||null):null,
+  };
+  setSyncStatus('spin','Saving…');
+  try{
+    await writeCrewDoc(depot,id,upd);
+    setSyncStatus('ok','Saved');
+  }catch(err){
+    setSyncStatus('err','Save failed');
+    setLog('Error: '+err.message);
+    throw err;
+  }
+}
+
+function quickActionBook(depot,id){
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
+  closeCrewDetails();
+  openUpdate(depot,id);
+  const sel=document.getElementById('mStatus');
+  if(sel){sel.value='BK';updateStatusPicker();onStatusChange();}
+}
+
+async function quickActionBookedOff(depot,id){
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
+  if(!isDesignationRestEligible(c.grade)){
+    alert(`${c.name} (${getDesignationLabel(c.grade)}) does not qualify for Resting.`);
+    return;
+  }
+  const dest=currentUser.depot||'HQ';
+  try{
+    await applyQuickStatus(depot,id,'R',{awayDepot:dest,note:`Booked off at ${dest}`,notes:`Booked off at ${dest}`});
+    setLog(`${c.name}: Booked Off → Resting at ${dest}`);
+  }catch(e){}
+  closeCrewDetails();
+  refreshPage();
+}
+
+async function quickActionRecall(depot,id){
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
+  try{
+    await applyQuickStatus(depot,id,'SB',{note:'Recalled to duty',notes:'Recalled to duty'});
+    setLog(`${c.name}: ${STATUS_META[c.status]?.label||c.status} → Stand By (recalled)`);
+  }catch(e){}
+  closeCrewDetails();
+  refreshPage();
+}
+
+async function quickActionStandby(depot,id){
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
+  try{
+    await applyQuickStatus(depot,id,'SB',{note:'Set to Stand By',notes:'Set to Stand By'});
+    setLog(`${c.name}: → Stand By`);
+  }catch(e){}
+  closeCrewDetails();
+  refreshPage();
+}
+
+async function quickActionTripOff(depot,id){
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
+  if(!confirmTripOffDay(c,CD)) return;
+  try{
+    await applyQuickStatus(depot,id,'TO',{note:'Trip Off day',notes:'Trip Off day'});
+    setLog(`${c.name}: → Trip Off`);
+  }catch(e){}
+  closeCrewDetails();
   refreshPage();
 }
 
@@ -3446,6 +3787,10 @@ window.openAddModal = openAddModal;
 window.saveAddCrew = saveAddCrew;
 window.openUpdate = openUpdate;
 window.openDayEdit = openDayEdit;
+window.openCrewDetails = openCrewDetails;
+window.closeCrewDetails = closeCrewDetails;
+window.changeStatusFromDetails = changeStatusFromDetails;
+window.setStatusFromGroup = setStatusFromGroup;
 window.selectMonthDay = selectMonthDay;
 window.selectMonthlyCrewDay = selectMonthlyCrewDay;
 window.addDaySegmentRow = addDaySegmentRow;
@@ -3485,7 +3830,7 @@ window.seedBackend = async () => {
 };
 /* ════════ UI ═══════════════════════════════════════════════════════════════ */
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeAddModal();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeAddModal();closeCrewDetails();}});
 ['lUser','lPass'].forEach(id=>{document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});});
 
 async function bootApp(){

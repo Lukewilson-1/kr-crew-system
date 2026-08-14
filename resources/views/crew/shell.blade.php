@@ -8,13 +8,16 @@
         <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
         @if (auth()->user())
             @php
+                $authUser = auth()->user();
                 $currentUserPayload = [
-                    'username' => auth()->user()->username,
-                    'depot' => auth()->user()->depot_code ?? 'HQ',
-                    'name' => auth()->user()->name ?? auth()->user()->email ?? auth()->user()->username,
-                    'isHQ' => (bool) auth()->user()->is_hq || (bool) auth()->user()->is_super_admin || auth()->user()->role_code === 'hq_admin' || (auth()->user()->depot_code === 'HQ'),
-                    'isSuperAdmin' => (bool) auth()->user()->is_super_admin || auth()->user()->role_code === 'super_admin',
-                    'role' => auth()->user()->role_code ?? '',
+                    'username' => $authUser->username,
+                    'depot' => $authUser->depot_code ?? 'HQ',
+                    'name' => $authUser->name ?? $authUser->email ?? $authUser->username,
+                    'isHQ' => (bool) $authUser->is_hq || (bool) $authUser->is_super_admin || $authUser->role_code === 'hq_admin' || ($authUser->depot_code === 'HQ'),
+                    'isSuperAdmin' => (bool) $authUser->is_super_admin || $authUser->role_code === 'super_admin',
+                    'role' => $authUser->role_code ?? '',
+                    'canRunningRooms' => $authUser->canAccessRunningRooms(),
+                    'canAdmin' => $authUser->isGlobalAccess(),
                 ];
             @endphp
             <script>
@@ -59,6 +62,7 @@
             <div id="shell">
                 <div id="sidebar">
                     <div class="sb-group">
+                        <a href="/" class="sb-item"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a>
                         <div class="sb-sec">Main Depot</div>
                         <a href="/crew-dashboard" class="sb-item active" onclick="if(typeof goPage==='function'){goPage('dashboard');return false;}" id="sb-dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
                         <a href="/crew-roster" class="sb-item" onclick="if(typeof goPage==='function'){goPage('roster');return false;}" id="sb-roster"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.85"/></svg>Crew Roster</a>
@@ -70,16 +74,20 @@
                             <div id="sbDepots"></div>
                         </div>
                     </div>
-                    <div class="sb-group">
-                        <div class="sb-sec">Running Rooms</div>
-                        <div class="sb-item" onclick="window.location.href='/running-rooms/monthly'"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly Report</div>
-                        <div class="sb-item" onclick="window.location.href='/running-rooms/challenges'"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>Challenges Summary</div>
-                        <div class="sb-item" onclick="window.location.href='/running-rooms/settings'"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
-                    </div>
-                    <div class="sb-group" id="adminSection" style="display:none">
-                        <div class="sb-sec">Admin</div>
-                        <div class="sb-item" onclick="window.location.href='/admin'" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
-                    </div>
+                    @if ($currentUserPayload['canRunningRooms'])
+                        <div class="sb-group">
+                            <div class="sb-sec">Running Rooms</div>
+                            <div class="sb-item" onclick="window.location.href='/running-rooms/monthly'"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M16 3v2M8 3v2"/></svg>Monthly Report</div>
+                            <div class="sb-item" onclick="window.location.href='/running-rooms/challenges'"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>Challenges Summary</div>
+                            <div class="sb-item" onclick="window.location.href='/running-rooms/settings'"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</div>
+                        </div>
+                    @endif
+                    @if ($currentUserPayload['canAdmin'])
+                        <div class="sb-group" id="adminSection" style="display:none">
+                            <div class="sb-sec">Admin</div>
+                            <div class="sb-item" onclick="window.location.href='/admin'" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
+                        </div>
+                    @endif
                 </div>
                 <div id="main">
                     <div id="phdr">
@@ -121,10 +129,14 @@
 
         <div class="modal-ov" id="modal">
             <div class="modal-box modal">
-                <div class="modal-title" id="mTitle">Update status</div>
+                <div class="modal-title" id="mTitle">Update crew status</div>
                 <div class="modal-sub" id="mSub"></div>
+
+                <div class="status-change-summary" id="statusChangeSummary"></div>
+
                 <label>Status</label>
-                <select id="mStatus" onchange="onStatusChange()">
+                <div class="status-picker" id="mStatusGrid"></div>
+                <select id="mStatus" class="status-picker-select" onchange="onStatusChange()">
                     <option value="BK">BK - Booked</option>
                     <option value="SB">SB - Standby</option>
                     <option value="R">R - Resting</option>
@@ -136,7 +148,8 @@
                     <option value="TO">TO - Trip Off</option>
                 </select>
                 <div id="statusHint" style="font-size:11px;color:#E53935;margin-top:6px;display:none"></div>
-                <div id="trainTypeRow">
+
+                <div id="trainTypeRow" class="modal-block">
                     <label>Train type</label>
                     <select id="mTrainType">
                         <option value="">- Select train type -</option>
@@ -150,7 +163,8 @@
                     <input type="time" id="mBookTime" value="">
                     <div style="font-size:11px;color:var(--text2);margin-top:3px">Time the crew is booked to operate the train.</div>
                 </div>
-                <div id="restHoursRow">
+
+                <div id="restHoursRow" class="modal-block">
                     <label>Rest started at (HH:MM)</label>
                     <input type="time" id="mRestStart" value="">
                     <div style="font-size:11px;color:var(--text2);margin-top:3px" id="restDepotInfo"></div>
@@ -167,6 +181,7 @@
                     </div>
                     <div style="font-size:11px;color:var(--text2);margin-top:3px" id="restLocationHint"></div>
                 </div>
+
                 <div class="modal-grid">
                     <div>
                         <label>Route / Assignment</label>
@@ -186,7 +201,19 @@
                 <div class="modal-btns">
                     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
                     <button class="btn btn-danger" id="mRemoveBtn" onclick="confirmRemoveCrew()" style="display:none;background:#FFEBEE;color:#B71C1C;border:1px solid #EF9A9A">🗑 Remove crew</button>
-                    <button class="btn btn-primary" id="mSaveBtn" onclick="saveModal()">Save</button>
+                    <button class="btn btn-primary" id="mSaveBtn" onclick="saveModal()">Save status</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-ov" id="crewModal">
+            <div class="modal-box modal crew-modal">
+                <div class="modal-title" id="crewModalTitle">Crew details</div>
+                <div class="modal-sub" id="crewModalSub"></div>
+                <div id="crewModalBody"></div>
+                <div class="modal-btns" style="margin-top:14px">
+                    <button class="btn btn-ghost" onclick="closeCrewDetails()">Close</button>
+                    <button class="btn btn-primary" onclick="changeStatusFromDetails()">Change status</button>
                 </div>
             </div>
         </div>

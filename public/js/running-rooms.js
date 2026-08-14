@@ -83,6 +83,10 @@
     return r ? r.name : '—';
   }
 
+  function roomLabel(r) {
+    return r ? (r.depot ? `${r.name} (${r.depot})` : r.name) : '—';
+  }
+
   function recordsForRoom(roomId) {
     return state.records.filter((r) => Number(r.room_id) === Number(roomId));
   }
@@ -210,6 +214,7 @@
             <span class="rr-room-name">${esc(room.name)}</span>
             <span class="rr-room-meta"><b>${occ}</b> / ${room.beds} beds</span>
           </div>
+          ${room.depot ? `<div class="rr-room-depot">${esc(room.depot)}</div>` : ''}
           <div class="rr-berths">${berths}</div>
           <div class="rr-room-flags">${flags.join('') || '<span class="rr-flag gray">Open</span>'}</div>
         </div>`;
@@ -226,7 +231,7 @@
   function renderCheckIn() {
     const attendantRoomId = state.user?.roomId;
     const roomOptions = state.rooms.map((r) =>
-      `<option value="${r.id}"${Number(r.id) === Number(attendantRoomId) ? ' selected' : ''}>${esc(r.name)}</option>`
+      `<option value="${r.id}"${Number(r.id) === Number(attendantRoomId) ? ' selected' : ''}>${esc(roomLabel(r))}</option>`
     ).join('');
 
     const defaultRoomId = state.rooms.length ? (Number(attendantRoomId) || state.rooms[0].id) : null;
@@ -237,12 +242,15 @@
 
     const form = `
       <h2>Check In / Out</h2>
-      <div class="rr-sub">Enter a staff number to auto-fill the crew member, then allocate a bed. Only existing crew members who qualify for rest may check in.</div>
+      <div class="rr-sub">Search the crew by staff number or name, then allocate a bed. Only existing crew members eligible to use running rooms may check in.</div>
       <div class="rr-form-card">
         <form id="rrCheckinForm" class="rr-form-grid">
           <div class="rr-field rr-field-wide">
-            <label>Staff No. *</label>
-            <input type="text" name="staff_no" id="rrStaffNo" required maxlength="64" placeholder="Enter staff number" autocomplete="off">
+            <label>Search staff *</label>
+            <div class="rr-combobox">
+              <input type="text" name="staff_no" id="rrStaffNo" required maxlength="64" placeholder="Type staff number or name…" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+              <ul id="rrStaffSearchList" class="rr-search-list" hidden></ul>
+            </div>
           </div>
           <div class="rr-field">
             <label>Name</label>
@@ -325,7 +333,6 @@
     const desigEl = $('#rrMemberDesig', root);
     const statusEl = $('#rrStaffStatus', root);
     const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
-    let lookupTimer = null;
     let selectedMember = null;
 
     function setStaffStatus(className, html) {
@@ -335,7 +342,7 @@
     }
 
     function gateSubmit() {
-      if (submitBtn) submitBtn.disabled = !(selectedMember && selectedMember.rest_eligible);
+      if (submitBtn) submitBtn.disabled = !(selectedMember && selectedMember.room_eligible);
     }
 
     async function lookupStaff() {
@@ -352,10 +359,10 @@
         selectedMember = m;
         if (nameEl) nameEl.value = m.name;
         if (desigEl) desigEl.value = m.designation;
-        if (!m.rest_eligible) {
-          setStaffStatus('err', `${esc(m.name)} (${esc(m.designation)}) — <b>does not qualify for rest rooms</b>`);
+        if (!m.room_eligible) {
+          setStaffStatus('err', `${esc(m.name)} (${esc(m.designation)}) — <b>not eligible to use running rooms</b>`);
         } else {
-          setStaffStatus('ok', `${esc(m.name)} — ${esc(m.designation)} <span class="rr-badge ok">Rest eligible</span>`);
+          setStaffStatus('ok', `${esc(m.name)} — ${esc(m.designation)} <span class="rr-badge ok">Room eligible</span>`);
         }
         gateSubmit();
       } catch (err) {
@@ -364,9 +371,102 @@
     }
 
     if (staffInput) {
+      const searchList = $('#rrStaffSearchList', root);
+      let searchTimer = null;
+      let searchResults = [];
+      let searchIndex = -1;
+
+      function closeSearch() {
+        searchIndex = -1;
+        if (searchList) {
+          searchList.hidden = true;
+          searchList.innerHTML = '';
+        }
+        if (staffInput) staffInput.setAttribute('aria-expanded', 'false');
+      }
+
+      function renderSearchList() {
+        if (!searchList) return;
+        if (!searchResults.length) {
+          searchList.hidden = true;
+          searchList.innerHTML = '';
+          return;
+        }
+        searchList.innerHTML = searchResults.map((m, i) =>
+          `<li data-search-index="${i}" class="${i === searchIndex ? 'rr-search-active' : ''}" ${m.room_eligible ? '' : 'data-room-ineligible="1"'}>
+            <span class="rr-search-name">${esc(m.name)} <small>(${esc(m.staff_no)})</small></span>
+            <span class="rr-search-meta">${esc(m.designation)}${m.room_eligible ? '' : ' · no room access'}</span>
+          </li>`
+        ).join('');
+        searchList.hidden = false;
+        if (staffInput) staffInput.setAttribute('aria-expanded', 'true');
+      }
+
+      async function runSearch(q) {
+        if (q.length < 2) { closeSearch(); return; }
+        try {
+          const res = await api('/running-rooms/api/crew/search?q=' + encodeURIComponent(q) + '&limit=12');
+          searchResults = Array.isArray(res.results) ? res.results : [];
+          searchIndex = searchResults.length ? 0 : -1;
+          renderSearchList();
+        } catch (err) {
+          closeSearch();
+        }
+      }
+
+      function pickResult(index) {
+        const m = searchResults[index];
+        if (!m) return;
+        staffInput.value = m.staff_no;
+        closeSearch();
+        lookupStaff();
+      }
+
       staffInput.addEventListener('input', () => {
-        clearTimeout(lookupTimer);
-        lookupTimer = setTimeout(lookupStaff, 300);
+        clearTimeout(searchTimer);
+        const q = staffInput.value.trim();
+        selectedMember = null;
+        gateSubmit();
+        if (nameEl) nameEl.value = '';
+        if (desigEl) desigEl.value = '';
+        if (!q) { setStaffStatus('', ''); closeSearch(); return; }
+        setStaffStatus('', '<span class="rr-muted">Searching crew…</span>');
+        searchTimer = setTimeout(() => runSearch(q), 220);
+      });
+
+      staffInput.addEventListener('keydown', (e) => {
+        const open = searchList && !searchList.hidden;
+        if (e.key === 'ArrowDown' && open) {
+          e.preventDefault();
+          searchIndex = searchIndex < searchResults.length - 1 ? searchIndex + 1 : 0;
+          renderSearchList();
+        } else if (e.key === 'ArrowUp' && open) {
+          e.preventDefault();
+          searchIndex = searchIndex > 0 ? searchIndex - 1 : searchResults.length - 1;
+          renderSearchList();
+        } else if (e.key === 'Enter' && open) {
+          e.preventDefault();
+          const exact = searchResults.find((r) => String(r.staff_no) === staffInput.value.trim());
+          if (exact) pickResult(searchResults.indexOf(exact));
+          else if (searchIndex >= 0) pickResult(searchIndex);
+          else { closeSearch(); lookupStaff(); }
+        } else if (e.key === 'Escape') {
+          closeSearch();
+        }
+      });
+
+      if (searchList) {
+        searchList.addEventListener('mousedown', (e) => {
+          const li = e.target.closest('li[data-search-index]');
+          if (li) {
+            e.preventDefault();
+            pickResult(Number(li.dataset.searchIndex));
+          }
+        });
+      }
+
+      staffInput.addEventListener('blur', () => {
+        setTimeout(() => closeSearch(), 150);
       });
     }
     gateSubmit();
@@ -498,7 +598,7 @@
       <div class="rr-sub">Monthly occupancy summary per room, or a day-by-day breakdown for one room.</div>
       <div class="rr-toolbar rr-print-hide">
         <div class="rr-field"><label>Month</label><input type="month" id="rrMonthKey" value="${state.monthKey}"></div>
-        ${BOOT.isAdmin ? `<div class="rr-field"><label>Room</label><select id="rrMonthRoom">${['all', ...state.rooms].map((r) => r === 'all' ? '<option value="all">All rooms</option>' : `<option value="${r.id}"${Number(r.id) === Number(state.monthRoom) ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div>` : ''}
+        ${BOOT.isAdmin ? `<div class="rr-field"><label>Room</label><select id="rrMonthRoom">${['all', ...state.rooms].map((r) => r === 'all' ? '<option value="all">All rooms</option>' : `<option value="${r.id}"${Number(r.id) === Number(state.monthRoom) ? ' selected' : ''}>${esc(roomLabel(r))}</option>`).join('')}</select></div>` : ''}
         <button class="rr-btn" id="rrMonthlyPrint">Print</button>
       </div>
       <div class="rr-print-area">`;
@@ -603,7 +703,7 @@
   /* ═════════════════════════ MATTERS ARISING ════════════════════════════ */
   function renderMatters() {
     const catOptions = state.categories.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
-    const roomOptions = state.rooms.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+    const roomOptions = state.rooms.map((r) => `<option value="${r.id}">${esc(roomLabel(r))}</option>`).join('');
     const attendantRoomId = state.user?.roomId;
 
     const filter = state.mattersFilter;
@@ -641,12 +741,12 @@
     const cards = filtered.map((m) => {
       const canEdit = !BOOT.isAttendant || Number(m.room_id) === Number(attendantRoomId);
       const roomSel = BOOT.isAdmin
-        ? `<select data-m-room="${m.id}">${state.rooms.map((r) => `<option value="${r.id}"${Number(r.id) === Number(m.room_id) ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`
+        ? `<select data-m-room="${m.id}">${state.rooms.map((r) => `<option value="${r.id}"${Number(r.id) === Number(m.room_id) ? ' selected' : ''}>${esc(roomLabel(r))}</option>`).join('')}</select>`
         : `<b>${esc(roomName(m.room_id))}</b>`;
       return `
         <div class="rr-matter-card" data-matter="${m.id}">
           <div class="rr-matter-head">
-            <span class="rr-matter-date">${fmtDate(m.date)}</span>
+            <span class="rr-matter-date">${esc(m.ticket_no || '—')} · ${fmtDate(m.date)}</span>
             <span class="rr-badge ${m.status}">${m.status}</span>
           </div>
           <div class="rr-matter-cat">${esc(m.category)} · ${roomSel}</div>
@@ -672,8 +772,8 @@
         e.preventDefault();
         const payload = Object.fromEntries(new FormData(form).entries());
         try {
-          await api('/running-rooms/api/matters', 'POST', payload);
-          toast('Matter logged.');
+          const created = await api('/running-rooms/api/matters', 'POST', payload);
+          toast('Matter logged as ' + (created.ticket_no || 'ticket').toUpperCase() + '.');
           await loadData();
           renderAll();
           goTab('matters');
@@ -745,9 +845,10 @@
         const card = $(`[data-matter="${m.id}"]`, root);
         if (card) {
           const catOptions = state.categories.map((c) => `<option value="${esc(c)}"${c === m.category ? ' selected' : ''}>${esc(c)}</option>`).join('');
-          const roomOptions = state.rooms.map((r) => `<option value="${r.id}"${Number(r.id) === Number(m.room_id) ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
+          const roomOptions = state.rooms.map((r) => `<option value="${r.id}"${Number(r.id) === Number(m.room_id) ? ' selected' : ''}>${esc(roomLabel(r))}</option>`).join('');
           card.innerHTML = `
             <form class="rr-form-grid" data-matter-edit="${m.id}">
+              <div class="rr-field"><label>Ticket</label><input type="text" value="${esc(m.ticket_no || '')}" readonly></div>
               <div class="rr-field"><label>Date</label><input type="date" name="date" value="${String(m.date).slice(0, 10)}"></div>
               <div class="rr-field"><label>Room</label><select name="room_id">${roomOptions}</select></div>
               <div class="rr-field"><label>Category</label><select name="category">${catOptions}</select></div>
@@ -804,12 +905,12 @@
     filtered.forEach((m) => { byCat[m.category] = (byCat[m.category] || 0) + 1; });
     const catRows = Object.entries(byCat).map(([cat, n]) => `<tr><td>${esc(cat)}</td><td>${n}</td></tr>`).join('');
 
-    const roomOptions = `<option value="all">All rooms</option>` + state.rooms.map((r) => `<option value="${r.id}"${Number(r.id) === Number(f.room) ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
+    const roomOptions = `<option value="all">All rooms</option>` + state.rooms.map((r) => `<option value="${r.id}"${Number(r.id) === Number(f.room) ? ' selected' : ''}>${esc(roomLabel(r))}</option>`).join('');
     const catOptions = `<option value="all">All categories</option>` + state.categories.map((c) => `<option value="${esc(c)}"${f.category === c ? ' selected' : ''}>${esc(c)}</option>`).join('');
 
     const list = filtered.map((m) => `
       <div class="rr-matter-card">
-        <div class="rr-matter-head"><span class="rr-matter-date">${fmtDate(m.date)}</span><span class="rr-badge ${m.status}">${m.status}</span></div>
+        <div class="rr-matter-head"><span class="rr-matter-date">${esc(m.ticket_no || '—')} · ${fmtDate(m.date)}</span><span class="rr-badge ${m.status}">${m.status}</span></div>
         <div class="rr-matter-cat">${esc(m.category)} · <b>${esc(roomName(m.room_id))}</b></div>
         <div class="rr-matter-desc">${esc(m.description)}</div>
         <div class="rr-matter-foot"><span>Reported by ${esc(m.reported_by || '—')}</span></div>
@@ -858,6 +959,8 @@
 
   /* ═════════════════════════ SETTINGS (admin) ═══════════════════════════ */
   function renderSettings() {
+    const desigList = (state.designations || []).join('\n');
+    const catList = (state.categories || []).join('\n');
     const rows = state.rooms.map((room) => {
       const occ = currentlyIn(room.id).length;
       return `
@@ -867,21 +970,42 @@
             <div class="rr-set-note">${occ} currently checked in</div>
           </div>
           <div class="rr-field"><label>Beds</label><input type="number" min="1" value="${room.beds}" data-beds></div>
-          <div class="rr-field"><label>Password</label><input type="password" minlength="6" placeholder="New password" data-pass></div>
           <div style="display:flex;gap:6px">
             <button class="rr-btn sm" data-save-beds="${room.id}">Save beds</button>
-            <button class="rr-btn ghost sm" data-save-pass="${room.id}">Reset</button>
           </div>
         </div>`;
     }).join('');
 
     return `
       <h2>Settings</h2>
-      <div class="rr-sub">Edit bed capacity per room and reset attendant sign-in passwords.</div>
+      <div class="rr-sub">Edit register options and bed capacity per room.</div>
+      <div class="rr-set-options" style="background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px;margin-bottom:16px">
+        <div class="rr-set-name">Register options</div>
+        <div class="rr-set-note">One value per line. Saved to the database and applied immediately to the register, matters and reports.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px">
+          <div class="rr-field"><label>Designations</label><textarea data-opt-desig rows="8" placeholder="One per line">${esc(desigList)}</textarea></div>
+          <div class="rr-field"><label>Matter categories</label><textarea data-opt-cat rows="8" placeholder="One per line">${esc(catList)}</textarea></div>
+        </div>
+        <div style="margin-top:10px"><button class="rr-btn sm" data-save-options>Save options</button></div>
+      </div>
       ${state.rooms.length ? rows : '<div class="rr-empty">No rooms available.</div>'}`;
   }
 
   function bindSettings(root) {
+    const optBtn = $('[data-save-options]', root);
+    if (optBtn) {
+      optBtn.addEventListener('click', async () => {
+        const designations = $('[data-opt-desig]', root).value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+        const categories = $('[data-opt-cat]', root).value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+        if (!designations.length || !categories.length) { toast('Both lists need at least one value.', true); return; }
+        try {
+          await api('/running-rooms/api/settings/options', 'POST', { designations, categories });
+          toast('Register options saved.');
+          await loadData(); renderAll(); goTab('settings');
+        } catch (err) { toast(err.message, true); }
+      });
+    }
+
     $$('[data-save-beds]', root).forEach((btn) => {
       btn.addEventListener('click', async () => {
         const row = btn.closest('.rr-set-row');
@@ -890,19 +1014,6 @@
           const res = await api('/running-rooms/api/settings/beds', 'POST', { room_id: btn.dataset.saveBeds, beds: Number(beds) });
           toast(res.warning || 'Bed capacity updated.', !!res.warning);
           await loadData(); renderAll(); goTab('settings');
-        } catch (err) { toast(err.message, true); }
-      });
-    });
-
-    $$('[data-save-pass]', root).forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const row = btn.closest('.rr-set-row');
-        const pass = $('[data-pass]', row).value;
-        if (!pass) { toast('Enter a new password.', true); return; }
-        try {
-          await api('/running-rooms/api/settings/password', 'POST', { room_id: btn.dataset.savePass, password: pass });
-          $('[data-pass]', row).value = '';
-          toast('Attendant password reset.');
         } catch (err) { toast(err.message, true); }
       });
     });

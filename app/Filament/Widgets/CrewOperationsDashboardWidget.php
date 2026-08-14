@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Schema;
 
 class CrewOperationsDashboardWidget extends Widget
 {
+    protected static bool $isDiscovered = false;
+
     protected string $view = 'filament.widgets.crew-operations-dashboard-widget';
 
     protected int | string | array $columnSpan = 'full';

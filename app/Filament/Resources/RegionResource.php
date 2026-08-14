@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Illuminate\Database\Eloquent\Model;
+use UnitEnum;
 
 class RegionResource extends Resource
 {
@@ -19,7 +20,8 @@ class RegionResource extends Resource
 
     protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-map';
     protected static ?string $navigationLabel = 'Regions';
-    protected static ?int $navigationSort = 4;
+    protected static UnitEnum|string|null $navigationGroup = 'Crew Management';
+    protected static ?int $navigationSort = 30;
 
     public static function form(Schema $schema): Schema
     {

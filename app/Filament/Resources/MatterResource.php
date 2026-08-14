@@ -27,9 +27,16 @@ class MatterResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup  = 'Running Rooms';
 
+    protected static ?int $navigationSort = 30;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            TextInput::make('ticket_no')
+                ->label('Ticket no.')
+                ->readOnly()
+                ->visibleOn('edit')
+                ->columnSpanFull(),
             Select::make('room_id')->label('Running room')->options(Room::pluck('name', 'id'))->required(),
             DatePicker::make('date')->required()->default(now()),
             Select::make('category')
@@ -47,6 +54,13 @@ class MatterResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('ticket_no')
+                    ->label('Ticket')
+                    ->badge()
+                    ->color('info')
+                    ->fontFamily('mono')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('room.name')->badge()->color('gray'),
                 TextColumn::make('date')->date()->fontFamily('mono'),
                 TextColumn::make('category'),

@@ -6,7 +6,6 @@ export let SHIFT_OPTIONS=[];
 export let STATUS_META={};
 export let STATUSES=[];
 export const DRIVER_GRADES=['locomotive_driver'];
-const NON_REST_DESIGNATION_KEYS = new Set(['shunter_driver', 'shunter', 'lio']);
 export const AVT_PAL=[['#E8F5E9','#1B5E20'],['#E3F2FD','#0D47A1'],['#FFF3E0','#E65100'],['#F3E5F5','#4A148C'],['#FFEBEE','#B71C1C'],['#E0F2F1','#00695C'],['#FFFDE7','#F57F17']];
 export function setDepotConfig(depots, colors, hours){
   DEPOTS.length = 0;
@@ -43,12 +42,12 @@ function cloneDesignationRegistry(registry){
       : typeof item.aliases==='string'
         ? item.aliases.split(',').map(alias=>alias.trim()).filter(Boolean)
         : [];
-    const normalizedId = normalizeDesignationKey(id);
     next[id]={
       id,
       label:String(item.label||id).trim()||id,
       aliases,
-      restEligible:!NON_REST_DESIGNATION_KEYS.has(normalizedId) && item.restEligible!==false,
+      restEligible:item.restEligible!==false,
+      runningRoomEligible:item.runningRoomEligible!==undefined?item.runningRoomEligible!==false:item.restEligible!==false,
       order:typeof item.order==='number'?item.order:index,
     };
   });
@@ -80,7 +79,11 @@ export function getDesignationLabel(value){
 }
 export function isDesignationRestEligible(value){
   const key=normalizeDesignation(value);
-  return !NON_REST_DESIGNATION_KEYS.has(normalizeDesignationKey(key)) && !!designationRegistry[key]?.restEligible;
+  return !!designationRegistry[key]?.restEligible;
+}
+export function isRunningRoomEligible(value){
+  const key=normalizeDesignation(value);
+  return !!designationRegistry[key]?.runningRoomEligible;
 }
 export function getDesignationOptions(selected='locomotive_driver'){
   const selectedKey=normalizeDesignation(selected);

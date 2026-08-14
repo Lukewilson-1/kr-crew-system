@@ -11,6 +11,9 @@
 .rr-tb-user{color:rgba(255,255,255,.75);font-size:12px}
 .rr-btn-out{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);padding:4px 11px;border-radius:var(--r);font-size:11px;font-weight:600;transition:background .15s;cursor:pointer;font-family:inherit}
 .rr-btn-out:hover{background:rgba(255,255,255,.22)}
+.rr-btn-home{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);padding:9px 18px;border-radius:var(--r);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s;text-decoration:none}
+.rr-btn-home svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9}
+.rr-btn-home:hover{background:rgba(255,255,255,.24)}
 
 /* ── Shell ──────────────────────────────────────────────────────────────── */
 #rr-shell{display:flex;flex:1;overflow:hidden}
@@ -46,6 +49,7 @@
 .rr-room-card{background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:16px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:10px}
 .rr-room-head{display:flex;justify-content:space-between;align-items:baseline}
 .rr-room-name{font-size:15px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--dark)}
+.rr-room-depot{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
 .rr-room-meta{font-size:12px;font-family:var(--mono);color:var(--text2)}
 .rr-room-meta b{color:var(--text)}
 .rr-berths{display:flex;flex-wrap:wrap;gap:5px}
@@ -75,6 +79,14 @@
 .rr-staff-status.ok{color:#1B5E20}
 .rr-staff-status.err{color:var(--kr-red)}
 .rr-staff-status .rr-badge.ok{background:#E8F5E9;color:#1B5E20}
+.rr-combobox{position:relative}
+.rr-search-list{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:40;margin:0;padding:4px;list-style:none;background:#fff;border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.14);max-height:280px;overflow:auto}
+.rr-search-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 10px;border-radius:var(--r);cursor:pointer}
+.rr-search-list li.rr-search-active,.rr-search-list li:hover{background:#F3F6FA}
+.rr-search-name{font-size:13px;color:var(--dark);font-weight:600}
+.rr-search-name small{color:var(--text2);font-weight:500}
+.rr-search-meta{font-size:11px;color:var(--text2);text-transform:capitalize;white-space:nowrap}
+.rr-search-list li[data-room-ineligible] .rr-search-meta{color:#C62828}
 .rr-form-actions{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
 .rr-btn{background:var(--kr-red);color:#fff;border:none;padding:8px 16px;border-radius:var(--r);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s}
 .rr-btn:hover{background:var(--kr-red-d)}
@@ -115,7 +127,7 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
 .rr-matter-actions{display:flex;gap:6px}
 
 /* ── Settings ───────────────────────────────────────────────────────────── */
-.rr-set-row{display:grid;grid-template-columns:1fr 140px 120px 120px;gap:10px;align-items:end;background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;margin-bottom:10px}
+.rr-set-row{display:grid;grid-template-columns:1fr 140px 120px;gap:10px;align-items:end;background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;margin-bottom:10px}
 .rr-set-name{font-weight:700;color:var(--dark)}
 .rr-set-note{font-size:11px;color:var(--text2)}
 
@@ -129,4 +141,157 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
   .rr-panel.active{display:block !important}
   .rr-panel.active .rr-print-area{display:block}
   .rr-room-card,.rr-table-wrap,.rr-kpi{box-shadow:none;break-inside:avoid}
+}
+
+/* ════════════ ACCESSIBILITY PASS — larger, clearer, high-contrast ══════════ */
+#rr-app{font-size:16px}
+#rr-app input,#rr-app select,#rr-app textarea,#rr-app button{font-size:16px}
+
+#rr-topbar{height:58px;padding:0 18px;gap:14px}
+.rr-tb-title{font-size:18px}
+.rr-tb-badge{font-size:13px;padding:4px 13px}
+.rr-tb-user{font-size:15px}
+.rr-tb-mark{width:34px;height:34px;border-radius:8px}
+
+#rr-sidebar{width:226px}
+.rr-sb-sec{padding:16px 16px 6px;font-size:11px;letter-spacing:.08em}
+.rr-sb-item{padding:13px 18px;font-size:16px;gap:12px;min-height:50px}
+.rr-sb-item svg{width:19px;height:19px}
+
+#rr-main{padding:22px 24px}
+#rr-main h2{font-size:22px}
+#rr-main .rr-sub{font-size:15px;margin-bottom:20px}
+
+.rr-kpi-row{gap:14px;margin-bottom:20px}
+.rr-kpi{padding:17px}
+.rr-kpi-n{font-size:30px}
+.rr-kpi-l{font-size:12px;letter-spacing:.04em;margin-top:3px}
+
+.rr-room-grid{gap:16px}
+.rr-room-card{padding:19px;gap:12px}
+.rr-room-name{font-size:18px}
+.rr-room-meta{font-size:14px}
+.rr-berth{width:26px;height:26px;border-radius:6px}
+.rr-flag{font-size:12px;padding:4px 11px;border-radius:12px}
+
+.rr-form-card{padding:22px}
+.rr-field label{font-size:12px;margin-bottom:5px}
+.rr-field input,.rr-field select,.rr-field textarea{font-size:16px;padding:11px 12px;border-radius:7px}
+.rr-field textarea{min-height:80px}
+.rr-staff-status{font-size:15px;min-height:22px}
+.rr-form-actions{margin-top:18px;gap:10px}
+.rr-btn{padding:12px 22px;font-size:16px;border-radius:7px;min-height:46px}
+.rr-btn.sm{padding:7px 12px;font-size:14px;min-height:38px}
+
+table.rr-table{font-size:15px}
+.rr-table th{padding:11px 14px;font-size:12px}
+.rr-table td{padding:12px 14px}
+.rr-badge{font-size:12px;padding:4px 11px;border-radius:12px}
+
+.rr-toolbar{gap:12px;margin-bottom:20px}
+.rr-toolbar .rr-field{min-width:180px}
+
+.rr-matter-grid{gap:14px}
+.rr-matter-card{padding:17px;gap:10px}
+.rr-matter-date{font-size:14px}
+.rr-matter-cat{font-size:13px}
+.rr-matter-desc{font-size:16px;line-height:1.6}
+.rr-matter-foot{font-size:13px}
+
+.rr-set-row{padding:15px 16px}
+.rr-set-note{font-size:13px}
+
+.rr-empty{font-size:16px;padding:40px}
+
+.rr-btn-home{padding:10px 18px;font-size:15px;min-height:42px}
+
+a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #FFB300;outline-offset:2px;border-radius:5px}
+
+@media (max-width:900px){
+  #rr-topbar{padding:10px 14px}
+  .rr-tb-title{font-size:16px}
+  #rr-main{padding:16px}
+  .rr-kpi-n{font-size:27px}
+}
+@media (max-width:768px){
+  .rr-sb-item{padding:12px 14px;font-size:14px}
+  #rr-main h2{font-size:19px}
+  .rr-room-name{font-size:16px}
+}
+@media (max-width:640px){
+  .rr-kpi-row{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+  .rr-btn{padding:10px 18px}
+}
+
+/* ════════════ ELEGANT BRAND THEME — Kenya Railways logo palette ══════════
+   Matches styles.css: gold #F8C808 · warm red #D0391F · maroon #681828 */
+#rr-topbar{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));height:62px;position:relative}
+#rr-topbar::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brand-gold-grad,linear-gradient(120deg,#F8C808,#E0A800))}
+.rr-tb-mark{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.rr-tb-title{font-weight:800;letter-spacing:.04em;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.rr-tb-badge{background:var(--brand-gold-grad,linear-gradient(120deg,#F8C808,#E0A800));color:#5A4200;font-weight:800}
+.rr-tb-user{color:rgba(255,255,255,.95)}
+.rr-btn-out{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35)}
+.rr-btn-home{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35)}
+.rr-btn-home:hover{background:rgba(255,255,255,.26)}
+
+#rr-sidebar{background:linear-gradient(180deg,#0F172A 0%,#131B2E 100%)}
+.rr-sb-sec{color:var(--kr-gold-bright,#F8C808);font-size:10px;letter-spacing:.14em;padding-top:17px}
+.rr-sb-item{color:rgba(255,255,255,.72);border-radius:0 8px 8px 0;margin:1px 0}
+.rr-sb-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.rr-sb-item.active{background:linear-gradient(90deg,rgba(216,57,31,.28),rgba(216,57,31,.08));border-left-color:var(--kr-gold-bright,#F8C808);color:#fff}
+
+#rr-main h2{display:flex;align-items:center;gap:9px;font-size:23px;color:#17130F}
+#rr-main h2::before{content:'';width:5px;height:22px;border-radius:3px;background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));flex-shrink:0}
+#rr-main .rr-sub{font-size:15px;color:var(--text2);padding-left:14px}
+
+.rr-kpi{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF}
+.rr-kpi-n{font-size:32px;letter-spacing:-.01em}
+.rr-kpi-l{font-size:11px;letter-spacing:.06em;color:#6B5A3E}
+.rr-kpi:hover{box-shadow:var(--sh-el-hover,0 12px 30px rgba(104,24,40,.18));transform:translateY(-1px);transition:all .18s}
+
+.rr-room-card{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF;position:relative;overflow:hidden}
+.rr-room-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brand-gold-grad,linear-gradient(120deg,#F8C808,#E0A800))}
+.rr-room-card:hover{box-shadow:var(--sh-el-hover,0 12px 30px rgba(104,24,40,.18));transform:translateY(-2px);transition:all .18s}
+.rr-room-name{color:#17130F}
+.rr-berth{width:26px;height:26px;border-radius:6px}
+.rr-berth.filled{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));box-shadow:inset 0 0 0 2px rgba(255,255,255,.2)}
+.rr-berth.empty{border-color:#D8CDB4;background:#FDFBF4}
+.rr-flag.red{background:#FDE8E4;color:#B71C1C}
+.rr-flag.amber{background:var(--kr-gold-lt,#FBF3D5);color:#8A6A00;border:1px solid #E0C55B}
+.rr-flag.gray{background:#F1EEE6;color:#6B5A3E}
+
+.rr-form-card{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF}
+.rr-field label{color:#6B5A3E}
+.rr-field input,.rr-field select,.rr-field textarea{border-radius:7px;border-color:#D8CDB4}
+.rr-field input:focus,.rr-field select:focus,.rr-field textarea:focus{border-color:var(--kr-gold,#C99914);box-shadow:0 0 0 3px rgba(248,200,8,.18)}
+.rr-btn{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,.08)}
+.rr-btn:hover{background:linear-gradient(100deg,#E04A2B,#C4241C 60%,#8F1111);box-shadow:0 4px 10px rgba(104,24,40,.25)}
+.rr-btn.ghost{background:#fff;color:#5A4200;border:1.5px solid #E0C55B}
+.rr-btn.ghost:hover{border-color:var(--kr-gold,#C99914);color:#5A4200;background:var(--kr-gold-lt,#FBF3D5)}
+.rr-btn.green{background:linear-gradient(100deg,#2E7D32,#1B5E20)}
+.rr-btn.amber{background:linear-gradient(100deg,#F59E0B,#E65100)}
+
+.rr-table-wrap{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF}
+.rr-table th{background:linear-gradient(180deg,#FDF7E7,#FBF3D5);color:#5A4200;border-bottom:2px solid #E0C55B}
+.rr-table tr:hover td{background:#FEFBF0}
+.rr-table td{border-bottom:1px solid #F0EAE0}
+.rr-badge{border-radius:12px}
+
+.rr-matter-card{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF;position:relative;overflow:hidden}
+.rr-matter-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F))}
+.rr-matter-desc{color:#17130F}
+.rr-matter-card:hover{box-shadow:var(--sh-el-hover,0 12px 30px rgba(104,24,40,.18));transform:translateY(-2px);transition:all .18s}
+
+.rr-set-row{border-radius:10px;border-color:#E8E0CF;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12))}
+.rr-empty{border-radius:12px}
+
+.rr-staff-status.ok{color:#1B5E20}
+.rr-staff-status.err{color:#B71C1C}
+
+a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline-color:#E0A800}
+
+@media (max-width:900px){
+  #rr-topbar::before{height:3px}
+  #rr-main h2::before{height:18px}
 }

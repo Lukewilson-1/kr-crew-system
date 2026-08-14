@@ -8,8 +8,11 @@ use App\Models\Room;
 use App\Support\CrewLookup;
 use App\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class RunningRoomController extends Controller
 {
@@ -20,10 +23,65 @@ class RunningRoomController extends Controller
         'Bedding & Supplies', 'Water/Power', 'Staffing', 'Other',
     ];
 
+    protected static ?array $cachedCategories = null;
+
+    protected function optionValue(string $key, array $defaults): array
+    {
+        if ($key === 'categories' && self::$cachedCategories !== null) {
+            return self::$cachedCategories;
+        }
+
+        $value = Cache::remember("running_room_options:{$key}", 300, function () use ($key) {
+            if (! Schema::hasTable('running_room_options')) {
+                return null;
+            }
+            $row = DB::table('running_room_options')->where('key', $key)->first();
+
+            return $row ? json_decode((string) $row->options, true) : null;
+        });
+
+        $resolved = is_array($value) && ! empty($value) ? array_values(array_map('strval', $value)) : $defaults;
+        self::$cachedCategories = $resolved;
+
+        return $resolved;
+    }
+
+    protected function designations(): array
+    {
+        // Designations are shared with the crew module: the register reads the
+        // same list the crew app uses (designations table), so there is only one
+        // list of crew designations across the whole system.
+        if (Schema::hasTable('designations')) {
+            $names = DB::table('designations')
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('designation_name')
+                ->pluck('designation_name')
+                ->map(fn ($value) => (string) $value)
+                ->all();
+
+            $names = array_values(array_filter($names, fn ($value) => trim($value) !== ''));
+            if (! empty($names)) {
+                return $names;
+            }
+        }
+
+        return static::DESIGNATIONS;
+    }
+
+    protected function categories(): array
+    {
+        return $this->optionValue('categories', static::CATEGORIES);
+    }
+
     public function index(Request $request)
     {
         if (! $request->user()) {
             return redirect('/login');
+        }
+
+        if (! $request->user()->canAccessRunningRooms()) {
+            return redirect('/');
         }
 
         $tab = 'dashboard';
@@ -42,13 +100,48 @@ class RunningRoomController extends Controller
         ]);
     }
 
-    protected function visibleRoomIds(User $user)
+    /**
+     * Rooms the user may manage. Attendants are tied to one room; depot users
+     * (booking/station officers) may only manage the rooms in their own depot;
+     * HQ/admin users see every room. A depot user still sees the rest status of
+     * his own depot's crew anywhere else through the crew module.
+     */
+    protected function visibleRoomIds(User $user): array
     {
         if ($user->isAttendant()) {
-            return [$user->room_id];
+            return [(int) $user->room_id];
         }
 
-        return Room::query()->pluck('id')->all();
+        $query = Room::query();
+        if (! $user->isGlobalAccess()) {
+            $depot = trim((string) $user->depot_code);
+            if ($depot === '') {
+                return [];
+            }
+            $query->where('depot_code', $depot);
+        }
+
+        return $query->pluck('id')->all();
+    }
+
+    protected function canManageRoom(User $user, mixed $roomId): bool
+    {
+        if ($user->isAttendant()) {
+            return (int) $roomId === (int) $user->room_id;
+        }
+
+        if ($user->isGlobalAccess()) {
+            return true;
+        }
+
+        $depot = trim((string) $user->depot_code);
+        if ($depot === '') {
+            return false;
+        }
+
+        $room = Room::query()->where('id', (int) $roomId)->first();
+
+        return $room !== null && trim((string) $room->depot_code) === $depot;
     }
 
     protected function roomScopeQuery($query, User $user)
@@ -102,7 +195,7 @@ class RunningRoomController extends Controller
             ->whereIn('id', $roomIds)
             ->orderBy('name')
             ->with('usableBeds:id,room_id,bed_no,is_usable')
-            ->get(['id', 'name', 'beds']);
+            ->get(['id', 'name', 'depot_code', 'beds']);
 
         return [
             'user' => [
@@ -113,6 +206,7 @@ class RunningRoomController extends Controller
             'rooms' => $rooms->map(fn (Room $room) => [
                 'id' => $room->id,
                 'name' => $room->name,
+                'depot' => $room->depot_code,
                 'beds' => $room->beds,
                 'bedList' => $room->usableBeds
                     ->sortBy(fn ($bed) => [(int) preg_replace('/[^0-9]/', '', $bed->bed_no), $bed->bed_no])
@@ -121,8 +215,8 @@ class RunningRoomController extends Controller
             ])->values(),
             'records' => $records,
             'matters' => $matters,
-            'designations' => static::DESIGNATIONS,
-            'categories' => static::CATEGORIES,
+            'designations' => $this->designations(),
+            'categories' => $this->categories(),
         ];
     }
 
@@ -161,8 +255,8 @@ class RunningRoomController extends Controller
 
         $data = $v->validated();
 
-        if ($user->isAttendant() && (int) $data['room_id'] !== (int) $user->room_id) {
-            return response()->json(['error' => 'Attendants may only check in to their own room.'], 403);
+        if (! $this->canManageRoom($user, $data['room_id'])) {
+            return response()->json(['error' => 'You may only check in to rooms in your own depot.'], 403);
         }
 
         $staffNo = trim($data['staff_no']);
@@ -176,8 +270,8 @@ class RunningRoomController extends Controller
             return response()->json(['error' => "Crew member {$member['name']} is not an active crew member."], 422);
         }
 
-        if (! $member['rest_eligible']) {
-            return response()->json(['error' => "Crew member {$member['name']} ({$member['designation']}) does not qualify for rest rooms."], 422);
+        if (! $member['room_eligible']) {
+            return response()->json(['error' => "Crew member {$member['name']} ({$member['designation']}) does not qualify to use running rooms."], 422);
         }
 
         $alreadyIn = AttendanceRecord::query()
@@ -225,6 +319,8 @@ class RunningRoomController extends Controller
             return response()->json(['error' => $message], 422);
         }
 
+        $this->syncCrewFromCheckIn($staffNo, $room, $data['arrival_date'], $data['arrival_time']);
+
         return response()->json($record, 201);
     }
 
@@ -245,6 +341,265 @@ class RunningRoomController extends Controller
         return response()->json(['member' => $member]);
     }
 
+    public function crewSearch(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        $query = trim((string) $request->query('q', ''));
+        $limit = (int) $request->query('limit', 12);
+
+        return response()->json(['results' => CrewLookup::search($query, $limit)]);
+    }
+
+    /* ── crew record integration ──────────────────────────────────────────────
+     * The register and the crew module share the same crew. Checking a crew
+     * member into a room starts their rest (crew status → R, restStarted =
+     * arrival, away depot = the room's depot) and checking them out ends it
+     * (still resting → Standby, marked as checked out). The booking officer of
+     * the crew's home depot therefore sees the rest countdown and the
+     * checked-out state even when the crew is resting in another depot. */
+
+    protected function combineDateTime(string $date, string $time): string
+    {
+        $tz = config('app.timezone') ?: 'UTC';
+
+        try {
+            return (new \DateTimeImmutable(trim($date).' '.trim($time), new \DateTimeZone($tz)))
+                ->setTimezone(new \DateTimeZone('UTC'))
+                ->format('Y-m-d\TH:i:s.u\Z');
+        } catch (\Throwable) {
+            return now()->toIso8601String();
+        }
+    }
+
+    protected function syncCrewFromCheckIn(string $staffNo, object $room, string $arrivalDate, string $arrivalTime): void
+    {
+        if (! Schema::hasTable('crew_members') || ! Schema::hasTable('crew_records')) {
+            return;
+        }
+
+        $member = DB::table('crew_members')->where('staff_number', $staffNo)->first();
+        if (! $member || ! ($member->record_id ?? null)) {
+            return;
+        }
+
+        $row = DB::table('crew_records')->where('record_id', $member->record_id)->first();
+        if (! $row) {
+            return;
+        }
+
+        $payload = json_decode($row->payload ?? '{}', true);
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+
+        $crewDepot = trim((string) ($payload['depot'] ?? $member->depot_code ?? ''));
+        $roomDepot = trim((string) ($room->depot_code ?? ''));
+        $awayDepot = ($crewDepot !== '' && $roomDepot !== '' && strcasecmp($crewDepot, $roomDepot) !== 0) ? $roomDepot : null;
+
+        $monthKey = substr($arrivalDate, 0, 7);
+        $day = (int) substr($arrivalDate, 8, 2);
+        $restEligible = CrewLookup::isDesignationRestEligible((string) ($payload['grade'] ?? $member->designation_code ?? ''));
+
+        $payload = array_merge($payload, [
+            'rrRoomId' => (int) $room->id,
+            'rrRoomName' => (string) $room->name,
+            'rrRoomDepot' => $roomDepot,
+            'rrCheckedOut' => false,
+            'rrCheckedOutAt' => null,
+            'lastUpdated' => now()->toIso8601String(),
+            'updatedBy' => 'running-room',
+        ]);
+
+        if (! $restEligible) {
+            // Non-rest room users (e.g. shunter drivers, PSAs) may use the room
+            // without entering the drivers' Resting state on the crew roster.
+            DB::table('crew_records')->where('record_id', $member->record_id)->update([
+                'payload' => json_encode($payload),
+                'updated_at' => now(),
+            ]);
+
+            return;
+        }
+
+        $monthly = $payload['monthly'] ?? [];
+        if (is_array($monthly) && $day >= 1 && $day <= 31) {
+            $monthly['d'.$day] = 'R';
+        }
+
+        $payload = array_merge($payload, [
+            'status' => 'R',
+            'since' => $arrivalTime,
+            'restStarted' => $this->combineDateTime($arrivalDate, $arrivalTime),
+            'awayDepot' => $awayDepot,
+            'monthly' => $monthly,
+        ]);
+
+        DB::table('crew_records')->where('record_id', $member->record_id)->update([
+            'payload' => json_encode($payload),
+            'updated_at' => now(),
+        ]);
+
+        $this->closeOpenSegment($member->record_id, $monthKey, $day, $arrivalTime);
+        $this->upsertRoomRestSegment($member->record_id, $monthKey, $day, 'R', $arrivalTime, $awayDepot, 'Running room: '.$room->name);
+    }
+
+    protected function syncCrewFromCheckOut(string $staffNo, object $record, string $departureDate, string $departureTime): void
+    {
+        if (! Schema::hasTable('crew_members') || ! Schema::hasTable('crew_records')) {
+            return;
+        }
+
+        $member = DB::table('crew_members')->where('staff_number', $staffNo)->first();
+        if (! $member || ! ($member->record_id ?? null)) {
+            return;
+        }
+
+        $row = DB::table('crew_records')->where('record_id', $member->record_id)->first();
+        if (! $row) {
+            return;
+        }
+
+        $payload = json_decode($row->payload ?? '{}', true);
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+
+        $wasResting = trim((string) ($payload['status'] ?? '')) === 'R';
+
+        $payload = array_merge($payload, [
+            'rrCheckedOut' => true,
+            'rrCheckedOutAt' => $this->combineDateTime($departureDate, $departureTime),
+            'lastUpdated' => now()->toIso8601String(),
+            'updatedBy' => 'running-room',
+        ]);
+
+        if ($wasResting) {
+            $payload['status'] = 'SB';
+            $payload['since'] = $departureTime;
+            $payload['restStarted'] = null;
+            $payload['awayDepot'] = null;
+        }
+
+        DB::table('crew_records')->where('record_id', $member->record_id)->update([
+            'payload' => json_encode($payload),
+            'updated_at' => now(),
+        ]);
+
+        if ($wasResting) {
+            $monthKey = substr($departureDate, 0, 7);
+            $day = (int) substr($departureDate, 8, 2);
+            $this->closeOpenSegment($member->record_id, $monthKey, $day, $departureTime);
+            $this->upsertRoomRestSegment($member->record_id, $monthKey, $day, 'SB', $departureTime, null, 'Checked out of running room');
+        }
+    }
+
+    /** Close a still-open (default 23:59) trailing segment at the given time. */
+    protected function closeOpenSegment(string $recordId, string $monthKey, int $day, string $time): void
+    {
+        if (! Schema::hasTable('crew_status_segments') || trim($time) === '') {
+            return;
+        }
+
+        $latest = DB::table('crew_status_segments')
+            ->where('crew_record_id', $recordId)
+            ->where('month_key', $monthKey)
+            ->where('day', $day)
+            ->orderByDesc('sort_order')
+            ->first();
+
+        if ($latest && trim((string) $latest->end_time) === '23:59') {
+            DB::table('crew_status_segments')->where('segment_id', $latest->segment_id)
+                ->update(['end_time' => trim($time), 'updated_at' => now()]);
+        }
+    }
+
+    /** Stack a rest segment for the crew's day timeline, mirroring the crew app. */
+    protected function upsertRoomRestSegment(string $recordId, string $monthKey, int $day, string $statusCode, string $startTime, ?string $awayDepot, string $note): void
+    {
+        if (! Schema::hasTable('crew_status_segments')) {
+            return;
+        }
+
+        $currentMonthKey = now()->format('Y-m');
+        if ($monthKey !== $currentMonthKey || $day < 1 || $day > 31) {
+            return;
+        }
+
+        $maxOrder = (int) DB::table('crew_status_segments')
+            ->where('crew_record_id', $recordId)
+            ->where('month_key', $monthKey)
+            ->where('day', $day)
+            ->max('sort_order');
+
+        $sortOrder = $maxOrder + 100;
+
+        DB::table('crew_status_segments')->updateOrInsert(
+            ['segment_id' => (string) Str::uuid()],
+            [
+                'crew_record_id' => $recordId,
+                'month_key' => $monthKey,
+                'day' => $day,
+                'sort_order' => $sortOrder,
+                'status_code' => $statusCode,
+                'start_time' => trim($startTime) ?: '00:00',
+                'end_time' => '23:59',
+                'away_depot' => $awayDepot,
+                'notes' => $note,
+                'metadata' => json_encode(['source' => 'running-room']),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+    }
+
+    /** Merge a designation list from the settings editor into the shared crew list. */
+    protected function syncSharedDesignations(array $names): void
+    {
+        if (! Schema::hasTable('designations')) {
+            return;
+        }
+
+        $now = now();
+        $existing = DB::table('designations')->get()->keyBy(fn ($row) => mb_strtolower(trim((string) $row->designation_name)));
+
+        foreach ($names as $name) {
+            $key = mb_strtolower(trim((string) $name));
+            $row = $existing->get($key);
+
+            if ($row) {
+                DB::table('designations')->where('designation_code', $row->designation_code)
+                    ->update(['is_active' => true, 'updated_at' => $now]);
+
+                continue;
+            }
+
+            $code = CrewLookup::normalizeDesignationKey($name);
+            if ($code === '') {
+                $code = 'd_'.substr(md5((string) $name), 0, 8);
+            }
+
+            DB::table('designations')->updateOrInsert(
+                ['designation_code' => $code],
+                [
+                    'designation_name' => trim((string) $name),
+                    'sort_order' => 0,
+                    'is_active' => true,
+                    'metadata' => json_encode(['restEligible' => true, 'runningRoomEligible' => true]),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]
+            );
+        }
+
+        DB::table('running_room_options')->where('key', 'designations')->delete();
+        Cache::forget('running_room_options:designations');
+    }
+
     public function checkoutRecord(Request $request, int $id)
     {
         $user = $request->user();
@@ -255,8 +610,8 @@ class RunningRoomController extends Controller
 
         $record = AttendanceRecord::findOrFail($id);
 
-        if ($user->isAttendant() && (int) $record->room_id !== (int) $user->room_id) {
-            return response()->json(['error' => 'Attendants may only check out from their own room.'], 403);
+        if (! $this->canManageRoom($user, $record->room_id)) {
+            return response()->json(['error' => 'You may only check out crew from rooms in your own depot.'], 403);
         }
 
         $v = Validator::make($request->all(), [
@@ -269,7 +624,11 @@ class RunningRoomController extends Controller
         }
 
         $data = $v->validated();
-        $record->checkOut($data['departure_date'] ?? null, $data['departure_time'] ?? null);
+        $departureDate = $data['departure_date'] ?? now()->toDateString();
+        $departureTime = $data['departure_time'] ?? now()->format('H:i');
+        $record->checkOut($departureDate, $departureTime);
+
+        $this->syncCrewFromCheckOut($record->staff_no, $record, $departureDate, $departureTime);
 
         return response()->json($record);
     }
@@ -284,11 +643,16 @@ class RunningRoomController extends Controller
 
         $record = AttendanceRecord::findOrFail($id);
 
-        if ($user->isAttendant() && (int) $record->room_id !== (int) $user->room_id) {
-            return response()->json(['error' => 'Attendants may only delete records from their own room.'], 403);
+        if (! $this->canManageRoom($user, $record->room_id)) {
+            return response()->json(['error' => 'You may only delete records from rooms in your own depot.'], 403);
         }
 
+        $wasIn = $record->status === 'in';
         $record->delete();
+
+        if ($wasIn && $record->staff_no) {
+            $this->syncCrewFromCheckOut($record->staff_no, $record, now()->toDateString(), now()->format('H:i'));
+        }
 
         return response()->json(['deleted' => true]);
     }
@@ -304,7 +668,7 @@ class RunningRoomController extends Controller
         $v = Validator::make($request->all(), [
             'room_id' => 'required|integer|exists:rooms,id',
             'date' => 'required|date',
-            'category' => 'required|string|in:' . implode(',', static::CATEGORIES),
+            'category' => 'required|string|in:' . implode(',', $this->categories()),
             'description' => 'required|string',
             'reported_by' => 'nullable|string|max:128',
         ]);
@@ -315,8 +679,8 @@ class RunningRoomController extends Controller
 
         $data = $v->validated();
 
-        if ($user->isAttendant() && (int) $data['room_id'] !== (int) $user->room_id) {
-            return response()->json(['error' => 'Attendants may only log matters for their own room.'], 403);
+        if (! $this->canManageRoom($user, $data['room_id'])) {
+            return response()->json(['error' => 'You may only log matters for rooms in your own depot.'], 403);
         }
 
         $matter = Matter::create([
@@ -341,14 +705,14 @@ class RunningRoomController extends Controller
 
         $matter = Matter::findOrFail($id);
 
-        if ($user->isAttendant() && (int) $matter->room_id !== (int) $user->room_id) {
-            return response()->json(['error' => 'Attendants may only edit matters for their own room.'], 403);
+        if (! $this->canManageRoom($user, $matter->room_id)) {
+            return response()->json(['error' => 'You may only edit matters for rooms in your own depot.'], 403);
         }
 
         $v = Validator::make($request->all(), [
             'room_id' => 'required|integer|exists:rooms,id',
             'date' => 'required|date',
-            'category' => 'required|string|in:' . implode(',', static::CATEGORIES),
+            'category' => 'required|string|in:' . implode(',', $this->categories()),
             'description' => 'required|string',
             'reported_by' => 'nullable|string|max:128',
             'status' => 'required|string|in:open,resolved',
@@ -389,8 +753,8 @@ class RunningRoomController extends Controller
 
         $matter = Matter::findOrFail($id);
 
-        if ($user->isAttendant() && (int) $matter->room_id !== (int) $user->room_id) {
-            return response()->json(['error' => 'Attendants may only delete matters for their own room.'], 403);
+        if (! $this->canManageRoom($user, $matter->room_id)) {
+            return response()->json(['error' => 'You may only delete matters for rooms in your own depot.'], 403);
         }
 
         $matter->delete();
@@ -427,27 +791,55 @@ class RunningRoomController extends Controller
         ]);
     }
 
-    public function resetRoomPassword(Request $request)
+    public function updateOptions(Request $request)
     {
         $user = $request->user();
 
         if (! $user || ! $user->isRoomAdmin()) {
-            return response()->json(['error' => 'Only admins may reset room passwords.'], 403);
+            return response()->json(['error' => 'Only admins may change register options.'], 403);
         }
 
         $v = Validator::make($request->all(), [
-            'room_id' => 'required|integer|exists:rooms,id',
-            'password' => 'required|string|min:6',
+            'designations' => 'nullable|array',
+            'designations.*' => 'required|string|max:64',
+            'categories' => 'nullable|array',
+            'categories.*' => 'required|string|max:64',
         ]);
 
         if ($v->fails()) {
             return response()->json(['errors' => $v->errors()], 422);
         }
 
-        User::query()
-            ->where('room_id', $v->validated()['room_id'])
-            ->where('role', 'attendant')
-            ->update(['password' => Hash::make($v->validated()['password'])]);
+        $data = $v->validated();
+
+        if (array_key_exists('designations', $data)) {
+            $names = array_values(array_unique(array_filter(array_map('trim', (array) $data['designations']), fn ($value) => $value !== '')));
+
+            if (empty($names)) {
+                return response()->json(['error' => 'Designations must contain at least one value.'], 422);
+            }
+
+            // Designations are shared with the crew module — save them into the
+            // same designations table the crew app uses instead of a register-only list.
+            $this->syncSharedDesignations($names);
+        }
+
+        if (array_key_exists('categories', $data)) {
+            $values = array_values(array_unique(array_map('trim', $data['categories'])));
+            $values = array_values(array_filter($values, fn ($value) => $value !== ''));
+
+            if (empty($values)) {
+                return response()->json(['error' => 'Categories must contain at least one value.'], 422);
+            }
+
+            DB::table('running_room_options')->updateOrInsert(
+                ['key' => 'categories'],
+                ['options' => json_encode($values), 'created_at' => now(), 'updated_at' => now()]
+            );
+
+            Cache::forget('running_room_options:categories');
+            self::$cachedCategories = null;
+        }
 
         return response()->json(['saved' => true]);
     }

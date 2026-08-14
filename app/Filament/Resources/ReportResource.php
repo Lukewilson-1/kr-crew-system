@@ -33,7 +33,7 @@ class ReportResource extends Resource
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
 
     protected static ?string $navigationLabel = 'Reports';
-    protected static UnitEnum|string|null $navigationGroup = 'Reports & Exports';
+    protected static UnitEnum|string|null $navigationGroup = 'Reports';
 
     protected static ?int $navigationSort = 25;
 
@@ -58,6 +58,17 @@ class ReportResource extends Resource
                 'report' => 'Report',
                 'view' => 'View',
             ])->required(),
+            Select::make('report_type')
+                ->label('Report type (frontend handler)')
+                ->options([
+                    'status' => 'Status',
+                    'monthly' => 'Monthly',
+                    'utilization' => 'Utilization',
+                    'absence' => 'Absence / NTB',
+                    'print' => 'Print',
+                ])
+                ->helperText('Determines which handler the crew Reports page uses.')
+                ->required(),
             TextInput::make('route_name')->label('Route name')->maxLength(255),
             TextInput::make('action_label')->label('Action label')->maxLength(255),
             TextInput::make('category')->label('Category')->maxLength(255),

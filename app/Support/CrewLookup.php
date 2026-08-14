@@ -31,13 +31,54 @@ class CrewLookup
             return null;
         }
 
+        return self::slimMember($member);
+    }
+
+    /**
+     * Search active crew members by staff number or name (partial match).
+     * Returns slim payloads ordered by name. Empty/short queries return [].
+     */
+    public static function search(string $query, int $limit = 10): array
+    {
+        $query = trim($query);
+
+        if (mb_strlen($query) < 2 || ! Schema::hasTable('crew_members')) {
+            return [];
+        }
+
+        $escaped = str_replace(['%', '\\'], ['\%', '\\\\'], $query);
+        $needle = '%'.$escaped.'%';
+        $prefix = $escaped.'%';
+        $members = DB::table('crew_members')
+            ->where('is_active', 1)
+            ->where(function ($builder) use ($needle) {
+                $builder->where('staff_number', 'like', $needle)
+                    ->orWhere('display_name', 'like', $needle)
+                    ->orWhere('first_name', 'like', $needle)
+                    ->orWhere('last_name', 'like', $needle)
+                    ->orWhereRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) LIKE ?", [$needle]);
+            })
+            ->orderByRaw('CASE WHEN staff_number = ? THEN 0 WHEN staff_number LIKE ? THEN 1 ELSE 2 END', [$query, $prefix])
+            ->orderBy('display_name')
+            ->orderBy('first_name')
+            ->orderBy('staff_number')
+            ->limit(max(1, min(50, $limit)))
+            ->get();
+
+        return $members->map(fn ($member) => self::slimMember($member))->values()->all();
+    }
+
+    protected static function slimMember(object $member): array
+    {
         return [
+            'record_id' => (string) ($member->record_id ?? ''),
             'staff_no' => (string) $member->staff_number,
             'name' => (string) ($member->display_name ?: trim(($member->first_name ?? '') . ' ' . ($member->last_name ?? ''))),
             'designation' => (string) ($member->designation_code ?? ''),
             'depot' => (string) ($member->depot_code ?? ''),
             'is_active' => (bool) $member->is_active,
             'rest_eligible' => self::isDesignationRestEligible($member->designation_code ?? ''),
+            'room_eligible' => self::canUseRunningRooms($member->designation_code ?? ''),
         ];
     }
 
@@ -50,41 +91,51 @@ class CrewLookup
         return trim($key, '_');
     }
 
-    /** Whether a designation qualifies for rest rooms (shared with the crew app). */
-    public static function isDesignationRestEligible(mixed $designation): bool
+    /** Read the designation metadata row (matched by code or name). */
+    protected static function designationMeta(mixed $designation): ?array
     {
-        $key = self::normalizeDesignationKey($designation);
+        $designation = trim((string) $designation);
 
-        if ($key === '') {
-            return false;
-        }
-
-        if (in_array($key, ['shunter_driver', 'shunter', 'lio'], true)) {
-            return false;
-        }
-
-        if (! Schema::hasTable('designations')) {
-            return true;
+        if ($designation === '' || ! Schema::hasTable('designations')) {
+            return null;
         }
 
         $row = DB::table('designations')
-            ->whereRaw('LOWER(designation_code) = ?', [strtolower((string) $designation)])
-            ->orWhereRaw('LOWER(designation_name) = ?', [strtolower((string) $designation)])
+            ->whereRaw('LOWER(designation_code) = ?', [strtolower($designation)])
+            ->orWhereRaw('LOWER(designation_name) = ?', [strtolower($designation)])
             ->first();
 
         if (! $row) {
+            return null;
+        }
+
+        return json_decode($row->metadata ?? '{}', true) ?: [];
+    }
+
+    /**
+     * Whether a designation may be put on Resting (drivers' statutory rest).
+     * Driven entirely by the designation permission flags — no hardcoding.
+     */
+    public static function isDesignationRestEligible(mixed $designation): bool
+    {
+        $metadata = self::designationMeta($designation);
+
+        return $metadata === null ? true : data_get($metadata, 'restEligible', true) !== false;
+    }
+
+    /**
+     * Whether a designation may be checked in to a running room. Separate from
+     * rest eligibility so e.g. shunter drivers or future PSAs can use rooms
+     * without being eligible for the Resting status.
+     */
+    public static function canUseRunningRooms(mixed $designation): bool
+    {
+        $metadata = self::designationMeta($designation);
+
+        if ($metadata === null) {
             return true;
         }
 
-        if (self::normalizeDesignationKey($row->designation_code) === 'shunter_driver'
-            || self::normalizeDesignationKey($row->designation_name) === 'shunter_driver'
-            || in_array(self::normalizeDesignationKey($row->designation_code), ['shunter', 'lio'], true)
-            || in_array(self::normalizeDesignationKey($row->designation_name), ['shunter', 'lio'], true)) {
-            return false;
-        }
-
-        $metadata = json_decode($row->metadata ?? '{}', true) ?: [];
-
-        return data_get($metadata, 'restEligible', true) !== false;
+        return data_get($metadata, 'runningRoomEligible', data_get($metadata, 'restEligible', true)) !== false;
     }
 }

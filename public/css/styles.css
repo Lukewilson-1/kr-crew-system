@@ -501,3 +501,353 @@ tr:hover td{background:#FAFBFC}
 .day-seg-remove{width:28px;height:28px;border:1px solid var(--border);border-radius:var(--r);background:#fff;color:var(--text2);font-weight:800;cursor:pointer}
 .day-seg-remove:hover{border-color:var(--kr-red);color:var(--kr-red)}
 @media(max-width:780px){.month-panel{grid-template-columns:1fr}.month-stack-hint{width:100%;margin-left:0}.day-segment-row{grid-template-columns:1fr 1fr}.day-seg-note{grid-column:1/-1}.day-seg-remove{width:100%}}
+
+/* ════════════ CREW DETAILS + STATUS PICKER ══════════════════════════════════ */
+.nm-click{cursor:pointer;border-radius:var(--r);transition:background .15s}
+.nm-click:hover{background:#F1F5F9}
+
+.status-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:7px;margin-bottom:4px}
+.status-picker-select{display:none}
+.st-pick{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 6px;border:1.5px solid var(--border);border-radius:var(--r);background:#fff;cursor:pointer;transition:all .15s;user-select:none}
+.st-pick:hover{border-color:var(--st-fg)}
+.st-pick.active{background:var(--st-bg);border-color:var(--st-fg);box-shadow:0 0 0 1px var(--st-fg) inset}
+.st-pick.disabled{opacity:.4;cursor:not-allowed}
+.st-pick input{position:absolute;opacity:0;pointer-events:none}
+.st-pick-code{font-size:13px;font-weight:800;color:var(--st-fg);line-height:1.1}
+.st-pick-label{font-size:9px;color:var(--text2);text-align:center;line-height:1.25}
+.st-pick.active .st-pick-label{color:var(--st-fg)}
+
+.status-change-summary{background:#F8FAFC;border:1px solid var(--border-lt);border-radius:var(--r);padding:9px 11px;margin-bottom:12px;font-size:11px}
+.stc-row{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.stc-from{opacity:.55}
+.stc-arrow{color:var(--text3);font-size:13px}
+.stc-same{font-weight:800;color:#1E40AF;font-size:12px}
+.stc-note{color:var(--text2);line-height:1.4}
+
+.modal-box.crew-modal{width:min(560px,96vw);max-height:88vh;overflow-y:auto}
+.crew-detail-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.crew-detail-head .avt{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
+.crew-detail-name{font-size:16px;font-weight:800;color:var(--dark)}
+.crew-detail-sub{font-size:11px;color:var(--text2)}
+.crew-detail-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.crew-chip{background:#F8FAFC;border:1px solid var(--border-lt);border-radius:var(--r);padding:6px 9px;display:flex;flex-direction:column;gap:1px;min-width:82px}
+.crew-chip span{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
+.crew-chip strong{font-size:11px;color:var(--dark)}
+.crew-detail-actions{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.qa{border:none;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;transition:opacity .12s,transform .06s}
+.qa:hover{opacity:.88}
+.qa:active{transform:translateY(1px)}
+.qa-book{background:#1B5E20}
+.qa-bo{background:#6D28D9}
+.qa-sb{background:#0D47A1}
+.qa-to{background:#AD1457}
+.qa-note{font-size:11px;color:var(--text3);background:#F8FAFC;border:1px dashed var(--border);border-radius:7px;padding:7px 10px}
+.crew-detail-section{border-top:1px solid var(--border-lt);padding-top:12px;margin-bottom:14px}
+.crew-detail-title{font-size:12px;font-weight:800;color:var(--dark);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cd-dow{font-size:10px;color:var(--text3);font-weight:600}
+.crew-cd{margin-left:auto;font-family:var(--mono);font-weight:800;font-size:12px;padding:3px 8px;border-radius:5px;background:var(--countdown-ok);color:#fff}
+.crew-cd.warn{background:var(--countdown-warn)}
+.crew-cd.crit{background:var(--countdown-crit)}
+.crew-cd.done{background:var(--standby)}
+.cd-timeline{display:grid;gap:9px;margin-top:10px}
+.cd-timeline-row{display:grid;grid-template-columns:14px 1fr;gap:9px}
+.cd-timeline-rail{display:flex;flex-direction:column;align-items:center}
+.cd-timeline-rail span{width:9px;height:9px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.cd-timeline-main{padding-bottom:2px}
+.cd-timeline-time{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.cd-timeline-status{font-size:12px;font-weight:700;color:var(--dark);display:flex;align-items:center;gap:6px;margin:1px 0}
+.cd-timeline-note{font-size:11px;color:var(--text2);line-height:1.4}
+@media(max-width:560px){.modal-box.crew-modal{width:96vw}.status-picker{grid-template-columns:repeat(3,1fr)}}
+
+/* ════════════ ACCESSIBILITY PASS — larger, clearer, high-contrast ══════════
+   Overrides for elderly / non-technical users. Appended last so it wins. */
+html,body{font-size:16px;line-height:1.55}
+input,select,textarea,button{font-size:16px}
+::-webkit-scrollbar{width:9px;height:9px}
+
+/* ── Topbar ─────────────────────────────────────────────────────────────── */
+#topBar{height:58px;padding:0 18px;gap:14px}
+.tb-title{font-size:18px}
+.tb-badge{font-size:13px;padding:4px 13px}
+.tbl-txt{font-size:13px}
+.tb-user{font-size:15px}
+.tb-clock{font-size:15px;min-width:84px}
+.btn-out{padding:8px 18px;font-size:14px;border-radius:7px}
+.tb-mark{width:34px;height:34px;border-radius:8px}
+
+/* ── Sidebar ────────────────────────────────────────────────────────────── */
+#sidebar{width:230px}
+.sb-sec{padding:16px 16px 6px;font-size:11px;letter-spacing:.08em}
+.sb-item{padding:13px 18px;font-size:16px;gap:12px}
+.sb-item svg{width:19px;height:19px}
+.sb-depot{padding:10px 16px 10px 26px;font-size:15px}
+.sb-depot-dot{width:9px;height:9px}
+
+/* ── Main / page header ─────────────────────────────────────────────────── */
+#phdr{padding:14px 22px}
+.ph-title{font-size:22px}
+.ph-sub{font-size:14px;margin-top:2px}
+#pbody{padding:20px 22px}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn{padding:11px 20px;font-size:16px;border-radius:7px;min-height:44px;gap:7px}
+.btn-sm{padding:7px 12px;font-size:14px;min-height:38px}
+.btn-primary,.btn-green,.btn-ghost{min-height:44px}
+
+/* ── KPI cards ──────────────────────────────────────────────────────────── */
+.kpi-row{gap:13px;margin-bottom:20px}
+.kpi-card{padding:16px 18px;border-radius:11px}
+.kpi-n{font-size:34px}
+.kpi-l{font-size:12px;letter-spacing:.03em}
+
+/* ── Badges & train types ───────────────────────────────────────────────── */
+.badge{font-size:13px;padding:5px 12px;border-radius:14px}
+.tt-Freight,.tt-Commuter,.tt-Passenger,.tt-Engineering,.tt-Shunting{font-size:12px;padding:4px 9px;border-radius:12px}
+
+/* ── Countdown ──────────────────────────────────────────────────────────── */
+.cd-bar-wrap{width:100px;height:7px}
+.cd-text{font-size:13px}
+.cd-done{font-size:12px;padding:4px 9px}
+
+/* ── Tables ─────────────────────────────────────────────────────────────── */
+table{font-size:15px}
+th{padding:11px 14px;font-size:12px}
+td{padding:13px 14px}
+.avt{width:36px;height:36px;font-size:12px}
+.nm strong{font-size:15px}
+.nm span{font-size:12px}
+.tbl-act{font-size:14px;padding:7px 13px;min-height:38px;border-radius:6px}
+.no-rows{padding:44px;font-size:16px}
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+.tbl-toolbar{padding:12px 14px}
+.tt-search{padding:8px 12px;min-width:180px}
+.tt-search svg{width:16px;height:16px}
+.tt-search input{font-size:15px}
+.pill{font-size:14px;padding:7px 13px}
+.pills{gap:6px}
+
+/* ── Depot cards ────────────────────────────────────────────────────────── */
+.depot-grid{gap:15px}
+.depot-card{padding:17px}
+.dc-name{font-size:16px}
+.dc-bar-row{font-size:14px}
+.dc-bar-lbl{font-size:12px;width:60px}
+.dc-bar-val{font-size:14px}
+.dc-foot{font-size:12px}
+
+/* ── Admin panel ────────────────────────────────────────────────────────── */
+.admin-card{padding:20px}
+.admin-card h2{font-size:18px}
+.admin-card p{font-size:15px}
+.admin-section-title{font-size:17px}
+.admin-section-note{font-size:14px}
+.admin-field{font-size:16px;padding:11px 13px;border-radius:7px}
+.admin-row-header{font-size:12px}
+.admin-checkbox-label{font-size:15px}
+.admin-overview-tile b{font-size:16px}
+.admin-overview-tile span{font-size:14px}
+.admin-warning{font-size:15px;padding:15px 17px}
+.admin-section-select{font-size:16px;padding:11px 13px;min-width:240px}
+
+/* ── Monthly view ───────────────────────────────────────────────────────── */
+.month-tbl{font-size:13px}
+.month-tbl th{font-size:11px}
+.mc-name{min-width:150px}
+.mc-dep{min-width:92px;font-size:12px}
+.month-register-title{font-size:19px}
+.month-register-sub,.month-register-meta{font-size:13px}
+.month-side-card h3{font-size:16px}
+.status-breakdown-code{font-size:16px}
+.status-breakdown-count{font-size:22px}
+.summary-value{font-size:22px}
+.summary-note{font-size:13px}
+.status-side-item{font-size:15px}
+.selected-day-item{font-size:15px}
+.month-info-note{font-size:13px;padding:12px 14px}
+.month-timeline-title{font-size:15px}
+.month-timeline-note{font-size:13px}
+.month-time{font-size:12px}
+.month-mini-badge,.month-final-badge{font-size:12px}
+.segment-editor-note{font-size:13px}
+.month-segment-stack{width:34px;height:28px;min-height:28px}
+.month-status-code{min-width:28px;height:28px}
+.month-tbl-modern td{height:42px;min-width:38px}
+
+/* ── Modal ──────────────────────────────────────────────────────────────── */
+.modal-box{width:470px;padding:26px}
+.modal-title{font-size:19px}
+.modal-sub{font-size:14px;margin-bottom:16px}
+.modal label{font-size:12px;margin-top:14px;margin-bottom:5px}
+.modal select,.modal input,.modal textarea{font-size:16px;padding:11px 12px;border-radius:7px}
+.modal textarea{min-height:60px}
+.modal-btns{gap:9px;margin-top:18px}
+.modal-btns .btn{min-height:44px}
+.bulk-area{font-size:14px;min-height:120px;padding:11px 12px}
+.bulk-hint{font-size:13px}
+
+/* ── Rest countdown widget ──────────────────────────────────────────────── */
+.rest-card{padding:16px 18px;gap:14px}
+.rest-avt{width:42px;height:42px;font-size:13px}
+.rest-name{font-size:16px}
+.rest-depot{font-size:12px}
+.rest-cd-time{font-size:23px}
+.rest-cd-label{font-size:11px}
+.rest-cd-bar{width:96px;height:6px}
+
+/* ── Misc ───────────────────────────────────────────────────────────────── */
+.sec-title{font-size:17px}
+.sel-sm{padding:9px 13px;font-size:15px;border-radius:7px}
+.alert-banner{font-size:15px;padding:11px 14px;border-radius:7px}
+.rep-card{padding:18px}
+.rep-card h3{font-size:17px}
+.rep-card p{font-size:15px}
+.legend{margin-bottom:16px}
+.leg-item{font-size:13px}
+.leg-dot{width:12px;height:12px}
+.sec-hdr{margin-bottom:14px}
+
+/* ── Focus rings for keyboard / low-vision users ────────────────────────── */
+a:focus-visible,button:focus-visible,.sb-item:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.pill:focus-visible{outline:3px solid #FFB300;outline-offset:2px;border-radius:5px}
+
+/* ── Responsive tuning ──────────────────────────────────────────────────── */
+@media (max-width:1024px){#sidebar{width:240px}}
+@media (max-width:900px){
+  #topBar{padding:10px 14px}
+  .tb-title{font-size:16px}
+  #pbody{padding:16px 16px}
+  .kpi-n{font-size:30px}
+}
+@media (max-width:768px){
+  .sb-item,.sb-depot{padding:12px 14px;font-size:14px}
+  .ph-title{font-size:19px}
+  .ph-sub{font-size:13px}
+  .tt-search{min-width:150px}
+  .btn{padding:10px 16px}
+}
+@media (max-width:640px){
+  .kpi-row{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+  .kpi-n{font-size:27px}
+  .btn-sm{padding:7px 10px;font-size:13px}
+  .modal-box{width:min(95vw,560px);padding:20px}
+}
+
+/* ════════════ ELEGANT BRAND THEME — Kenya Railways logo palette ══════════
+   Gold #F8C808 · warm red #D0391F · maroon #681828 · deep navy #0F172A */
+:root{
+  --kr-gold:#C99914;--kr-gold-lt:#FBF3D5;--kr-gold-bright:#F8C808;
+  --kr-warm:#D0391F;--kr-warm-d:#A82713;
+  --kr-maroon:#681828;
+  --brand-grad:linear-gradient(100deg,#D0391F 0%,#B71C1C 55%,#7E0F0F 100%);
+  --brand-gold-grad:linear-gradient(120deg,#F8C808 0%,#E0A800 100%);
+  --sh-el:0 6px 22px rgba(104,24,40,.12),0 1px 3px rgba(0,0,0,.06);
+  --sh-el-hover:0 12px 30px rgba(104,24,40,.18),0 3px 8px rgba(0,0,0,.08);
+}
+
+/* ── Topbar — brand stripe + red gradient ───────────────────────────────── */
+#topBar{background:var(--brand-grad);height:62px;position:relative}
+#topBar::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brand-gold-grad)}
+.tb-mark{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.tb-title{font-weight:800;letter-spacing:.04em;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.tb-badge{background:var(--brand-gold-grad);color:#5A4200;font-weight:800}
+.tb-live{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.2)}
+.tb-user,.tb-clock{color:rgba(255,255,255,.95)}
+.btn-out{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35)}
+
+/* ── Sidebar — deep navy + gold active accent ───────────────────────────── */
+#sidebar{background:linear-gradient(180deg,#0F172A 0%,#131B2E 100%)}
+.sb-sec{color:var(--kr-gold-bright);font-size:10px;letter-spacing:.14em;padding-top:17px}
+.sb-item{color:rgba(255,255,255,.72);border-radius:0 8px 8px 0;margin:1px 0}
+.sb-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.sb-item.active{background:linear-gradient(90deg,rgba(216,57,31,.28),rgba(216,57,31,.08));border-left-color:var(--kr-gold-bright);color:#fff}
+.sb-depot:hover{color:#fff;background:rgba(255,255,255,.05)}
+.sb-depot.active{border-left-color:var(--kr-gold-bright);background:rgba(248,200,8,.08)}
+
+/* ── Page header — brand kicker ─────────────────────────────────────────── */
+#phdr{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 1px 0 rgba(104,24,40,.04)}
+.ph-title{display:flex;align-items:center;gap:9px;font-size:23px;color:#17130F}
+.ph-title::before{content:'';width:5px;height:22px;border-radius:3px;background:var(--brand-grad);flex-shrink:0}
+.ph-sub{font-size:14px;color:var(--text2);padding-left:14px}
+
+/* ── Buttons — brand red gradient + gold ghost hover ────────────────────── */
+.btn{border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,.08);font-weight:700}
+.btn-primary{background:var(--brand-grad)}
+.btn-primary:hover{background:linear-gradient(100deg,#E04A2B 0%,#C4241C 60%,#8F1111 100%);box-shadow:0 4px 10px rgba(104,24,40,.25)}
+.btn-green{background:linear-gradient(100deg,#2E7D32,#1B5E20)}
+.btn-ghost{background:#fff;color:#5A4200;border:1.5px solid #E0C55B}
+.btn-ghost:hover{background:var(--kr-gold-lt);border-color:var(--kr-gold);color:#5A4200;box-shadow:none}
+.btn-sm{box-shadow:none}
+
+/* ── KPI cards — gold-accented tops, elegant numbers ────────────────────── */
+.kpi-card{border-radius:12px;box-shadow:var(--sh-el);padding:16px 18px;border:1px solid #E8E0CF}
+.kpi-card::before{height:4px;background:var(--brand-gold-grad)}
+.kc-TOT::before{background:var(--brand-gold-grad)}
+.kc-TOT .kpi-n{color:var(--kr-maroon)}
+.kpi-n{font-size:34px;letter-spacing:-.01em}
+.kpi-l{font-size:11px;letter-spacing:.06em;color:#6B5A3E}
+.kpi-card:hover{box-shadow:var(--sh-el-hover);transform:translateY(-1px);transition:box-shadow .18s,transform .18s}
+
+/* ── Section headers — gold rule + brand title ──────────────────────────── */
+.sec-hdr{position:relative;padding-left:14px}
+.sec-hdr::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:3px;background:var(--brand-grad)}
+.sec-title{font-size:18px;font-weight:800;color:#17130F;letter-spacing:.01em}
+
+/* ── Tables — refined header + row hover ────────────────────────────────── */
+.tbl-card{border-radius:12px;box-shadow:var(--sh-el);border:1px solid #E8E0CF;overflow:hidden}
+th{background:linear-gradient(180deg,#FDF7E7,#FBF3D5);color:#5A4200;font-size:12px;border-bottom:2px solid #E0C55B}
+tr:hover td{background:#FEFBF0}
+td{border-bottom:1px solid #F0EAE0}
+.nm strong{color:#17130F}
+.avt{box-shadow:0 0 0 1px rgba(104,24,40,.12)}
+.tbl-toolbar{background:linear-gradient(180deg,#FDFBF5,#FAF6EC);border-bottom:1px solid #EFE7D4}
+.tbl-act{border-radius:6px}
+.tbl-act:hover{border-color:var(--kr-gold);color:var(--kr-maroon);background:#FDF6E0}
+
+/* ── Badges — crisper borders ───────────────────────────────────────────── */
+.badge{border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+
+/* ── Depot cards — brand hover lift ─────────────────────────────────────── */
+.depot-card{border-radius:12px;box-shadow:var(--sh-el);border:1px solid #E8E0CF}
+.depot-card:hover{box-shadow:var(--sh-el-hover);border-color:#E0C55B;transform:translateY(-2px)}
+.dc-name{font-weight:800}
+.dc-bar-track{background:#F4EEDC}
+.dc-foot{border-top-color:#F0EAE0}
+
+/* ── Rest countdown cards ───────────────────────────────────────────────── */
+.rest-card{border-radius:12px;box-shadow:var(--sh-el);border:1px solid #E8E0CF}
+.rest-card::before{width:5px}
+.rest-name{color:#17130F}
+.rest-cd-time{letter-spacing:-.02em}
+
+/* ── Modal — elegant brand frame ────────────────────────────────────────── */
+.modal-box{border-radius:14px;box-shadow:0 18px 50px rgba(104,24,40,.25);border-top:4px solid var(--brand-gold-grad)}
+.modal-title{font-size:20px;color:#17130F}
+.modal label{color:#6B5A3E}
+.modal select,.modal input,.modal textarea{border-radius:7px;border-color:#D8CDB4}
+.modal select:focus,.modal input:focus,.modal textarea:focus{border-color:var(--kr-gold);box-shadow:0 0 0 3px rgba(248,200,8,.18)}
+
+/* ── Monthly / reports cards ────────────────────────────────────────────── */
+.month-side-card,.rep-card{border-radius:12px;box-shadow:var(--sh-el);border:1px solid #E8E0CF}
+.month-side-card h3,.rep-card h3{color:#17130F}
+.rep-card:hover{box-shadow:var(--sh-el-hover);transform:translateY(-2px);transition:all .18s}
+.month-register-card{border-radius:12px;box-shadow:var(--sh-el);border:1px solid #E8E0CF}
+.month-register-head{background:linear-gradient(180deg,#FDF7E7,#FBF3D5);border-bottom:2px solid #E0C55B}
+.month-register-title{color:#17130F}
+.month-tbl-modern th{background:linear-gradient(180deg,#FDF7E7,#FBF3D5);color:#5A4200}
+.status-breakdown-card{border-radius:10px;border-color:#E8E0CF;box-shadow:var(--sh-el)}
+.summary-value{color:var(--kr-maroon)}
+
+/* ── Alerts ─────────────────────────────────────────────────────────────── */
+.alert-banner{border-radius:9px;border:1px solid #F2C94C;background:linear-gradient(180deg,#FFFDF0,#FFF8E1);color:#7A5A00}
+.admin-warning{border-radius:9px}
+.sel-sm{border-radius:7px;border-color:#D8CDB4}
+.tt-search{border-radius:7px;border-color:#D8CDB4}
+.bulk-area{border-radius:7px}
+
+/* ── Focus rings stay gold (accessibility) ──────────────────────────────── */
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline-color:#E0A800}
+
+@media (max-width:900px){
+  #topBar::before{height:3px}
+  .ph-title::before{height:18px}
+}

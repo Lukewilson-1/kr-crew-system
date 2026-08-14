@@ -10,9 +10,9 @@ class Room extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'beds', 'password'];
+    protected $fillable = ['name', 'depot_code', 'beds'];
 
-    protected $hidden = ['password'];
+    protected $hidden = [];
 
     protected function casts(): array
     {

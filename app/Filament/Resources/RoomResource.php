@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources;
 
+use App\Models\Depot;
 use App\Models\Room;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -19,6 +21,10 @@ class RoomResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup  = 'Running Rooms';
 
+    protected static ?string $navigationLabel = 'Rooms';
+
+    protected static ?int $navigationSort = 10;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -27,17 +33,17 @@ class RoomResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(255),
+            Select::make('depot_code')
+                ->label('Depot')
+                ->helperText('Which depot owns this room. Booking/station officers of this depot manage it.')
+                ->options(fn () => Depot::query()->orderBy('depot_name')->pluck('depot_name', 'depot_code')->toArray())
+                ->searchable()
+                ->required(),
             TextInput::make('beds')
                 ->label('Bed capacity')
                 ->numeric()
                 ->minValue(1)
                 ->required(),
-            TextInput::make('password')
-                ->label('Attendant sign-in password')
-                ->password()
-                ->revealable()
-                ->dehydrated(fn ($state) => filled($state))
-                ->helperText('Leave blank to keep the current password.'),
         ]);
     }
 
@@ -46,6 +52,7 @@ class RoomResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->label('Room')->searchable()->weight('bold'),
+                TextColumn::make('depot_code')->label('Depot')->sortable()->searchable(),
                 TextColumn::make('beds')->label('Capacity')->numeric()->fontFamily('mono'),
                 TextColumn::make('occupied')
                     ->label('Occupied')

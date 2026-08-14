@@ -97,12 +97,12 @@ class User extends Authenticatable implements FilamentUser
 
     public function getAuthIdentifierName(): string
     {
-        return 'email';
+        return 'username';
     }
 
     public function getAuthIdentifier(): string
     {
-        return (string) ($this->getAttribute('email') ?: $this->getAttribute('username') ?? '');
+        return (string) $this->getAttribute('username') ?? '';
     }
 
     public function hasPermissionTo(string $permission): bool
@@ -136,14 +136,6 @@ class User extends Authenticatable implements FilamentUser
                     $this->forceFill(['password' => $stored, 'pw' => $stored]);
                     $this->saveQuietly();
                 }
-
-                return true;
-            }
-
-            if ($stored === $plainPassword) {
-                $hashed = Hash::make($plainPassword);
-                $this->forceFill(['password' => $hashed, 'pw' => $hashed]);
-                $this->saveQuietly();
 
                 return true;
             }
@@ -206,17 +198,30 @@ class User extends Authenticatable implements FilamentUser
 
     public function getRememberTokenName(): ?string
     {
-        return null;
+        return 'remember_token';
+    }
+
+    public function canAccessCrewSystem(): bool
+    {
+        return (bool) $this->is_active;
+    }
+
+    public function canAccessRunningRooms(): bool
+    {
+        return $this->is_active && (
+            in_array($this->role_code, ['booking_officer', 'station_officer'], true) ||
+            $this->isGlobalAccess()
+        );
+    }
+
+    public function isGlobalAccess(): bool
+    {
+        return (bool) ($this->is_super_admin || $this->is_hq || $this->role_code === 'hq_admin' || $this->depot_code === 'HQ');
     }
 
     public function canAccessPanel(Panel $panel): bool
     {
-        $result = $this->is_active && (
-            $this->is_super_admin ||
-            $this->is_hq ||
-            $this->role_code === 'hq_admin' ||
-            $this->depot_code === 'HQ'
-        );
+        $result = $this->is_active && $this->isGlobalAccess();
         \Log::debug('canAccessPanel called', [
             'username' => $this->username,
             'role_code' => $this->role_code,

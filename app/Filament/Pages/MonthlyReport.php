@@ -22,6 +22,8 @@ class MonthlyReport extends Page implements HasForms
 
     protected static UnitEnum | string | null  $navigationGroup = 'Running Rooms';
 
+    protected static ?int $navigationSort = 50;
+
     protected string $view = 'filament.pages.monthly-report';
 
     /** @var array{roomId: ?string, period: ?string} */

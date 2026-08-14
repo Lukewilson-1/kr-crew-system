@@ -560,10 +560,19 @@ class CrewDataController extends Controller
             }
         }
 
+        $currentMonthKey = now()->format('Y-m');
+        $currentDay = (int) now()->format('j');
+        $isCurrentMonth = $monthKey === $currentMonthKey;
+
         foreach ($segments as $segment) {
             $day = isset($segment['day']) ? (int) $segment['day'] : 0;
             $statusCode = trim((string) ($segment['status_code'] ?? ''));
             if ($day < 1 || $day > 31) {
+                continue;
+            }
+
+            // Never touch past-day history for the current month.
+            if ($isCurrentMonth && $day < $currentDay) {
                 continue;
             }
 
@@ -576,12 +585,20 @@ class CrewDataController extends Controller
                 continue;
             }
 
+            $sortOrder = (int) ($segment['sort_order'] ?? 100);
+            $existingSegment = DB::table($this->segmentTable)
+                ->where('crew_record_id', $recordId)
+                ->where('month_key', $monthKey)
+                ->where('day', $day)
+                ->where('sort_order', $sortOrder)
+                ->first();
+
             $segmentPayload = [
                 'crew_id' => $this->normalizeText($payload['id'] ?? $existing?->crew_id ?? $recordId) ?: $recordId,
                 'depot_code' => $this->normalizeText($payload['depot'] ?? $existing?->depot ?? '') ?: null,
                 'month_key' => $monthKey,
                 'day' => $day,
-                'sort_order' => (int) ($segment['sort_order'] ?? 100),
+                'sort_order' => $sortOrder,
                 'status_code' => $statusCode,
                 'status' => $statusCode,
                 'train_type' => trim((string) ($segment['train_type'] ?? '')) ?: null,
@@ -594,12 +611,14 @@ class CrewDataController extends Controller
                 'notes' => trim((string) ($segment['notes'] ?? '')) ?: null,
                 'note' => trim((string) ($segment['notes'] ?? '')) ?: null,
                 'metadata' => $segment['metadata'] ?? json_encode([]),
-                'created_at' => $existing?->created_at ?: now(),
+                'created_at' => $existingSegment ? $existingSegment->created_at : now(),
                 'updated_at' => now(),
             ];
 
             if (in_array(Schema::getColumnType($this->segmentTable, 'segment_id'), ['string', 'varchar', 'text'], true)) {
-                $segmentPayload['segment_id'] = (string) ($segment['segment_id'] ?? Str::uuid());
+                $segmentPayload['segment_id'] = $existingSegment
+                    ? (string) $existingSegment->segment_id
+                    : (string) ($segment['segment_id'] ?? Str::uuid());
             }
 
             if (Schema::hasColumn($this->segmentTable, 'date')) {
@@ -615,11 +634,11 @@ class CrewDataController extends Controller
             }
 
             if (Schema::hasColumn($this->segmentTable, 'start_time')) {
-                $segmentPayload['start_time'] = trim((string) ($segment['book_time'] ?? '')) ?: '00:00';
+                $segmentPayload['start_time'] = trim((string) ($segment['start_time'] ?? $segment['book_time'] ?? '')) ?: '00:00';
             }
 
             if (Schema::hasColumn($this->segmentTable, 'end_time')) {
-                $segmentPayload['end_time'] = trim((string) ($segment['book_time'] ?? '')) ?: '23:59';
+                $segmentPayload['end_time'] = trim((string) ($segment['end_time'] ?? $segment['book_time'] ?? '')) ?: '23:59';
             }
 
             DB::table($this->segmentTable)->updateOrInsert(
@@ -627,7 +646,7 @@ class CrewDataController extends Controller
                     'crew_record_id' => $recordId,
                     'month_key' => $monthKey,
                     'day' => $day,
-                    'sort_order' => (int) ($segment['sort_order'] ?? 100),
+                    'sort_order' => $sortOrder,
                 ],
                 $segmentPayload
             );
@@ -839,25 +858,54 @@ class CrewDataController extends Controller
                 }
             }
         }
-        // If monthly/day edits target this month, disallow changes to past days.
+        // The frontend always sends the full month state (monthly + status_segments),
+        // so a blanket "reject any past-day entry" guard would block every save.
+        // Instead, reject only when a past-day FINAL status would actually change.
+        // Past-day entries are compared only against the CURRENT month's stored state.
+        // During/after a month rollover the client carries stale segments belonging to
+        // the previous month; the current month has no rows for those days (and
+        // syncCrewStatusSegments never writes past-day rows for the current month), so
+        // such carry-over entries are skipped rather than treated as changes.
+        $storedMonthKey = $existing
+            ? trim((string) ($this->payloadFromRow($existing)['monthKey'] ?? ''))
+            : '';
         if (($merged['monthKey'] ?? '') === $currentMonthKey) {
-            // check monthly array keys like d1..d31
+            $previousSegments = $existing ? $this->fetchStatusSegments($recordId, $currentMonthKey) : [];
+            // Only trust the stored monthly fallback when the stored record is already
+            // on the same (current) month; otherwise it is previous-month carry-over.
+            $previousMonthly = ($storedMonthKey === $currentMonthKey)
+                ? ($this->payloadFromRow($existing)['monthly'] ?? [])
+                : [];
+            $previousFinal = function (int $day) use ($previousSegments, $previousMonthly): string {
+                $final = '';
+                foreach ($previousSegments as $segment) {
+                    if ((int) ($segment['day'] ?? 0) === $day) {
+                        $final = (string) ($segment['status_code'] ?? $segment['status'] ?? $final);
+                    }
+                }
+
+                return $final !== '' ? $final : (string) ($previousMonthly['d'.$day] ?? '');
+            };
+
             if (is_array($merged['monthly'])) {
                 foreach ($merged['monthly'] as $k => $v) {
                     if (preg_match('/^d(\d+)$/', (string) $k, $m)) {
                         $day = (int) $m[1];
-                        if ($day < $currentDay) {
+                        $previous = $previousFinal($day);
+                        if ($day < $currentDay && trim((string) $v) !== '' && $previous !== '' && trim((string) $v) !== $previous) {
                             return response()->json(['error' => 'Modifying past-day statuses is not allowed.'], 403);
                         }
                     }
                 }
             }
-            // check status_segments entries
+
             if (is_array($merged['status_segments'])) {
                 foreach ($merged['status_segments'] as $seg) {
                     if (is_array($seg) && isset($seg['day'])) {
                         $day = (int) $seg['day'];
-                        if ($day < $currentDay) {
+                        $code = trim((string) ($seg['status_code'] ?? $seg['status'] ?? ''));
+                        $previous = $previousFinal($day);
+                        if ($day < $currentDay && $code !== '' && $previous !== '' && $code !== $previous) {
                             return response()->json(['error' => 'Modifying past-day statuses is not allowed.'], 403);
                         }
                     }

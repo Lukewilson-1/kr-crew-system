@@ -12,9 +12,11 @@ class DatabaseSeeder extends Seeder
             ReportDefinitionSeeder::class,
             DepotSeeder::class,
             ShiftTemplateSeeder::class,
+            TrainTypeSeeder::class,
             DepotUserSeeder::class,
             RoomSeeder::class,
             RunningRoomSampleSeeder::class,
+            RunningRoomOptionSeeder::class,
         ]);
     }
 }

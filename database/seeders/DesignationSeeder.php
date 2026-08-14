@@ -26,9 +26,6 @@ class DesignationSeeder extends Seeder
             ->toArray();
 
         foreach ($designations as $code) {
-            $key = $this->normalizeDesignationKey((string) $code);
-            $restEligible = ! in_array($key, ['shunter_driver', 'shunter', 'lio'], true);
-
             DB::table('designations')->updateOrInsert(
                 ['designation_code' => $code],
                 [
@@ -36,7 +33,8 @@ class DesignationSeeder extends Seeder
                     'sort_order' => 0,
                     'is_active' => true,
                     'metadata' => json_encode([
-                        'restEligible' => $restEligible,
+                        'restEligible' => true,
+                        'runningRoomEligible' => true,
                         'canLogin' => true,
                         'isCrewMember' => true,
                         'isUser' => false,

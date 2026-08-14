@@ -19,9 +19,9 @@ class ShiftTemplateResource extends Resource
     protected static ?string $model = ShiftTemplate::class;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clock';
-    protected static UnitEnum|string|null $navigationGroup = 'Crew Operations';
+    protected static UnitEnum|string|null $navigationGroup = 'Crew Management';
     protected static ?string $navigationLabel = 'Shifts';
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 60;
 
     public static function shouldRegisterNavigation(): bool
     {

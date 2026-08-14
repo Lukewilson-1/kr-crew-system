@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Illuminate\Database\Eloquent\Model;
+use UnitEnum;
 
 class DepotResource extends Resource
 {
@@ -19,7 +20,8 @@ class DepotResource extends Resource
 
     protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-building-office';
     protected static ?string $navigationLabel = 'Depots';
-    protected static ?int $navigationSort = 5;
+    protected static UnitEnum|string|null $navigationGroup = 'Crew Management';
+    protected static ?int $navigationSort = 20;
 
     public static function shouldRegisterNavigation(): bool
     {

@@ -29,6 +29,8 @@ class AttendanceRecordResource extends Resource
 
     protected static UnitEnum | string | null  $navigationGroup = 'Running Rooms';
 
+    protected static ?int $navigationSort = 20;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([

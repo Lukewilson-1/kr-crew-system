@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class AdminMetaController extends Controller
 {
@@ -27,6 +30,43 @@ class AdminMetaController extends Controller
         'reportMeta' => 'reports',
     ];
 
+    protected static array $schemaTableCache = [];
+
+    protected static array $schemaColumnCache = [];
+
+    protected ?array $rolePermissionsByRole = null;
+
+    protected function hasTable(string $table): bool
+    {
+        return self::$schemaTableCache[$table] ??= Schema::hasTable($table);
+    }
+
+    protected function hasColumn(string $table, string $column): bool
+    {
+        $key = $table.'.'.$column;
+
+        return self::$schemaColumnCache[$key] ??= Schema::hasColumn($table, $column);
+    }
+
+    protected function rolePermissionsByRole(): array
+    {
+        if ($this->rolePermissionsByRole !== null) {
+            return $this->rolePermissionsByRole;
+        }
+
+        if (! $this->hasTable('role_permissions')) {
+            return $this->rolePermissionsByRole = [];
+        }
+
+        $this->rolePermissionsByRole = DB::table('role_permissions')
+            ->get(['role_code', 'permission_code'])
+            ->groupBy('role_code')
+            ->map(fn ($rows) => $rows->pluck('permission_code')->values()->all())
+            ->all();
+
+        return $this->rolePermissionsByRole;
+    }
+
     protected function ensureSuperAdminUser(): void
     {
         $config = Config::get('services.superadmin', []);
@@ -37,26 +77,40 @@ class AdminMetaController extends Controller
             return;
         }
 
+        // Fast path: this ran before — the super admin already exists in the
+        // users table with a proper hash. Skip bcrypt + writes entirely.
+        if ($this->hasTable('users')) {
+            $existing = DB::table('users')->where('username', $username)->first();
+            if ($existing) {
+                $stored = (string) ($existing->password ?? '');
+                if (str_starts_with($stored, '$2y$') || str_starts_with($stored, '$argon2i$') || str_starts_with($stored, '$argon2id$')) {
+                    return;
+                }
+            }
+        }
+
         $passwordHash = $this->normalizePassword($password);
 
-        DB::table('admin_meta')->updateOrInsert(
-            ['collection' => 'users', 'record_id' => $username],
-            [
-                'payload' => json_encode([
-                    'username' => $username,
-                    'name' => 'Super Admin',
-                    'depot' => 'HQ',
-                    'role' => 'super_admin',
-                    'password' => $passwordHash,
-                    'isHQ' => true,
-                    'isSuperAdmin' => true,
-                ]),
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
-        );
+        if ($this->hasTable('admin_meta')) {
+            DB::table('admin_meta')->updateOrInsert(
+                ['collection' => 'users', 'record_id' => $username],
+                [
+                    'payload' => json_encode([
+                        'username' => $username,
+                        'name' => 'Super Admin',
+                        'depot' => 'HQ',
+                        'role' => 'super_admin',
+                        'password' => $passwordHash,
+                        'isHQ' => true,
+                        'isSuperAdmin' => true,
+                    ]),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
 
-        if (Schema::hasTable('users')) {
+        if ($this->hasTable('users')) {
             DB::table('users')->updateOrInsert(
                 ['username' => $username],
                 [
@@ -92,7 +146,7 @@ class AdminMetaController extends Controller
 
     protected function ensureTable(): void
     {
-        if (Schema::hasTable('admin_meta')) {
+        if ($this->hasTable('admin_meta')) {
             return;
         }
 
@@ -131,6 +185,7 @@ class AdminMetaController extends Controller
                 'label' => $row->designation_name,
                 'aliases' => data_get(json_decode($row->metadata ?? '{}', true), 'aliases', []),
                 'restEligible' => data_get(json_decode($row->metadata ?? '{}', true), 'restEligible', true),
+                'runningRoomEligible' => data_get(json_decode($row->metadata ?? '{}', true), 'runningRoomEligible', data_get(json_decode($row->metadata ?? '{}', true), 'restEligible', true)),
                 'canLogin' => data_get(json_decode($row->metadata ?? '{}', true), 'canLogin', true),
                 'isCrewMember' => data_get(json_decode($row->metadata ?? '{}', true), 'isCrewMember', true),
                 'isUser' => data_get(json_decode($row->metadata ?? '{}', true), 'isUser', false),
@@ -155,7 +210,7 @@ class AdminMetaController extends Controller
                 'id' => $row->slug,
                 'label' => $row->name,
                 'description' => $row->description,
-                'reportType' => $row->type,
+                'reportType' => $row->report_type ?: $row->type,
                 'buttonText' => $row->action_label ?? $row->actionLabel ?? 'Run',
                 'visible' => (bool) $row->is_active,
                 'order' => (int) $row->sort_order,
@@ -184,9 +239,7 @@ class AdminMetaController extends Controller
                 'canLogin' => data_get(json_decode($row->metadata ?? '{}', true), 'canLogin', false),
                 'isCrewMember' => data_get(json_decode($row->metadata ?? '{}', true), 'isCrewMember', false),
                 'isUser' => data_get(json_decode($row->metadata ?? '{}', true), 'isUser', false),
-                'permissions' => Schema::hasTable('role_permissions')
-                    ? DB::table('role_permissions')->where('role_code', $row->role_code)->pluck('permission_code')->values()->all()
-                    : [],
+                'permissions' => $this->rolePermissionsByRole()[$row->role_code] ?? [],
             ],
             'permissions' => [
                 'id' => $row->permission_code,
@@ -207,7 +260,7 @@ class AdminMetaController extends Controller
     protected function loadNormalizedCollection(string $collection): ?array
     {
         $table = $this->normalizedCollections[$collection] ?? null;
-        if ($table === null || !Schema::hasTable($table)) {
+        if ($table === null || !$this->hasTable($table)) {
             return null;
         }
 
@@ -221,7 +274,7 @@ class AdminMetaController extends Controller
 
     protected function applySoftDeleteState(string $collection, string $table, string $id, bool $active): void
     {
-        if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'deleted_at')) {
+        if (!$this->hasTable($table) || !$this->hasColumn($table, 'deleted_at')) {
             return;
         }
 
@@ -250,7 +303,7 @@ class AdminMetaController extends Controller
     protected function persistNormalizedCollection(string $collection, string $id, array $payload): void
     {
         $table = $this->normalizedCollections[$collection] ?? null;
-        if ($table === null || !Schema::hasTable($table)) {
+        if ($table === null || !$this->hasTable($table)) {
             return;
         }
 
@@ -307,6 +360,7 @@ class AdminMetaController extends Controller
                     'metadata' => json_encode([
                         'aliases' => $payload['aliases'] ?? [],
                         'restEligible' => !empty($payload['restEligible']),
+                        'runningRoomEligible' => array_key_exists('runningRoomEligible', $payload) ? !empty($payload['runningRoomEligible']) : true,
                         'canLogin' => array_key_exists('canLogin', $payload) ? !empty($payload['canLogin']) : true,
                         'isCrewMember' => array_key_exists('isCrewMember', $payload) ? !empty($payload['isCrewMember']) : true,
                         'isUser' => !empty($payload['isUser']),
@@ -414,9 +468,9 @@ class AdminMetaController extends Controller
                     'created_at' => now(),
                 ]
             );
-            if (Schema::hasTable('role_permissions')) {
+            if ($this->hasTable('role_permissions')) {
                 DB::table('role_permissions')->where('role_code', $id)->delete();
-                $validPermissions = Schema::hasTable('permissions')
+                $validPermissions = $this->hasTable('permissions')
                     ? DB::table('permissions')->whereIn('permission_code', $permissions)->pluck('permission_code')->all()
                     : [];
                 foreach ($validPermissions as $permission) {
@@ -454,7 +508,7 @@ class AdminMetaController extends Controller
             return;
         }
         $table = $this->normalizedCollections[$collection] ?? null;
-        if ($table === null || !Schema::hasTable($table)) {
+        if ($table === null || !$this->hasTable($table)) {
             return;
         }
 
@@ -471,7 +525,7 @@ class AdminMetaController extends Controller
         };
 
         if ($column !== null) {
-            if (Schema::hasColumn($table, 'deleted_at')) {
+            if ($this->hasColumn($table, 'deleted_at')) {
                 DB::table($table)->where($column, $id)->update([
                     'deleted_at' => now(),
                     'updated_at' => now(),
@@ -481,7 +535,7 @@ class AdminMetaController extends Controller
             }
         }
 
-        if ($collection === 'users' && Schema::hasTable('admin_meta')) {
+        if ($collection === 'users' && $this->hasTable('admin_meta')) {
             DB::table('admin_meta')->where('collection', 'users')->where('record_id', $id)->delete();
         }
     }
@@ -515,8 +569,14 @@ class AdminMetaController extends Controller
         $this->ensureTable();
         $this->ensureSuperAdminUser();
 
+        $throttleKey = Str::lower($username).'|'.$request->ip();
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $minutes = ceil(RateLimiter::availableIn($throttleKey) / 60);
+            return response()->json(['error' => "Too many login attempts. Please try again in {$minutes} minute(s)."], 429);
+        }
+
         $user = null;
-        if (Schema::hasTable('users')) {
+        if ($this->hasTable('users')) {
             $row = DB::table('users')->where('username', $username)->first();
             if ($row) {
                 $user = [
@@ -552,6 +612,7 @@ class AdminMetaController extends Controller
         }
 
         if ($user === null) {
+            RateLimiter::hit($throttleKey, 60);
             return response()->json(['error' => 'Invalid credentials.'], 401);
         }
 
@@ -561,22 +622,40 @@ class AdminMetaController extends Controller
 
         $hash = $user['password'] ?: ($user['legacy_pw'] ?? '');
         $valid = $hash !== '' && Hash::check($password, $hash);
-        if (!$valid && $hash === $password) {
-            $valid = true;
-        }
-
         if (!$valid) {
+            RateLimiter::hit($throttleKey, 60);
             return response()->json(['error' => 'Invalid credentials.'], 401);
         }
 
-        if ((($user['password'] ?? '') === '' && ($user['legacy_pw'] ?? '') !== '') || $hash === $password) {
-            $passwordHash = $hash === $password ? Hash::make($password) : $hash;
-            if (Schema::hasTable('users')) {
+        RateLimiter::clear($throttleKey);
+
+        // Promote a legacy hash and upgrade weak hashes to the canonical column.
+        if ((($user['password'] ?? '') === '' && ($user['legacy_pw'] ?? '') !== '')) {
+            $passwordHash = $hash;
+            if (password_needs_rehash($passwordHash, PASSWORD_BCRYPT)) {
+                $passwordHash = Hash::make($password);
+            }
+            if ($this->hasTable('users')) {
                 DB::table('users')->where('username', $username)->update([
                     'password' => $passwordHash,
                     'pw' => $passwordHash,
                     'updated_at' => now(),
                 ]);
+            }
+        }
+
+        // Establish a real Laravel session so the in-app sign-in panel is
+        // recognised by the standard web guard for subsequent requests.
+        if ($this->hasTable('users')) {
+            $model = \App\User::find($username);
+            if ($model !== null) {
+                Auth::login($model);
+                $request->session()->regenerate();
+                if ($model->getAuthPassword() !== '' && password_needs_rehash($model->getAuthPassword(), PASSWORD_BCRYPT)) {
+                    $model->password = $password;
+                    $model->saveQuietly();
+                }
+                $model->forceFill(['last_login_at' => now()])->saveQuietly();
             }
         }
 
@@ -596,7 +675,7 @@ class AdminMetaController extends Controller
         }
 
         $table = $this->normalizedCollections[$collection] ?? null;
-        if ($table === null || !Schema::hasTable($table)) {
+        if ($table === null || !$this->hasTable($table)) {
             return response()->json([]);
         }
 
@@ -723,7 +802,7 @@ class AdminMetaController extends Controller
 
         $this->deleteNormalizedCollection($collection, $id);
 
-        if ($collection === 'users' && Schema::hasTable('users')) {
+        if ($collection === 'users' && $this->hasTable('users')) {
             DB::table('users')->where('username', $id)->delete();
         }
 

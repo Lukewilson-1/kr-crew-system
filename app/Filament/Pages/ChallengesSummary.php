@@ -23,6 +23,8 @@ class ChallengesSummary extends Page implements HasForms
 
     protected static UnitEnum | string | null $navigationGroup = 'Running Rooms';
 
+    protected static ?int $navigationSort = 40;
+
     protected string $view = 'filament.pages.challenges-summary';
 
     public array $data = [

@@ -23,11 +23,11 @@ class PermissionResource extends Resource
     protected static ?string $model = Permission::class;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-key';
-    protected static UnitEnum|string|null $navigationGroup = 'User Management';
+    protected static UnitEnum|string|null $navigationGroup = 'Users & Access';
 
     protected static ?string $navigationLabel = 'Permissions';
 
-    protected static ?int $navigationSort = 40;
+    protected static ?int $navigationSort = 30;
 
     public static function form(Schema $schema): Schema
     {

@@ -31,8 +31,9 @@ class StatusCodeResource extends Resource
     protected static ?string $model = StatusCode::class;
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static UnitEnum|string|null $navigationGroup = 'Crew Metadata';
-    protected static ?int $navigationSort = 20;
+    protected static UnitEnum|string|null $navigationGroup = 'Crew Management';
+    protected static ?string $navigationLabel = 'Status Codes';
+    protected static ?int $navigationSort = 50;
 
     public static function form(Schema $schema): Schema
     {

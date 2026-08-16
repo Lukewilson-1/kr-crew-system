@@ -14,6 +14,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         \App\Console\Commands\SeedDefaultReports::class,
         \App\Console\Commands\CopyEndOfDayStatus::class,
+        \App\Console\Commands\AutoCheckoutExpiredRest::class,
     ];
 
     /**
@@ -26,6 +27,10 @@ class Kernel extends ConsoleKernel
     {
         // Run the end-of-day status copy one minute after midnight server time.
         $schedule->command('crew:copy-end-of-day-status')->dailyAt('00:01');
+
+        // Auto-check-out crew whose running-room rest period has ended and
+        // notify HQ + the relevant booking officers. Runs every five minutes.
+        $schedule->command('running-rooms:auto-checkout-rested')->everyFiveMinutes();
     }
 
     /**

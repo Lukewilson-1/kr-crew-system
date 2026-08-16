@@ -30,7 +30,7 @@
         </h3>
         <table class="w-full text-xs mb-6" style="border-collapse: collapse;">
             <thead>
-                <tr style="background: #F7F9FC;">
+                <tr style="background: #f8f6f6;">
                     <th class="text-left p-2 border" style="border-color: var(--kr-line);">Name</th>
                     <th class="text-left p-2 border" style="border-color: var(--kr-line);">Designation</th>
                     <th class="text-left p-2 border" style="border-color: var(--kr-line);">Arrived</th>

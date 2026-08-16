@@ -169,6 +169,7 @@ let selectedMonthDay = new Date().getDate();
 let selectedMonthCrewKey = null;
 let cdInterval=null; // countdown ticker
 let currentModalGrade=null;
+let currentModalInRoom=false;
 let crewDetailsKey=null;
 let crewDetailsTimer=null;
 let lastRefreshTime=0; // prevent rapid refresh spamming
@@ -422,7 +423,8 @@ function updateStatusValidation(){
   const statusEl=document.getElementById('mStatus');
   const hintEl=document.getElementById('statusHint');
   const saveBtn=document.getElementById('mSaveBtn');
-  const rBtn=document.querySelector('#mStatusGrid .st-pick[data-status="R"]');
+  const grid=document.getElementById('mStatusGrid');
+  const rBtn=grid?grid.querySelector('.st-pick[data-status="R"]'):null;
   if(!grade){
     if(rBtn)rBtn.classList.remove('disabled');
     if(hintEl)hintEl.style.display='none';
@@ -441,6 +443,34 @@ function updateStatusValidation(){
     if(hintEl)hintEl.style.display='none';
     if(saveBtn)saveBtn.disabled=false;
   }
+}
+
+function applyInRoomStatusLock(){
+  const statusEl=document.getElementById('mStatus');
+  const grid=document.getElementById('mStatusGrid');
+  const hintEl=document.getElementById('statusHint');
+  const saveBtn=document.getElementById('mSaveBtn');
+  if(!currentModalInRoom){
+    if(grid) grid.querySelectorAll('.st-pick').forEach(el=>el.classList.remove('disabled'));
+    if(hintEl)hintEl.style.display='none';
+    if(saveBtn)saveBtn.disabled=false;
+    return;
+  }
+  // A crew member checked into a running room may only keep the Resting (R)
+  // status. Every other status is grayed out until they are checked out.
+  if(grid) grid.querySelectorAll('.st-pick').forEach(el=>{
+    const locked=el.dataset.status!=='R';
+    el.classList.toggle('disabled',locked);
+  });
+  if(statusEl){
+    statusEl.value='R';
+    updateStatusPicker();
+  }
+  if(hintEl){
+    hintEl.textContent='Checked into a running room — status is locked to Resting. Check the crew out of the room before changing status.';
+    hintEl.style.display='block';
+  }
+  if(saveBtn)saveBtn.disabled=false;
 }
 
 function getServerUser(){
@@ -1011,6 +1041,7 @@ function buildStatusButtons(selected='SB'){
 }
 
 function setStatusFromGroup(value){
+  if(currentModalInRoom && value!=='R') return;
   const select=document.getElementById('mStatus');
   if(select) select.value=value;
   updateStatusPicker();
@@ -3153,6 +3184,20 @@ function onStatusChange(){
   const s=document.getElementById('mStatus').value;
   updateStatusPicker();
   updateStatusChangeSummary();
+  if(currentModalInRoom){
+    // Force the Resting status while checked into a running room.
+    if(s!=='R'){
+      document.getElementById('mStatus').value='R';
+      updateStatusPicker();
+      updateStatusChangeSummary();
+    }
+    applyInRoomStatusLock();
+    document.getElementById('trainTypeRow').style.display='none';
+    document.getElementById('restHoursRow').style.display='block';
+    document.getElementById('restLocationRow').style.display='block';
+    onRestLocationChange();
+    return;
+  }
   document.getElementById('trainTypeRow').style.display=s==='BK'?'block':'none';
   document.getElementById('restHoursRow').style.display=s==='R'?'block':'none';
   document.getElementById('restLocationRow').style.display=s==='R'?'block':'none';
@@ -3310,6 +3355,7 @@ function openUpdate(depot,id){
   editKey={depot,id,day:null};
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   currentModalGrade=c.grade;
+  currentModalInRoom=!!(c.rrRoomId && c.rrCheckedOut===false && c.status==='R');
   setDaySegmentEditorVisible(false);
   populateStatusSelects(c.status||'SB');
   populateTrainTypeSelect(c.trainType||'');
@@ -3340,6 +3386,7 @@ function openDayEdit(depot,id,day){
   selectedMonthCrewKey = `${depot}::${id}`;
   selectedMonthDay = day;
   currentModalGrade=c.grade;
+  currentModalInRoom=(day===CD) && !!(c.rrRoomId && c.rrCheckedOut===false && c.status==='R');
   const daySegments=getDaySegments(c,day);
   const finalStatus=getFinalStatusForDay(c,day)||'SB';
   populateStatusSelects(finalStatus);
@@ -3363,7 +3410,7 @@ function openDayEdit(depot,id,day){
   document.getElementById('modal').classList.add('open');
 }
 
-function closeModal(){document.getElementById('modal').classList.remove('open');setDaySegmentEditorVisible(false);editKey=null;currentModalGrade=null;}
+function closeModal(){document.getElementById('modal').classList.remove('open');setDaySegmentEditorVisible(false);editKey=null;currentModalGrade=null;currentModalInRoom=false;}
 
 function countTripOffDays(c){
   const monthly=c.monthly||{};
@@ -3388,6 +3435,10 @@ async function saveModal(){
     const trainType=newStatus==='BK'?document.getElementById('mTrainType').value:'';
     const bookTime=newStatus==='BK'?document.getElementById('mBookTime').value:'';
     const restStartInput=document.getElementById('mRestStart').value;
+    if(currentModalInRoom && newStatus!=='R'){
+      alert('This crew member is checked into a running room and must remain on Resting. Check them out of the room before changing status.');
+      return;
+    }
     if(newStatus==='R' && !isRestAllowedForGrade(currentModalGrade)){
       alert('This designation does not qualify for Resting. Change the status before saving.');
       return;
@@ -3398,7 +3449,11 @@ async function saveModal(){
       const daySegments=readDaySegmentEditor(editKey.day);
       if(!daySegments.length){alert('Add at least one status segment for this day.');return;}
       const finalSegment=daySegments[daySegments.length-1];
-      const finalStatus=finalSegment.status_code;
+      let finalStatus=finalSegment.status_code;
+      if(currentModalInRoom && finalStatus!=='R'){
+        alert('This crew member is checked into a running room and must remain on Resting. Check them out of the room before changing status.');
+        return;
+      }
       if(finalStatus==='TO' && !confirmTripOffDay(c,editKey.day)) return;
       if(daySegments.some(seg=>seg.status_code==='R') && !isRestAllowedForGrade(currentModalGrade)){
         alert('This designation does not qualify for Resting. Change the status before saving.');

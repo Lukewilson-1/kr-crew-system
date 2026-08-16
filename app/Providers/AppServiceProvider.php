@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\ReportDefinition;
+use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Pagination\PaginationState;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
@@ -23,6 +24,11 @@ class AppServiceProvider extends ServiceProvider
             'pagination',
             base_path('vendor/laravel/framework/src/Illuminate/Pagination/resources/views')
         );
+
+        // Keep the maintenance sign-in reachable while the site is offline.
+        PreventRequestsDuringMaintenance::except([
+            'maintenance-login',
+        ]);
 
         $this->seedDefaultReports();
     }

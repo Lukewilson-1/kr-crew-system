@@ -39,6 +39,7 @@
         @else
             @vite(['resources/js/app.js'])
         @endif
+        <script src="{{ asset('js/notification-bell.js') }}"></script>
     </head>
     <body>
         <div id="syncBadge" class="hide"><div class="sd sd-ok" id="syncDot"></div><span id="syncLabel">Connected</span></div>
@@ -51,6 +52,17 @@
                 <span class="tb-badge" id="tbBadge"></span>
                 <div class="tb-live"><div class="tbl-dot" id="tbLiveDot"></div><span class="tbl-txt" id="tbLiveTxt">Live</span></div>
                 <div class="tb-right">
+                    <div class="kr-bell" id="krBell">
+                        <button type="button" class="kr-bell-btn" id="krBellBtn" aria-label="Notifications">
+                            <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                            <span class="kr-bell-count" id="krBellCount" hidden>0</span>
+                        </button>
+                        <div class="kr-bell-panel" id="krBellPanel" hidden>
+                            <div class="kr-bell-head">Notifications</div>
+                            <div class="kr-bell-list" id="krBellList"></div>
+                            <button type="button" class="kr-bell-mark" id="krBellMark">Mark all as read</button>
+                        </div>
+                    </div>
                     <span class="tb-user" id="tbUser"></span>
                     <span class="tb-clock" id="tbClock"></span>
                     <form method="POST" action="{{ route('logout') }}" style="display:inline">

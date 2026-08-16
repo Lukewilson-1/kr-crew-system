@@ -4,7 +4,7 @@
         <div class="mt-3 space-y-2">
             @forelse ($items as $it)
                 <div class="flex items-start gap-3">
-                    <div class="h-2 w-2 rounded-full bg-sky-500 mt-2"></div>
+                    <div class="h-2 w-2 rounded-full mt-2" style="background: #6C1A23;"></div>
                     <div>
                         <div class="font-medium">{{ $it['label'] }}</div>
                         <div class="text-xs text-gray-500">{{ $it['meta'] }} • {{ $it['time'] }}</div>

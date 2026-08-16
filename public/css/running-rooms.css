@@ -317,3 +317,24 @@ a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visib
   #rr-topbar::before{height:3px}
   #rr-main h2::before{height:18px}
 }
+ 
+/* ── Notification bell ──────────────────────────────────────────────────── */
+.kr-bell{position:relative}
+.kr-bell-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;cursor:pointer;transition:background .15s;padding:0}
+.kr-bell-btn:hover{background:rgba(255,255,255,.24)}
+.kr-bell-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.9}
+.kr-bell-count{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:10px;background:var(--kr-orange,#F14219);color:#fff;font-size:10px;font-weight:800;line-height:17px;text-align:center;border:1.5px solid #fff}
+.kr-bell-panel{position:absolute;top:calc(100% + 8px);right:0;width:320px;max-width:90vw;background:#fff;border:1px solid #E8E0CF;border-radius:12px;box-shadow:0 14px 34px rgba(0,0,0,.22);z-index:200;overflow:hidden}
+.kr-bell-head{padding:11px 14px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#5A4200;border-bottom:1px solid #F0EAE0}
+.kr-bell-list{max-height:320px;overflow-y:auto}
+.kr-bell-item{display:flex;gap:9px;padding:10px 14px;border-bottom:1px solid #F5F0E6;cursor:default}
+.kr-bell-item:hover{background:#FEFBF0}
+.kr-bell-item.read{opacity:.62}
+.kr-bell-item-dot{width:7px;height:7px;border-radius:50%;background:var(--kr-orange,#F14219);margin-top:5px;flex-shrink:0}
+.kr-bell-item.read .kr-bell-item-dot{background:#D8CDB4}
+.kr-bell-item-title{font-size:12px;font-weight:700;color:#17130F}
+.kr-bell-item-text{font-size:11px;color:#6B5A3E;line-height:1.45;margin-top:1px}
+.kr-bell-item-time{font-size:10px;color:#A2947A;margin-top:3px}
+.kr-bell-empty{padding:22px 14px;text-align:center;font-size:12px;color:#A2947A}
+.kr-bell-mark{width:100%;padding:9px;border:none;border-top:1px solid #F0EAE0;background:#FDF7E7;color:#5A4200;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;cursor:pointer}
+.kr-bell-mark:hover{background:#FBF3D5}

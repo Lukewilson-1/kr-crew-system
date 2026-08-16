@@ -6,6 +6,7 @@ use App\Models\AttendanceRecord;
 use App\Models\Matter;
 use App\Models\MatterPhoto;
 use App\Models\Room;
+use App\Models\SystemNotification;
 use App\Support\CrewLookup;
 use App\User;
 use Illuminate\Http\Request;
@@ -255,23 +256,28 @@ class RunningRoomController extends Controller
                     ->map(fn ($bed) => ['bed_no' => $bed->bed_no, 'is_usable' => $bed->is_usable]),
             ])->values(),
             'records' => $records,
-            'matters' => $matters->map(fn (Matter $matter) => [
-                'id' => $matter->id,
-                'room_id' => $matter->room_id,
-                'date' => $matter->date?->toDateString(),
-                'category' => $matter->category,
-                'description' => $matter->description,
-                'reported_by' => $matter->reported_by,
-                'status' => $matter->status,
-                'resolved_date' => $matter->resolved_date?->toDateString(),
-                'ticket_no' => $matter->ticket_no,
-                'photos' => $matter->photos->map(fn (MatterPhoto $photo) => [
-                    'id' => $photo->id,
-                    'url' => asset($photo->filename),
-                ])->values(),
-            ])->values(),
+            'matters' => $matters->map(fn (Matter $matter) => $this->matterPayload($matter))->values(),
             'designations' => $this->designations(),
             'categories' => $this->categories(),
+        ];
+    }
+
+    protected function matterPayload(Matter $matter): array
+    {
+        return [
+            'id' => $matter->id,
+            'room_id' => $matter->room_id,
+            'date' => $matter->date?->toDateString(),
+            'category' => $matter->category,
+            'description' => $matter->description->toHtml(),
+            'reported_by' => $matter->reported_by,
+            'status' => $matter->status,
+            'resolved_date' => $matter->resolved_date?->toDateString(),
+            'ticket_no' => $matter->ticket_no,
+            'photos' => $matter->photos->map(fn (MatterPhoto $photo) => [
+                'id' => $photo->id,
+                'url' => asset($photo->filename),
+            ])->values(),
         ];
     }
 
@@ -756,7 +762,7 @@ class RunningRoomController extends Controller
 
         $matter->load('photos');
 
-        return response()->json($matter, 201);
+        return response()->json($this->matterPayload($matter), 201);
     }
 
     public function updateMatter(Request $request, int $id)
@@ -823,7 +829,7 @@ class RunningRoomController extends Controller
 
         $matter->load('photos');
 
-        return response()->json($matter);
+        return response()->json($this->matterPayload($matter));
     }
 
     public function deleteMatter(Request $request, int $id)
@@ -874,6 +880,61 @@ class RunningRoomController extends Controller
             'room' => $room,
             'warning' => $occupied > $beds ? "{$room->name} has {$occupied} people checked in, above the new capacity of {$beds}." : null,
         ]);
+    }
+
+    public function notifications(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        $items = SystemNotification::query()
+            ->forRecipient($user->username)
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
+        $unread = $items->filter(fn (SystemNotification $n) => $n->read_at === null)->count();
+
+        return response()->json([
+            'unread_count' => $unread,
+            'notifications' => $items->map(fn (SystemNotification $n) => [
+                'id' => $n->id,
+                'title' => $n->title,
+                'body' => $n->body,
+                'type' => $n->type,
+                'data' => $n->data,
+                'read' => $n->read_at !== null,
+                'created_at' => $n->created_at?->toIso8601String(),
+            ])->values(),
+        ]);
+    }
+
+    public function markNotificationsRead(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        $ids = $request->input('ids');
+        if (is_array($ids) && ! empty($ids)) {
+            $count = SystemNotification::query()
+                ->forRecipient($user->username)
+                ->unread()
+                ->whereIn('id', array_map('intval', $ids))
+                ->update(['read_at' => now()]);
+        } else {
+            $count = SystemNotification::query()
+                ->forRecipient($user->username)
+                ->unread()
+                ->update(['read_at' => now()]);
+        }
+
+        return response()->json(['updated' => $count]);
     }
 
     public function updateOptions(Request $request)

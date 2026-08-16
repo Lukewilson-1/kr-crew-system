@@ -3,14 +3,13 @@
         .kr-admin-dashboard {
             --kr-bg: #f6f7f9;
             --kr-panel: #ffffff;
-            --kr-ink: #111827;
-            --kr-muted: #667085;
+            --kr-ink: #1a1a1a;
+            --kr-muted: #555555;
             --kr-line: #d9dee7;
-            --kr-rail: #111827;
-            --kr-gold: #d69a16;
-            --kr-green: #16a34a;
-            --kr-blue: #2563eb;
-            --kr-orange: #f59e0b;
+            --kr-rail: #6C1A23;
+            --kr-gold: #FEC000;
+            --kr-maroon: #6C1A23;
+            --kr-orange: #F14219;
             color: var(--kr-ink);
             display: grid;
             gap: 20px;
@@ -21,8 +20,8 @@
         }
 
         .kr-admin-hero {
-            background: linear-gradient(135deg, #111827 0%, #1f2937 55%, #3d2b05 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--kr-rail);
+            border: 1px solid #3a0f15;
             border-radius: 16px;
             color: #fff;
             display: grid;
@@ -33,7 +32,7 @@
         }
 
         .kr-admin-eyebrow {
-            color: #f7c65f;
+            color: var(--kr-gold);
             font-size: 12px;
             font-weight: 800;
             letter-spacing: 0.12em;
@@ -219,7 +218,7 @@
         }
 
         .kr-admin-bar-fill {
-            background: var(--kr-green);
+            background: var(--kr-maroon);
             border-radius: inherit;
             height: 100%;
         }
@@ -231,40 +230,31 @@
             grid-template-columns: 180px minmax(0, 1fr);
         }
 
-        .kr-admin-donut {
-            align-items: center;
-            aspect-ratio: 1;
+        .kr-admin-stacked {
+            display: grid;
+            gap: 12px;
+            text-align: center;
+        }
+
+        .kr-admin-stacked-bar {
+            border: 1px solid var(--kr-line);
             border-radius: 999px;
             display: flex;
-            justify-content: center;
-            margin: 0 auto;
-            max-width: 180px;
-            position: relative;
-            width: 100%;
+            height: 14px;
+            overflow: hidden;
         }
 
-        .kr-admin-donut::after {
-            background: #fff;
-            border-radius: 999px;
-            content: "";
-            height: 58%;
-            position: absolute;
-            width: 58%;
+        .kr-admin-stacked-seg {
+            height: 100%;
         }
 
-        .kr-admin-donut-center {
-            position: relative;
-            text-align: center;
-            z-index: 1;
-        }
-
-        .kr-admin-donut-center strong {
+        .kr-admin-stacked-total strong {
             display: block;
             font-size: 28px;
             line-height: 1;
         }
 
-        .kr-admin-donut-center span {
+        .kr-admin-stacked-total span {
             color: var(--kr-muted);
             display: block;
             font-size: 11px;
@@ -372,7 +362,7 @@
         }
 
         .kr-admin-link {
-            color: #b77908;
+            color: var(--kr-maroon);
             font-size: 13px;
             font-weight: 800;
             text-decoration: none;
@@ -413,14 +403,7 @@
     </style>
 
     @php
-        $gradientParts = [];
-        $cursor = 0;
-        foreach ($statusRows as $row) {
-            $next = $cursor + (int) $row['percent'];
-            $gradientParts[] = "{$row['color']} {$cursor}% {$next}%";
-            $cursor = $next;
-        }
-        $donutGradient = count($gradientParts) ? 'conic-gradient(' . implode(', ', $gradientParts) . ')' : '#e5e7eb';
+        $statusTotal = array_sum(array_column($statusRows, 'count'));
     @endphp
 
     <div class="kr-admin-dashboard">
@@ -498,8 +481,15 @@
                 </div>
 
                 <div class="kr-admin-status-layout">
-                    <div class="kr-admin-donut" style="background: {{ $donutGradient }}">
-                        <div class="kr-admin-donut-center">
+                    <div class="kr-admin-stacked">
+                        <div class="kr-admin-stacked-bar">
+                            @forelse ($statusRows as $status)
+                                <div class="kr-admin-stacked-seg" style="background: {{ $status['color'] }}; width: {{ $status['percent'] }}%"></div>
+                            @empty
+                                <div class="kr-admin-stacked-seg" style="background: #e5e7eb; width: 100%"></div>
+                            @endforelse
+                        </div>
+                        <div class="kr-admin-stacked-total">
                             <strong>{{ $statusTotal }}</strong>
                             <span>Status</span>
                         </div>

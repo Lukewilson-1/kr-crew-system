@@ -4,10 +4,16 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\CrewController;
 use App\Http\Controllers\CrewDataController;
 use App\Http\Controllers\AdminMetaController;
+use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\RunningRoomController;
 use Illuminate\Support\Facades\Route;
 
 require __DIR__.'/auth.php';
+
+// Maintenance-mode sign-in. This route stays reachable while the site is down
+// so visitors can authenticate with the hardcoded maintenance credentials.
+Route::get('/maintenance-login', [MaintenanceController::class, 'showLogin'])->name('maintenance.login');
+Route::post('/maintenance-login', [MaintenanceController::class, 'login'])->name('maintenance.login.attempt');
 
 // Public authentication endpoint used by the in-app sign-in panel. It is
 // session-less (JSON), but hardened: it uses Auth::attempt (bcrypt only),
@@ -56,4 +62,6 @@ Route::get('/running-rooms/api/crew/{staffNo}', [RunningRoomController::class, '
     Route::delete('/running-rooms/api/matters/{id}', [RunningRoomController::class, 'deleteMatter']);
     Route::post('/running-rooms/api/settings/beds', [RunningRoomController::class, 'updateBeds']);
     Route::post('/running-rooms/api/settings/options', [RunningRoomController::class, 'updateOptions']);
+    Route::get('/running-rooms/api/notifications', [RunningRoomController::class, 'notifications']);
+    Route::post('/running-rooms/api/notifications/read', [RunningRoomController::class, 'markNotificationsRead']);
 });

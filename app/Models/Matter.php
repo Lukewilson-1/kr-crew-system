@@ -7,14 +7,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon as CarbonInterface;
+use Tonysm\RichTextLaravel\Models\Traits\HasRichText;
 
 class Matter extends Model
 {
     use HasFactory;
+    use HasRichText;
 
     protected $fillable = [
         'room_id', 'date', 'category', 'description',
         'reported_by', 'status', 'resolved_date', 'ticket_no',
+    ];
+
+    protected $richTextAttributes = [
+        'description' => ['attribute' => true],
     ];
 
     protected function casts(): array

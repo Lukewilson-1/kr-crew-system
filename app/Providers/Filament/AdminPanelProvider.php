@@ -36,7 +36,9 @@ class AdminPanelProvider extends PanelProvider
             ->favicon(fn () => asset('assets/logo.png'))
 
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::hex('#6C1A23'),
+                'danger' => Color::hex('#F14219'),
+                'warning' => Color::hex('#FEC000'),
             ])
 
             ->discoverResources(
@@ -81,6 +83,9 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
 
-            ;
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::HEAD_START,
+                fn () => view('partials.kr-theme'),
+            );
     }
 }

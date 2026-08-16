@@ -29,7 +29,7 @@
     <h3 class="text-sm font-semibold uppercase tracking-wide mb-2" style="font-family:'Oswald',sans-serif;">By running room</h3>
     <table class="w-full text-xs mb-6" style="border-collapse: collapse;">
         <thead>
-            <tr style="background:#F7F9FC;">
+            <tr style="background: #f8f6f6;">
                 <th class="text-left p-2 border" style="border-color: var(--kr-line);">Room</th>
                 <th class="text-left p-2 border" style="border-color: var(--kr-line);">Total</th>
                 <th class="text-left p-2 border" style="border-color: var(--kr-line);">Open</th>
@@ -55,7 +55,7 @@
     <h3 class="text-sm font-semibold uppercase tracking-wide mb-2" style="font-family:'Oswald',sans-serif;">By category</h3>
     <table class="w-full text-xs mb-6" style="border-collapse: collapse;">
         <thead>
-            <tr style="background:#F7F9FC;">
+            <tr style="background: #f8f6f6;">
                 <th class="text-left p-2 border" style="border-color: var(--kr-line);">Category</th>
                 <th class="text-left p-2 border" style="border-color: var(--kr-line);">Count</th>
             </tr>

@@ -6,7 +6,7 @@ use App\Models\Room;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Pages\Page;
-use Filament\Schemas\Components\Select;
+use Filament\Forms\Components\Select;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Carbon;
 use UnitEnum;

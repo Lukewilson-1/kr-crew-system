@@ -3,13 +3,12 @@
         .kr-unified-dashboard {
             --kr-bg: #f6f7f9;
             --kr-panel: #ffffff;
-            --kr-ink: #111827;
-            --kr-muted: #667085;
+            --kr-ink: #1a1a1a;
+            --kr-muted: #555555;
             --kr-line: #d9dee7;
-            --kr-green: #16a34a;
-            --kr-blue: #2563eb;
-            --kr-orange: #f59e0b;
-            --kr-red: #dc2626;
+            --kr-maroon: #6C1A23;
+            --kr-orange: #F14219;
+            --kr-gold: #FEC000;
             color: var(--kr-ink);
             display: grid;
             gap: 20px;
@@ -20,8 +19,8 @@
         }
 
         .kr-unified-hero {
-            background: linear-gradient(135deg, #111827 0%, #1f2937 55%, #3d2b05 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--kr-maroon);
+            border: 1px solid #3a0f15;
             border-radius: 16px;
             color: #fff;
             display: grid;
@@ -32,7 +31,7 @@
         }
 
         .kr-unified-eyebrow {
-            color: #f7c65f;
+            color: var(--kr-gold);
             font-size: 12px;
             font-weight: 800;
             letter-spacing: 0.12em;
@@ -240,7 +239,7 @@
         }
 
         .kr-unified-bar-fill {
-            background: var(--kr-green);
+            background: var(--kr-maroon);
             border-radius: inherit;
             height: 100%;
         }
@@ -300,7 +299,7 @@
         }
 
         .kr-unified-link {
-            color: #b77908;
+            color: var(--kr-maroon);
             font-size: 13px;
             font-weight: 800;
             text-decoration: none;

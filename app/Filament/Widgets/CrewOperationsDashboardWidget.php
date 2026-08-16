@@ -104,15 +104,15 @@ class CrewOperationsDashboardWidget extends Widget
             'TO' => 'Trip off',
         ];
         $colors = [
-            'BK' => '#16a34a',
-            'SB' => '#2563eb',
-            'R' => '#7c3aed',
-            'L' => '#f97316',
-            'SK' => '#dc2626',
-            'ABS' => '#991b1b',
-            'T' => '#0d9488',
-            'NTB' => '#475569',
-            'TO' => '#be123c',
+            'BK' => '#6C1A23',
+            'SB' => '#8a2430',
+            'R' => '#F14219',
+            'L' => '#d8542f',
+            'SK' => '#c94518',
+            'ABS' => '#6C1A23',
+            'T' => '#FEC000',
+            'NTB' => '#b88a00',
+            'TO' => '#8a2430',
         ];
         $total = array_sum($statusCounts) ?: 1;
 

@@ -5,7 +5,8 @@
     "require": {
         "php": "^8.2",
         "filament/filament": "^4.0",
-        "laravel/framework": "^11.0"
+        "laravel/framework": "^11.0",
+        "tonysm/rich-text-laravel": "^3.11"
     },
     "autoload": {
         "psr-4": {

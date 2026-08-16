@@ -157,7 +157,8 @@
         <h1>System under maintenance</h1>
         <p>
             The system is temporarily offline for scheduled maintenance.
-            Authorised staff can sign in below to continue working.
+            Authorised staff (superadmin, HQ, or the maintenance account)
+            can sign in below to continue working.
         </p>
 
         @if ($errors->any())

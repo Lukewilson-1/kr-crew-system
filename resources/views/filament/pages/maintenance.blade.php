@@ -1,68 +1,105 @@
 <x-filament-panels::page>
-    <div class="grid gap-4 lg:grid-cols-3">
-        {{-- Status / overview --}}
-        <div class="rounded-xl border p-5 lg:col-span-1"
-             style="background: var(--kr-paper-raised); border-color: var(--kr-line);">
-            <div class="flex items-center justify-between mb-4">
-                <span class="text-[11px] font-bold uppercase tracking-widest" style="color: var(--kr-ink-soft);">
-                    System status
-                </span>
-                <span class="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded-full"
-                      style="background: {{ $this->isMaintenanceActive() ? '#fde3dd' : '#e7d9db' }};
-                             color: {{ $this->isMaintenanceActive() ? '#F14219' : '#6C1A23' }};">
-                    <span class="w-1.5 h-1.5 rounded-full"
-                          style="background: {{ $this->isMaintenanceActive() ? '#F14219' : '#6C1A23' }};"></span>
-                    {{ $this->isMaintenanceActive() ? 'Active' : 'Online' }}
-                </span>
-            </div>
+    <div class="grid gap-6 lg:grid-cols-5">
+        {{-- Status card --}}
+        <div class="lg:col-span-2">
+            <x-filament::section
+                :icon="$this->isMaintenanceActive() ? 'heroicon-o-shield-exclamation' : 'heroicon-o-check-circle'"
+                :icon-color="$this->isMaintenanceActive() ? 'danger' : 'success'"
+                :heading="'System status'"
+                :description="$this->isMaintenanceActive()
+                    ? 'Maintenance is currently running'
+                    : 'System is operational'"
+            >
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <x-filament::badge
+                            :color="$this->isMaintenanceActive() ? 'danger' : 'success'"
+                            size="lg"
+                        >
+                            {{ $this->isMaintenanceActive() ? 'Maintenance ON' : 'Online' }}
+                        </x-filament::badge>
 
-            <h3 class="text-sm font-semibold mb-1" style="font-family:'Oswald',sans-serif;">
-                {{ $this->isMaintenanceActive() ? 'Maintenance is currently running' : 'System is operational' }}
-            </h3>
-            <p class="text-xs leading-relaxed" style="color: var(--kr-ink-soft);">
-                {{ $this->isMaintenanceActive()
-                    ? 'Visitors are being redirected to the maintenance page and must sign in with the maintenance account to continue.'
-                    : 'Everything is online. Toggle maintenance mode to take the site offline for scheduled work or emergencies.' }}
-            </p>
+                        <p class="mt-4 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                            {{ $this->isMaintenanceActive()
+                                ? 'Visitors are being shown the maintenance page and must sign in with the maintenance account, or an HQ / superadmin account, to continue working.'
+                                : 'Everything is online. Use the toggle above to take the site offline for scheduled work or emergencies.' }}
+                        </p>
+                    </div>
+                </div>
 
-            <div class="mt-4 p-3 rounded-lg text-[11px] leading-relaxed"
-                 style="background: var(--kr-bg); border: 1px solid var(--kr-line); color: var(--kr-ink-soft);">
-                <span class="font-semibold" style="color: var(--kr-ink);">Tip:</span>
-                The maintenance credentials are the hardcoded account that remains reachable while the
-                site is down. Only admins with HQ access can toggle this.
-            </div>
+                @if ($this->scheduledEndsAt())
+                    <div
+                        x-data="{
+                            endsAt: @js($this->scheduledEndsAt()),
+                            now: Date.now(),
+                            tick() { this.now = Date.now(); },
+                            init() {
+                                this.tick();
+                                this.timer = setInterval(() => this.tick(), 1000);
+                            },
+                            destroyed() { clearInterval(this.timer); },
+                            diff() {
+                                const ms = Date.parse(this.endsAt) - this.now;
+                                if (ms <= 0) return { done: true, d: 0, h: 0, m: 0, s: 0 };
+                                return {
+                                    done: false,
+                                    d: Math.floor(ms / 86400000),
+                                    h: Math.floor((ms % 86400000) / 3600000),
+                                    m: Math.floor((ms % 3600000) / 60000),
+                                    s: Math.floor((ms % 60000) / 1000),
+                                };
+                            },
+                            pad(v) { return String(v).padStart(2, '0'); },
+                        }"
+                        class="mt-6 rounded-xl border p-4"
+                        style="border-color: var(--kr-line); background: var(--kr-bg);"
+                    >
+                        <p class="text-[11px] font-bold uppercase tracking-widest mb-3" style="color: var(--kr-ink-soft);">
+                            Scheduled to end in
+                        </p>
+
+                        <template x-if="! diff().done">
+                            <div class="flex items-center gap-2" style="font-family:'Oswald',sans-serif;">
+                                <template x-if="diff().d > 0">
+                                    <span class="text-xl font-bold" style="color: var(--kr-maroon);">
+                                        <span x-text="diff().d"></span>d
+                                    </span>
+                                </template>
+                                <span class="text-xl font-bold tabular-nums" style="color: var(--kr-maroon);">
+                                    <span x-text="pad(diff().h)"></span>:<span x-text="pad(diff().m)"></span>:<span x-text="pad(diff().s)"></span>
+                                </span>
+                            </div>
+                        </template>
+
+                        <template x-if="diff().done">
+                            <p class="text-sm font-semibold" style="color: var(--kr-orange);">
+                                Maintenance should have ended.
+                            </p>
+                        </template>
+                    </div>
+                @endif
+            </x-filament::section>
         </div>
 
-        {{-- Toggle / credentials --}}
-        <div class="rounded-xl border p-5 lg:col-span-2"
-             style="background: var(--kr-paper-raised); border-color: var(--kr-line);">
-            <h3 class="text-sm font-semibold uppercase tracking-wide mb-1" style="font-family:'Oswald',sans-serif;">
-                Maintenance mode
-            </h3>
-            <p class="text-xs mb-4" style="color: var(--kr-ink-soft);">
-                Enter the maintenance credentials below to activate or deactivate the mode. Fields are cleared on
-                every toggle for safety.
-            </p>
+        {{-- Credentials + schedule --}}
+        <div class="lg:col-span-3">
+            <x-filament::section>
+                <x-slot name="heading">
+                    {{ $this->isMaintenanceActive() ? 'Switch maintenance off' : 'Take the site offline' }}
+                </x-slot>
 
-            {{ $this->form }}
+                <x-slot name="description">
+                    Enter your credentials to {{ $this->isMaintenanceActive() ? 'deactivate' : 'activate' }} maintenance mode. Fields are cleared after every change.
+                </x-slot>
 
-            <div class="flex flex-wrap items-center gap-3 mt-4">
-                @if (! $this->isMaintenanceActive())
-                    <button type="button"
-                            wire:click="activateMaintenance"
-                            class="px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-white rounded-lg border"
-                            style="font-family:'Oswald',sans-serif; background: var(--kr-maroon); border-color: var(--kr-maroon);">
-                        Activate maintenance mode
-                    </button>
-                @else
-                    <button type="button"
-                            wire:click="deactivateMaintenance"
-                            class="px-4 py-2 text-[11px] font-bold uppercase tracking-wide rounded-lg border"
-                            style="font-family:'Oswald',sans-serif; background: var(--kr-orange); border-color: var(--kr-orange); color:#fff;">
-                        Deactivate maintenance mode
-                    </button>
-                @endif
-            </div>
+                {{ $this->form }}
+
+                <div class="mt-4 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+                    <span class="font-semibold">Tip:</span>
+                    The maintenance account is hardcoded and always reachable while the site is down, so you can
+                    never be locked out. Only HQ / superadmin accounts can access this page.
+                </div>
+            </x-filament::section>
         </div>
     </div>
 </x-filament-panels::page>

@@ -86,6 +86,11 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 \Filament\View\PanelsRenderHook::HEAD_START,
                 fn () => view('partials.kr-theme'),
+            )
+
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::BODY_START,
+                fn () => view('partials.maintenance-banner'),
             );
     }
 }

@@ -954,6 +954,10 @@ class RunningRoomController extends Controller
 
         try {
             Artisan::call('running-rooms:auto-checkout-rested');
+
+            // Also respect any scheduled end time for maintenance mode, so the
+            // cron webhook covers shared hosts without a real scheduler.
+            Artisan::call('maintenance:auto-deactivate');
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }

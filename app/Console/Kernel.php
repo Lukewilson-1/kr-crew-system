@@ -31,6 +31,10 @@ class Kernel extends ConsoleKernel
         // Auto-check-out crew whose running-room rest period has ended and
         // notify HQ + the relevant booking officers. Runs every five minutes.
         $schedule->command('running-rooms:auto-checkout-rested')->everyFiveMinutes();
+
+        // Bring the site back online automatically once scheduled maintenance
+        // has passed its end time. Runs every minute.
+        $schedule->command('maintenance:auto-deactivate')->everyMinute();
     }
 
     /**

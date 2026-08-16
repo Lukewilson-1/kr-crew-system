@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\ReportDefinition;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Pagination\PaginationState;
 use Illuminate\Support\Facades\Schema;
@@ -31,6 +32,12 @@ class AppServiceProvider extends ServiceProvider
             'maintenance-login',
             'running-rooms/cron/auto-checkout',
         ]);
+
+        // The maintenance bypass cookie is read by CheckForMaintenanceMode, which
+        // runs in the global stack BEFORE the web group's EncryptCookies middleware
+        // decrypts cookies. It must therefore never be encrypted, or the maintenance
+        // sign-in would set a cookie that the next request cannot validate.
+        EncryptCookies::except(['laravel_maintenance']);
 
         $this->seedDefaultReports();
     }

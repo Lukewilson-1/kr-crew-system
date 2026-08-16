@@ -20,7 +20,10 @@ done with a token-protected **webhook** that a free scheduler service (cron-job.
    - checks the crew out of the room
    - updates the crew payload (`status=SB`, `rrCheckedOut=true`, `restStarted=null`, `awayDepot=null`)
    - creates a `SystemNotification` for HQ admin + booking officers of the crew's depot and the room's depot
-4. The webhook is **exempt from maintenance mode**, so it keeps working while the site is offline.
+4. It then runs `maintenance:auto-deactivate`, which takes the site back online automatically once
+   scheduled maintenance (`ends_at` in the `down` file) has passed. This makes the webhook double as
+   the scheduler for maintenance mode on hosts without real cron.
+5. The webhook is **exempt from maintenance mode**, so it keeps working while the site is offline.
 
 ## Cron job (already configured)
 
@@ -90,14 +93,15 @@ Or run the command directly:
 
 ```bash
 php artisan running-rooms:auto-checkout-rested
+php artisan maintenance:auto-deactivate
 ```
 
 ## Notes
 
-- The Laravel scheduler entry (`$schedule->command('running-rooms:auto-checkout-rested')->everyFiveMinutes()`)
-  is still registered in `app/Console/Kernel.php`. It is harmless and will work automatically if the
-  host ever provides real cron (`* * * * * php artisan schedule:run`). If that happens, the webhook
-  becomes redundant and can be removed.
+- The Laravel scheduler entries (`running-rooms:auto-checkout-rested` every 5 min and
+  `maintenance:auto-deactivate` every 1 min) are still registered in `app/Console/Kernel.php`. They are
+  harmless and will work automatically if the host ever provides real cron (`* * * * * php artisan schedule:run`).
+  If that happens, the webhook becomes redundant and can be removed.
 - Changing `CRON_TOKEN` requires updating both the server `.env` and the cron-job.org job URL.
 - Never commit real secrets; keep `CRON_TOKEN=change-me` in `.env.example`.
 
@@ -105,7 +109,8 @@ php artisan running-rooms:auto-checkout-rested
 
 - `app/Http/Controllers/RunningRoomController.php` — `cronAutoCheckout()` webhook handler
 - `app/Console/Commands/AutoCheckoutExpiredRest.php` — the command the webhook runs
-- `app/Console/Kernel.php` — command registration + schedule entry
+- `app/Console/Commands/AutoDeactivateMaintenance.php` — auto-end of scheduled maintenance
+- `app/Console/Kernel.php` — command registration + schedule entries
 - `app/Providers/AppServiceProvider.php` — maintenance-mode exemption for the webhook
 - `config/cron.php` — reads `CRON_TOKEN` from the environment
 - `routes/web.php` — the `running-rooms/cron/auto-checkout` route

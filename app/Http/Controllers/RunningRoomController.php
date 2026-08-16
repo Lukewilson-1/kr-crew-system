@@ -10,6 +10,7 @@ use App\Models\SystemNotification;
 use App\Support\CrewLookup;
 use App\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -935,6 +936,29 @@ class RunningRoomController extends Controller
         }
 
         return response()->json(['updated' => $count]);
+    }
+
+    /**
+     * Token-protected webhook that runs the rest-expiry auto-checkout directly.
+     * Used on shared hosts that have no cron: a free ping service (cron-job.org)
+     * hits /running-rooms/cron/auto-checkout?token=... every five minutes.
+     */
+    public function cronAutoCheckout(Request $request)
+    {
+        $provided = (string) ($request->query('token') ?? '');
+        $expected = (string) config('cron.token');
+
+        if ($expected === '' || $expected === 'change-me' || ! hash_equals($expected, $provided)) {
+            return response()->json(['error' => 'Unauthorized.'], 401);
+        }
+
+        try {
+            Artisan::call('running-rooms:auto-checkout-rested');
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+
+        return response()->json(['ok' => true, 'output' => Artisan::output()]);
     }
 
     public function updateOptions(Request $request)

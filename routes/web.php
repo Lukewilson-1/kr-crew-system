@@ -20,6 +20,10 @@ Route::post('/maintenance-login', [MaintenanceController::class, 'login'])->name
 // rate limits brute-force attempts and establishes the Laravel session.
 Route::post('/mysql/login', [AdminMetaController::class, 'mysqlLogin']);
 
+// Token-protected cron webhook for shared hosts without a real scheduler.
+// A free ping service (e.g. cron-job.org) calls this every five minutes.
+Route::get('/running-rooms/cron/auto-checkout', [RunningRoomController::class, 'cronAutoCheckout']);
+
 Route::middleware('auth')->group(function () {
     Route::get('/admin/meta', [AdminMetaController::class, 'index']);
     Route::post('/admin/meta/{collection}/{id}', [AdminMetaController::class, 'save']);

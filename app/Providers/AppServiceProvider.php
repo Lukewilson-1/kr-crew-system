@@ -25,9 +25,11 @@ class AppServiceProvider extends ServiceProvider
             base_path('vendor/laravel/framework/src/Illuminate/Pagination/resources/views')
         );
 
-        // Keep the maintenance sign-in reachable while the site is offline.
+        // Keep the maintenance sign-in reachable while the site is offline, and
+        // let the token-protected cron webhook keep running during maintenance.
         PreventRequestsDuringMaintenance::except([
             'maintenance-login',
+            'running-rooms/cron/auto-checkout',
         ]);
 
         $this->seedDefaultReports();

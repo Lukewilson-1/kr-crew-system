@@ -36,7 +36,7 @@ class Room extends Model
 
     public function users(): HasMany
     {
-        return $this->hasMany(User::class, 'room_id');
+        return $this->hasMany(\App\User::class, 'room_id');
     }
 
     public function matters(): HasMany

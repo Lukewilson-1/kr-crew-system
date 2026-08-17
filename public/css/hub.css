@@ -35,6 +35,11 @@
 .hub-card-go{font-size:26px;color:var(--text3);flex-shrink:0;font-weight:700}
 .hub-empty{background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.25);border-radius:12px;padding:22px 26px;font-size:15px;color:rgba(255,255,255,.75);max-width:560px;line-height:1.6}
 
+/* ── Responsive ─────────────────────────────────────────────────────── */
+@media(max-width:900px){
+  .hub-grid{grid-template-columns:1fr}
+  .hub-main{padding:32px 20px}
+}
 @media(max-width:640px){
   .hub-hello{font-size:25px}
   .hub-grid{grid-template-columns:1fr}
@@ -42,4 +47,31 @@
   .hub-user{display:none}
   .hub-card{padding:18px}
   .hub-card-body h2{font-size:18px}
+  .hub-main{padding:24px 16px}
+  .hub-sub{font-size:14px;margin-bottom:28px}
+  .hub-brand span{font-size:11px}
+}
+@media(max-width:400px){
+  .hub-hello{font-size:20px}
+  .hub-card{padding:14px;gap:12px}
+  .hub-card-icon{width:46px;height:46px;border-radius:10px}
+  .hub-card-icon svg{width:24px;height:24px}
+  .hub-card-body h2{font-size:16px}
+  .hub-card-body p{font-size:12px}
+  .hub-card-go{font-size:20px}
+}
+
+/* ── Print ──────────────────────────────────────────────────────────── */
+@media print{
+  #hubPage{background:#fff!important;color:#000!important}
+  .hub-bg,.hub-topbar,.hub-signout{display:none!important}
+  .hub-main{padding:20px}
+  .hub-hello{color:#1A1A2E;font-size:22px}
+  .hub-sub{color:#666;font-size:13px}
+  .hub-grid{grid-template-columns:1fr}
+  .hub-card{box-shadow:none;border:1px solid #ccc;border-radius:6px;break-inside:avoid}
+  .hub-card::before{background:#B71C1C}
+  .hub-card-body h2{color:#1A1A2E}
+  .hub-card-body p{color:#666}
+  .hub-card-go{color:#999}
 }

@@ -8,8 +8,19 @@
 /public/hot
 /node_modules/
 
+# Vite build artifacts (regenerated with npm run build)
+/public/build
+
+# Filament published assets (regenerated with php artisan filament:assets)
+/public/css/filament
+/public/js/filament
+/public/fonts/filament
+
 # User-uploaded matter photos (served from public/)
 /public/matter-photos
+
+# Test files
+/tests
 
 # Ignore OS files
 .DS_Store

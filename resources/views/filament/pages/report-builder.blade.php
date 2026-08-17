@@ -1,20 +1,22 @@
 <x-filament-panels::page>
     <div class="space-y-6">
-        <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Report builder</h2>
-            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Create a report definition from the Filament admin area and define its layout, grouping, and presentation.
+        <div class="kr-builder-intro">
+            <h2 class="text-lg font-semibold" style="color: var(--kr-ink);">Report builder</h2>
+            <p class="mt-2 text-sm leading-relaxed" style="color: var(--kr-ink-soft);">
+                Create a report definition from the admin area and define its layout, grouping, columns, and filters.
+                Use the <strong>Save report</strong> button in the top-right corner when you are done.
             </p>
         </div>
 
-        <form wire:submit.prevent="save" class="space-y-6">
-            {{ $this->form }}
-
-            <div class="flex justify-end">
-                <x-filament::button type="submit">
-                    Save report
-                </x-filament::button>
-            </div>
-        </form>
+        {{ $this->form }}
     </div>
+
+    <style>
+        .kr-builder-intro {
+            background: var(--kr-paper-raised);
+            border: 1px solid var(--kr-line);
+            border-radius: 14px;
+            padding: 20px 22px;
+        }
+    </style>
 </x-filament-panels::page>

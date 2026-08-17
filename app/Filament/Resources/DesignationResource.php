@@ -16,8 +16,7 @@ class DesignationResource extends Resource
 {
     protected static ?string $model = Designation::class;
 
-    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-briefcase'
-        ;
+    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-briefcase';
 
     protected static ?string $navigationLabel = 'Designations';
     protected static UnitEnum|string|null $navigationGroup = 'Crew Management';
@@ -85,8 +84,16 @@ class DesignationResource extends Resource
             ->columns([
                 TextColumn::make('designation_code')->label('Code')->sortable()->searchable(),
                 TextColumn::make('designation_name')->label('Name')->sortable()->searchable(),
+                TextColumn::make('is_active')
+                    ->label('Status')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
+                    ->color(fn ($state) => $state ? 'success' : 'danger')
+                    ->sortable(),
             ])
-            ->filters([]);
+            ->filters([
+                \Filament\Tables\Filters\SelectFilter::make('is_active')->options([1 => 'Active', 0 => 'Inactive']),
+            ]);
     }
 
     public static function getPages(): array

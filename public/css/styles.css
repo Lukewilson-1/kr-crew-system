@@ -461,7 +461,111 @@ tr:hover td{background:#FAFBFC}
   .tbl-toolbar{gap:5px}
 }
 
-@media print{#loginPage,#configBanner,#topBar,#sidebar,#logBar,#syncBadge,.no-print{display:none!important}#main{overflow:visible}#pbody{overflow:visible}}
+/* ════════════════════════════════════════════════════════════════════════════
+   PRINT STYLES — comprehensive print support for all crew SPA pages
+   ════════════════════════════════════════════════════════════════════════════ */
+@media print{
+  /* ── Reset page & hide all chrome ─────────────────────────────────────── */
+  @page{size:A4 portrait;margin:12mm}
+  *,*::before,*::after{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  
+  body{background:#fff!important;margin:0;padding:0!important}
+  #loginPage,#configBanner,#topBar,#sidebar,#logBar,
+  #syncBadge,.no-print,.kr-bell,.modal-ov,
+  .tbl-toolbar,.tt-search,.pills,.btn,.btn-out,
+  .month-legend,.month-info-note,
+  .legend,.month-side,.month-side-card,
+  .rest-section .sec-hdr,
+  #phActions,#phSub{display:none!important}
+  
+  /* ── Force layout open ─────────────────────────────────────────────────── */
+  #app{display:block!important;height:auto!important;overflow:visible!important}
+  #shell{display:block!important;overflow:visible!important}
+  #main{overflow:visible!important;height:auto!important}
+  #pbody{overflow:visible!important;height:auto!important;padding:0!important}
+  
+  /* ── Page header — compact KR branding ─────────────────────────────────── */
+  #phdr{display:flex!important;padding:8px 0 6px!important;border-bottom:2px solid #1A1A2E!important;background:none!important;box-shadow:none!important;margin-bottom:12px}
+  .ph-title{font-size:18px!important;font-weight:800!important;color:#1A1A2E!important}
+  .ph-title::before{width:4px;height:18px}
+  .ph-sub{font-size:11px!important;color:#666!important}
+  
+  /* ── KPI cards — show in compact print layout ──────────────────────────── */
+  .kpi-row{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))!important;gap:8px!important;margin-bottom:12px!important}
+  .kpi-card{box-shadow:none!important;border:1px solid #ccc!important;border-radius:6px!important;padding:8px 10px!important;transform:none!important;page-break-inside:avoid}
+  .kpi-n{font-size:20px!important}
+  .kpi-l{font-size:9px!important}
+  .kpi-card::before{height:3px!important}
+  
+  /* ── Hide charts (canvas/SVG), show print tables ───────────────────────── */
+  canvas,.chart-container,.apexcharts-canvas,.apexcharts-canvas svg,
+  .no-print,iframe{display:none!important}
+  .print-show{display:block!important}
+  .print-only{display:block!important}
+  .print-hide{display:none!important}
+  
+  /* ── Tables — force full-width, compact, bordered ──────────────────────── */
+  .tbl-card,.month-register-card,.rep-card,.rest-card{box-shadow:none!important;border:1px solid #999!important;border-radius:4px!important;overflow:visible!important;page-break-inside:avoid}
+  .tbl-wrap,.month-wrap{overflow:visible!important;width:100%!important}
+  table{width:100%!important;font-size:10px!important;border-collapse:collapse!important}
+  th{background:#F0F0F0!important;color:#333!important;padding:5px 8px!important;font-size:9px!important;border:1px solid #999!important;position:static!important}
+  td{padding:5px 8px!important;border:1px solid #ccc!important;font-size:10px!important}
+  tr{page-break-inside:avoid}
+  tr:hover td{background:transparent!important}
+  .avt{width:22px!important;height:22px!important;font-size:8px!important}
+  .nm strong{font-size:11px!important}
+  .nm span{font-size:9px!important}
+  .badge{border:1px solid #666!important;background:#fff!important;color:#333!important;font-size:9px!important;padding:1px 5px!important}
+  
+  /* ── Monthly register — landscape override ─────────────────────────────── */
+  .monthly-view .month-panel,
+  .monthly-view .month-main{display:block!important;gap:0}
+  .monthly-view .month-register-card{width:100%!important;border:none!important;box-shadow:none!important;overflow:visible}
+  .monthly-view .month-wrap{overflow:visible!important;width:100%!important}
+  .month-tbl-modern{min-width:0!important;width:100%!important;font-size:8px!important}
+  .month-tbl-modern th,.month-tbl-modern td{height:auto!important;min-width:0!important;padding:2px 3px!important}
+  .month-tbl-modern th{position:static!important}
+  .month-tbl-modern .mc-name{position:static!important}
+  
+  /* ── Rest countdown cards — compact rows ───────────────────────────────── */
+  .rest-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))!important;gap:6px!important}
+  .rest-card{flex-direction:row!important;padding:6px 10px!important;border-radius:4px!important;border:1px solid #ccc!important}
+  .rest-avt{width:24px!important;height:24px!important;font-size:8px!important}
+  .rest-cd-bar{display:none!important}
+  .rest-cd-time{font-size:12px!important}
+  
+  /* ── Depot cards — inline layout ───────────────────────────────────────── */
+  .depot-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))!important;gap:8px!important}
+  .depot-card{padding:8px 10px!important;box-shadow:none!important;border-radius:4px!important;transform:none!important;border:1px solid #ccc!important}
+  .dc-bar-track{background:#eee!important}
+  .dc-bar-fill{background:#666!important}
+  
+  /* ── Modals — hide ─────────────────────────────────────────────────────── */
+  .modal-ov{display:none!important}
+  
+  /* ── Page breaks ───────────────────────────────────────────────────────── */
+  .kpi-row{page-break-after:avoid}
+  .rep-card{page-break-inside:avoid}
+  h2,.sec-title{page-break-after:avoid}
+  
+  /* ── Ensure KR brand colors print ──────────────────────────────────────── */
+  .kpi-card::before{background:inherit!important}
+  .kc-BK::before{background:#1B5E20!important}
+  .kc-SB::before{background:#0D47A1!important}
+  .kc-R::before{background:#4A148C!important}
+  .kc-L::before{background:#E65100!important}
+  .kc-SK::before{background:#B71C1C!important}
+  .kc-ABS::before{background:#991B1B!important}
+  .kc-T::before{background:#00695C!important}
+  .kc-NTB::before{background:#37474F!important}
+  .kc-TO::before{background:#AD1457!important}
+  .kc-TOT::before{background:#1A1A2E!important}
+}
+
+@media print and (orientation:landscape){
+  @page{size:landscape;margin:10mm}
+  .month-tbl-modern{font-size:7px!important}
+}
 
 /* Monthly multi-status view */
 .monthly-view{display:flex;flex-direction:column;gap:12px}
@@ -508,14 +612,14 @@ tr:hover td{background:#FAFBFC}
 
 .status-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:7px;margin-bottom:4px}
 .status-picker-select{display:none}
-.st-pick{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 6px;border:1.5px solid var(--border);border-radius:var(--r);background:#fff;cursor:pointer;transition:all .15s;user-select:none}
-.st-pick:hover{border-color:var(--st-fg)}
-.st-pick.active{background:var(--st-bg);border-color:var(--st-fg);box-shadow:0 0 0 1px var(--st-fg) inset}
-.st-pick.disabled{opacity:.4;cursor:not-allowed}
-.st-pick input{position:absolute;opacity:0;pointer-events:none}
-.st-pick-code{font-size:13px;font-weight:800;color:var(--st-fg);line-height:1.1}
-.st-pick-label{font-size:9px;color:var(--text2);text-align:center;line-height:1.25}
-.st-pick.active .st-pick-label{color:var(--st-fg)}
+.modal .st-pick,.status-picker .st-pick{display:flex !important;flex-direction:column;align-items:center;gap:2px;padding:8px 6px;border:1.5px solid var(--border);border-radius:var(--r);background:#fff;cursor:pointer;transition:all .15s;user-select:none;margin:0 !important;text-transform:none !important;font-size:inherit;letter-spacing:normal}
+.modal .st-pick:hover,.status-picker .st-pick:hover{border-color:var(--st-fg)}
+.modal .st-pick.active,.status-picker .st-pick.active{background:var(--st-bg);border-color:var(--st-fg);box-shadow:0 0 0 1px var(--st-fg) inset}
+.modal .st-pick.disabled,.status-picker .st-pick.disabled{opacity:.4;cursor:not-allowed}
+.modal .st-pick input,.status-picker .st-pick input{position:absolute;opacity:0;pointer-events:none}
+.modal .st-pick-code,.status-picker .st-pick-code{font-size:13px;font-weight:800;color:var(--st-fg);line-height:1.1}
+.modal .st-pick-label,.status-picker .st-pick-label{font-size:9px;color:var(--text2);text-align:center;line-height:1.25}
+.modal .st-pick.active .st-pick-label,.status-picker .st-pick.active .st-pick-label{color:var(--st-fg)}
 
 .status-change-summary{background:#F8FAFC;border:1px solid var(--border-lt);border-radius:var(--r);padding:9px 11px;margin-bottom:12px;font-size:11px}
 .stc-row{display:flex;align-items:center;gap:7px;margin-bottom:4px}
@@ -717,6 +821,12 @@ a:focus-visible,button:focus-visible,.sb-item:focus-visible,input:focus-visible,
   .tb-title{font-size:16px}
   #pbody{padding:16px 16px}
   .kpi-n{font-size:30px}
+  .month-panel{grid-template-columns:1fr!important}
+  .month-side{min-width:0!important}
+  .rest-grid{grid-template-columns:1fr 1fr}
+  .depot-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .rep-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .status-breakdown-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
 }
 @media (max-width:768px){
   .sb-item,.sb-depot{padding:12px 14px;font-size:14px}
@@ -730,6 +840,27 @@ a:focus-visible,button:focus-visible,.sb-item:focus-visible,input:focus-visible,
   .kpi-n{font-size:27px}
   .btn-sm{padding:7px 10px;font-size:13px}
   .modal-box{width:min(95vw,560px);padding:20px}
+  .rest-grid{grid-template-columns:1fr}
+  .depot-grid{grid-template-columns:1fr}
+  .rep-grid{grid-template-columns:1fr}
+  .status-breakdown-grid{grid-template-columns:1fr 1fr}
+  .admin-overview-grid{grid-template-columns:1fr 1fr}
+  .modal-grid{grid-template-columns:1fr}
+  .month-panel{grid-template-columns:1fr!important}
+  .tbl-toolbar{flex-direction:column;align-items:stretch}
+  .pills{gap:4px}
+  .pill{font-size:11px;padding:3px 6px}
+  .kpi-row{grid-template-columns:repeat(2,1fr)!important}
+  #phdr{flex-direction:column;gap:8px}
+  .ph-actions{width:100%;flex-wrap:wrap}
+}
+@media (max-width:400px){
+  .kpi-row{grid-template-columns:1fr 1fr!important;gap:6px!important}
+  .kpi-card{padding:6px 8px!important}
+  .kpi-n{font-size:22px!important}
+  .kpi-l{font-size:8px!important}
+  .rest-card{padding:8px 10px!important}
+  .rest-cd-time{font-size:14px!important}
 }
 
 /* ════════════ ELEGANT BRAND THEME — Kenya Railways logo palette ══════════

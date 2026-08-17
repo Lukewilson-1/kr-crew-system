@@ -93,7 +93,13 @@ class DepotResource extends Resource
                 TextColumn::make('depot_code')->label('Code')->sortable()->searchable(),
                 TextColumn::make('depot_name')->label('Name')->sortable()->searchable(),
                 TextColumn::make('region')->label('Region')->sortable()->searchable(),
-                TextColumn::make('color')->label('Color')->sortable()->searchable(),
+                TextColumn::make('color')
+                    ->label('Color')
+                    ->html()
+                    ->formatStateUsing(fn ($state) => $state
+                        ? '<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:' . e($state) . ';border:1px solid #d9dee7;display:inline-block;flex-shrink:0;"></span>' . e($state) . '</span>'
+                        : '—')
+                    ->sortable()->searchable(),
                 IconColumn::make('is_hq')->label('HQ')->boolean(),
             ])
             ->filters([]);

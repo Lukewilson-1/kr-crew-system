@@ -3,8 +3,6 @@ import { getRestHours, restSecondsLeft, fmtCountdown, cdClass, getAllCrew, cts, 
 import { DEPOTS, DEPOT_COLORS, REST_HOURS, STATUS_META, STATUSES, getDesignationLabel, getDesignationOptions, getDesignationRegistry, isDesignationRestEligible, normalizeDesignation, normalizeDesignationKey, setDesignationRegistry, setDepotConfig, setStatusConfig, setTrainTypeConfig, setShiftConfig } from './constants.js';
 import { collection, query, where, onSnapshot, getDocs, getDoc, doc, setDoc, deleteDoc, writeBatch, serverTimestamp } from './mysql.js';
 /* ════════ CONSTANTS ════════════════════════════════════════════════════════ */
-const HOME_REST_HOURS=12;
-const AWAY_REST_HOURS=10;
 const AVT_PAL=[['#E8F5E9','#1B5E20'],['#E3F2FD','#0D47A1'],['#FFF3E0','#E65100'],['#F3E5F5','#4A148C'],['#FFEBEE','#B71C1C'],['#E0F2F1','#00695C'],['#FFFDE7','#F57F17']];
 const REPORT_TYPES=[
   {id:'status',label:'Daily status'},
@@ -84,6 +82,122 @@ function selectMonthlyCrewDay(depot,id,day){
 function selectMonthlyCrew(depot,id){
   selectedMonthCrewKey = `${depot}::${id}`;
   renderMonthly();
+}
+
+function printReportOpen(printHtml,title){
+  const w=window.open('','_blank','width=1100,height=750');
+  if(!w){alert('Pop-up blocked. Please allow pop-ups for this site.');return null;}
+  w.document.write(printHtml);
+  w.document.close();
+  setTimeout(()=>{w.print();},350);
+  return w;
+}
+const PRINT_LOGO=window.location.origin+'/assets/logo.png';
+const PRINT_CSS=`@page{size:landscape;margin:12mm}
+body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:20px 24px;color:#1a1a1a;font-size:11px;line-height:1.4}
+.kr-p-header{display:flex;flex-direction:column;align-items:center;text-align:center;border-bottom:2px solid #6C1A23;padding-bottom:10px;margin-bottom:14px}
+.kr-p-header img{width:56px;height:56px;object-fit:contain;margin-bottom:4px}
+.kr-p-header h1{font-size:18px;margin:0;color:#6C1A23;text-transform:uppercase;letter-spacing:.5px}
+.kr-p-header h2{font-size:13px;margin:2px 0 0;font-weight:600;color:#333}
+.kr-p-header .meta{font-size:10px;color:#667085;margin-top:3px}
+h3{font-size:12px;margin:14px 0 6px;color:#6C1A23;border-bottom:1px solid #ddd;padding-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
+table{border-collapse:collapse;width:100%}
+th{background:#f5f5f5;padding:4px 6px;border:1px solid #ccc;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+td{padding:3px 6px;border:1px solid #ddd;font-size:10px}
+.footer{margin-top:16px;font-size:9px;color:#999;border-top:1px solid #ddd;padding-top:6px;text-align:center}
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-weight:700;font-size:10px;white-space:nowrap}
+.sum-cell{text-align:center;font-weight:700;font-family:monospace;font-size:11px}
+.total-row td{background:#0F172A;color:#E0E0E0;font-weight:700;font-size:10px}
+@media print{body{padding:0}}`;
+
+function printSelectedCrew(){
+  const depots=currentUser.isHQ?(hqDepotView==='all'?getActiveDepots():[hqDepotView]):[currentUser.depot];
+  const allCrew=getAllCrew(state, depots).sort((a,b)=>a.name.localeCompare(b.name));
+  if(!selectedMonthCrewKey && allCrew.length) selectedMonthCrewKey=`${allCrew[0].depot}::${allCrew[0].id}`;
+  const crew=allCrew.find(c=>`${c.depot}::${c.id}`===selectedMonthCrewKey);
+  if(!crew){alert('Select a crew member first by clicking their name.');return;}
+  const maxDay=CD;
+  const days=Array.from({length:maxDay},(_,i)=>i+1);
+  const segsByDay=days.map(d=>getDaySegments(crew,d));
+  const finalByDay=days.map(d=>getFinalStatusForDay(crew,d)||'');
+  const monthSummary=Object.keys(STATUS_META).map(code=>[code,days.filter((_,i)=>finalByDay[i]===code).length]).filter(([,n])=>n>0);
+  let tableRows=days.map((d,i)=>{
+    const segs=segsByDay[i];
+    const code=finalByDay[i];
+    const dt=new Date(CY,CM,d);
+    const dayName=DAY_NAMES[dt.getDay()];
+    const we=dt.getDay()===0||dt.getDay()===6;
+    const segText=segs.length?segs.map(s=>`${s.start_time}\u2013${s.end_time} ${STATUS_META[s.status_code]?.label||s.status_code}${s.note?' ('+s.note+')':''}`).join(', '):'\u2014';
+    const sm=STATUS_META[code]||{label:code,bg:'#ECEFF1',fg:'#37474F'};
+    return `<tr><td style="font-weight:700;${we?'color:#C62828':''}">${dayName} ${d}</td><td><span class="badge" style="background:${sm.bg};color:${sm.fg}">${code}</span> ${sm.label}</td><td style="font-size:10px">${segText}</td></tr>`;
+  }).join('');
+  const summaryRows=monthSummary.map(([code,n])=>{
+    const sm=STATUS_META[code]||{label:code,bg:'#ECEFF1',fg:'#37474F'};
+    return `<tr><td><span class="badge" style="background:${sm.bg};color:${sm.fg}">${code}</span> ${sm.label}</td><td class="sum-cell">${n}</td></tr>`;
+  }).join('');
+  const printHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${crew.name} - Monthly Report - ${MONTH_NAME}</title>
+<style>${PRINT_CSS}</style></head><body>
+<div class="kr-p-header"><img src="${PRINT_LOGO}" alt="Kenya Railways"><h1>Kenya Railways</h1><h2>${crew.name} &mdash; Monthly Position Register</h2><div class="meta">Staff No. ${crew.staff_number||'\u2014'} &middot; ${crew.depot} Depot &middot; ${getDesignationLabel(crew.grade)} &middot; ${MONTH_NAME} &middot; Generated ${new Date().toLocaleString()}</div></div>
+<div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:#555"><div><b>Route:</b> ${crew.route||'\u2014'}</div><div><b>Shift:</b> ${getCrewShiftLabel(crew)}</div><div><b>Status:</b> ${STATUS_META[crew.status]?.label||crew.status||'\u2014'}</div></div>
+<h3>Daily Position Register</h3>
+<table><thead><tr><th style="width:120px">Day</th><th style="width:150px">Final Status</th><th>Segments</th></tr></thead><tbody>${tableRows}</tbody></table>
+<h3>Monthly Summary</h3>
+<table style="width:auto;min-width:260px"><thead><tr><th>Status</th><th style="width:70px;text-align:center">Days</th></tr></thead><tbody>${summaryRows}</tbody></table>
+<div class="footer">Kenya Railways &middot; KR Crew System &middot; Printed ${new Date().toLocaleString()}</div>
+</body></html>`;
+  printReportOpen(printHtml,`${crew.name} Monthly Report`);
+}
+
+function printAllCrew(){
+  const depots=currentUser.isHQ?(hqDepotView==='all'?getActiveDepots():[hqDepotView]):[currentUser.depot];
+  const showDepot=currentUser.isHQ&&hqDepotView==='all';
+  const allCrew=getAllCrew(state, depots).sort((a,b)=>a.name.localeCompare(b.name));
+  if(!allCrew.length){alert('No crew data to print.');return;}
+  const maxDay=CD;
+  const days=Array.from({length:maxDay},(_,i)=>i+1);
+  const depotLabel=showDepot?'All Depots':depots[0]+' Depot';
+  const totals={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
+  let bodyRows=allCrew.map(c=>{
+    const sm={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
+    let dayCells=days.map(d=>{
+      const code=getFinalStatusForDay(c,d)||'';
+      const dt=new Date(CY,CM,d);
+      const we=dt.getDay()===0||dt.getDay()===6;
+      const isTod=d===CD;
+      const bg=STATUS_META[code]?.bg||'';
+      const fg=STATUS_META[code]?.fg||'#37474F';
+      if(sm[code]!==undefined)sm[code]++;
+      if(totals[code]!==undefined)totals[code]++;
+      const style=`${we?'color:#B71C1C;':''}${isTod?'background:#FFF8E1;':''}${bg?`background:${bg};color:${fg};font-weight:700;`:''}text-align:center;font-size:9px;min-width:22px;padding:2px 3px`;
+      return `<td style="${style}">${code}</td>`;
+    }).join('');
+    const nameStyle=showDepot?'':'display:none';
+    return `<tr><td style="font-size:10px;font-weight:600;white-space:nowrap">${c.name}<div style="font-size:8px;color:#666;font-weight:400">${getDesignationLabel(c.grade)}</div></td><td style="font-size:9px;font-weight:700;color:${STATUS_META[c.status]?.fg||'#37474F'};${nameStyle}">${c.depot}</td>${dayCells}<td class="sum-cell">${sm.BK}</td><td class="sum-cell">${sm.SB}</td><td class="sum-cell">${sm.R}</td><td class="sum-cell">${sm.L}</td><td class="sum-cell">${sm.SK}</td><td class="sum-cell">${sm.ABS}</td><td class="sum-cell">${sm.NTB}</td><td class="sum-cell">${sm.TO}</td></tr>`;
+  }).join('');
+  const headerDays=days.map(d=>{
+    const dt=new Date(CY,CM,d);
+    const we=dt.getDay()===0||dt.getDay()===6;
+    return `<th style="${we?'color:#C62828;':''}font-size:9px;min-width:22px;text-align:center;padding:2px 3px"><div>${d}</div><div style="font-size:7px;font-weight:400">${DAY_NAMES[dt.getDay()]}</div></th>`;
+  }).join('');
+  const totalsRow=days.map(d=>{
+    const bk=allCrew.filter(c=>getFinalStatusForDay(c,d)==='BK').length;
+    return `<td class="sum-cell" style="background:#1B2631;color:#fff;font-size:9px">${bk}</td>`;
+  }).join('');
+  const showDepotAttr=showDepot?'':'display:none';
+  const statusCodes=getStatusCodes();
+  const printHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Monthly Position Register - ${MONTH_NAME}</title>
+<style>${PRINT_CSS}
+.th-name{min-width:130px}
+th{position:sticky;top:0;z-index:1}
+</style></head><body>
+<div class="kr-p-header"><img src="${PRINT_LOGO}" alt="Kenya Railways"><h1>Kenya Railways</h1><h2>Monthly Position Register</h2><div class="meta">${depotLabel} &middot; ${MONTH_NAME} &middot; ${allCrew.length} crew members &middot; Generated ${new Date().toLocaleString()}</div></div>
+<table><thead><tr><th class="th-name">Name</th><th style="${showDepotAttr}min-width:60px">Depot</th>${headerDays}<th style="background:#E8F5E9;color:#1B5E20">BK</th><th style="background:#E3F2FD;color:#0D47A1">SB</th><th style="background:#F3F2F5;color:#4A148C">R</th><th style="background:#FFF3E0;color:#E65100">L</th><th style="background:#FFEBEE;color:#B71C1C">SK</th><th style="background:#FEF2F2;color:#991B1B">ABS</th><th style="background:#ECEFF1;color:#37474F">NTB</th><th style="background:#FCE4EC;color:#AD1457">TO</th></tr></thead><tbody>
+${bodyRows}
+<tr class="total-row"><td style="color:#E0E0E0;font-weight:700;font-size:9px">BOOKED / DAY</td><td style="background:#0F172A;${showDepotAttr}"></td>${totalsRow}<td colspan="7" style="color:rgba(255,255,255,.4);font-size:9px;text-align:left;padding-left:6px">Booked per day</td></tr>
+</tbody></table>
+<div class="footer">Kenya Railways &middot; KR Crew System &middot; Printed ${new Date().toLocaleString()}</div>
+</body></html>`;
+  printReportOpen(printHtml,`Monthly Position Register ${MONTH_NAME}`);
 }
 
 function buildMonthlyTotals(allCrew, maxDay){
@@ -1252,6 +1366,7 @@ function attachListeners(depots){
       const d=ch.doc.data();const id=d.id||ch.doc.id;const depot=normalizeCrewDepot(d.depot||currentUser?.depot);
       if(!depot)return;
       d.depot=depot;
+      if(d.awayDepot)d.awayDepot=normalizeCrewDepot(d.awayDepot);
       if(!state[depot])state[depot]={};
       if(ch.type==='removed')delete state[depot][id];else state[depot][id]=d;
     });
@@ -1684,7 +1799,8 @@ function renderMonthly(){
   safeSetText('phSub', `${MONTH_NAME} - Daily Position Register`);
   safeSetInner('phActions', `
     ${currentUser.isHQ?`<select class="sel-sm no-print" onchange="setHqDepotView(this.value);renderMonthly()"><option value="all">All depots</option>${getActiveDepots().map(d=>`<option value="${d}"${hqDepotView===d?' selected':''}>${d}</option>`).join('')}</select>`:''}
-    <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">Print</button>
+    <button class="btn btn-ghost btn-sm no-print" onclick="printSelectedCrew()">Print crew</button>
+    <button class="btn btn-ghost btn-sm no-print" onclick="printAllCrew()">Print all</button>
     <button class="btn btn-primary btn-sm no-print" onclick="exportMonthlyCSV()">CSV</button>`);
 
   const maxDay = CD;
@@ -1696,7 +1812,6 @@ function renderMonthly(){
   const selectedCrew = allCrew.find(c=>`${c.depot}::${c.id}`===selectedMonthCrewKey) || allCrew[0] || null;
   const selectedSegments = selectedCrew ? getDaySegments(selectedCrew, selectedDay) : [];
   const selectedFinal = selectedSegments.length ? selectedSegments[selectedSegments.length-1].status_code : '';
-  const canEditToday = selectedCrew && selectedDay === CD && canManageCrew(selectedCrew.depot);
   const dayMinutes = selectedSegments.reduce((acc,seg)=>{acc[seg.status_code]=(acc[seg.status_code]||0)+segmentDurationMinutes(seg);return acc;},{});
   const days = Array.from({length:maxDay},(_,i)=>i+1);
   const monthSummaryForCrew = selectedCrew ? Object.entries(STATUS_META).map(([code])=>[
@@ -1730,7 +1845,7 @@ function renderMonthly(){
 
   allCrew.forEach(c=>{
     const activeRow = selectedCrew && selectedCrew.id===c.id && selectedCrew.depot===c.depot;
-    html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name" onclick="openCrewDetails('${c.depot}','${c.id}')" style="cursor:pointer" title="View details & status history"><strong>${c.name}</strong><div style="font-size:11px;color:var(--text2)">${getDesignationLabel(c.grade)}</div></td>`;
+    html+=`<tr class="${activeRow?'month-row-selected':''}"><td class="mc-name" onclick="selectMonthlyCrew('${c.depot}','${c.id}')" style="cursor:pointer" title="Click to view details on the right panel"><strong>${c.name}</strong><div style="font-size:11px;color:var(--text2)">${getDesignationLabel(c.grade)}</div></td>`;
     if(showDepot)html+=`<td class="mc-dep" style="color:${DEPOT_COLORS[c.depot]};font-weight:700">${c.depot}</td>`;
     const sm={BK:0,SB:0,R:0,L:0,SK:0,ABS:0,T:0,NTB:0,TO:0};
     days.forEach(d=>{
@@ -1761,7 +1876,7 @@ function renderMonthly(){
         <div class="month-info-note">A crew member can carry several statuses in one day. The stacked cell segments are sized by time held; daily totals count the final status.</div>
       </div>
       <aside class="month-side">
-        <div class="month-side-card"><h3>Day timeline</h3><div class="summary-note">${selectedCrew?`${selectedCrew.name} - ${selectedDay} ${MONTH_NAME.split(' ')[0]}`:'No crew selected'}</div>${canEditToday?`<div style="margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="openDayEdit('${selectedCrew.depot}','${selectedCrew.id}',${selectedDay})">Edit today</button></div>`:''}<div class="month-timeline">${selectedSegments.length?selectedSegments.map((seg,index)=>{
+        <div class="month-side-card"><h3>Day timeline</h3><div class="summary-note">${selectedCrew?`${selectedCrew.name} - ${selectedDay} ${MONTH_NAME.split(' ')[0]}`:'No crew selected'}</div><div class="month-timeline">${selectedSegments.length?selectedSegments.map((seg,index)=>{
           const meta=STATUS_META[seg.status_code]||{label:seg.status_code,bg:'#ECEFF1',fg:'#37474F'};
           return `<div class="month-timeline-row"><div class="month-timeline-rail"><span style="background:${meta.fg}"></span>${index<selectedSegments.length-1?'<i></i>':''}</div><div><div class="month-time">${seg.start_time} - ${seg.end_time}</div><div class="month-timeline-title">${statusBadgeHtml(seg.status_code,'month-mini-badge')} ${meta.label}</div><div class="month-timeline-note">${seg.note||meta.label}</div></div></div>`;
         }).join(''):`<div class="selected-day-none">No status recorded on this date.</div>`}</div></div>
@@ -3250,7 +3365,7 @@ function closeCrewDetails(){
   if(m)m.classList.remove('open');
 }
 
-function openCrewDetails(depot,id){
+function openCrewDetails(depot,id,allowStatusEdit=true){
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);
   if(!c)return;
   crewDetailsKey={depot,id};
@@ -3268,18 +3383,20 @@ function openCrewDetails(depot,id){
     : '';
   const inRoom=!!(c.rrRoomId && c.rrCheckedOut===false);
   let quickActions='';
-  if(inRoom){
-    quickActions=`<span class="qa-note">In running room (${c.rrRoomName||''}) — check out via the register first.</span>`;
-  }else if(c.status==='SB'){
-    quickActions=`<button class="qa qa-book" onclick="quickActionBook('${depot}','${id}')">Book</button><button class="qa qa-to" onclick="quickActionTripOff('${depot}','${id}')">Trip Off</button>`;
-  }else if(c.status==='BK'){
-    quickActions=`<button class="qa qa-bo" onclick="quickActionBookedOff('${depot}','${id}')">Booked Off</button>`;
-  }else if(c.status==='R'){
-    quickActions=`<button class="qa qa-sb" onclick="quickActionStandby('${depot}','${id}')">End Rest</button>`;
-  }else if(['L','SK','T'].includes(c.status)){
-    quickActions=`<button class="qa qa-sb" onclick="quickActionRecall('${depot}','${id}')">Recall to duty</button>`;
-  }else if(['TO','ABS','NTB'].includes(c.status)){
-    quickActions=`<button class="qa qa-sb" onclick="quickActionStandby('${depot}','${id}')">Set Stand By</button>`;
+  if(allowStatusEdit){
+    if(inRoom){
+      quickActions=`<span class="qa-note">In running room (${c.rrRoomName||''}) — check out via the register first.</span>`;
+    }else if(c.status==='SB'){
+      quickActions=`<button class="qa qa-book" onclick="quickActionBook('${depot}','${id}')">Book</button><button class="qa qa-to" onclick="quickActionTripOff('${depot}','${id}')">Trip Off</button>`;
+    }else if(c.status==='BK'){
+      quickActions=`<button class="qa qa-bo" onclick="quickActionBookedOff('${depot}','${id}')">Booked Off</button>`;
+    }else if(c.status==='R'){
+      quickActions=`<button class="qa qa-sb" onclick="quickActionStandby('${depot}','${id}')">End Rest</button>`;
+    }else if(['L','SK','T'].includes(c.status)){
+      quickActions=`<button class="qa qa-sb" onclick="quickActionRecall('${depot}','${id}')">Recall to duty</button>`;
+    }else if(['TO','ABS','NTB'].includes(c.status)){
+      quickActions=`<button class="qa qa-sb" onclick="quickActionStandby('${depot}','${id}')">Set Stand By</button>`;
+    }
   }
   const days=Array.from({length:Math.max(1,CD)},(_,i)=>i+1);
   const summary=Object.keys(STATUS_META).map(code=>{
@@ -3330,6 +3447,8 @@ function openCrewDetails(depot,id){
     </div>`;
   const m=document.getElementById('crewModal');
   if(m)m.classList.add('open');
+  const csBtn=document.getElementById('changeStatusBtn');
+  if(csBtn)csBtn.style.display=allowStatusEdit?'':'none';
   if(crewDetailsTimer)clearInterval(crewDetailsTimer);
   if(finalStatus==='R'&&isDriver){
     crewDetailsTimer=setInterval(()=>{
@@ -3470,7 +3589,7 @@ async function saveModal(){
       const monthly={...(c.monthly||{})};monthly[`d${editKey.day}`]=finalStatus;
       const status_segments = buildStatusSegmentsForDayList(c, editKey.day, daySegments);
       const restLocation=document.getElementById('mRestLocation').value;
-      const awayDepot = finalStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
+      const awayDepot = finalStatus==='R' && restLocation==='away' ? (normalizeCrewDepot(document.getElementById('mAwayDepot')?.value)||null) : null;
       const upd={monthly,status_segments,awayDepot};
       if(editKey.day===CD){upd.status=finalStatus;upd.trainType=finalTrainType;upd.bookTime=finalBookTime;upd.since=fmtTime(new Date());upd.updatedBy=currentUser.username;if(finalStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);upd.restStarted=rs.toISOString();}else if(finalStatus!=='R')upd.restStarted=null;}
       await writeCrewDoc(editKey.depot,editKey.id,upd);
@@ -3484,7 +3603,7 @@ async function saveModal(){
       else if(newStatus!=='R')restStarted=null;
       const status_segments = buildStatusSegmentsForDay({...c,restStarted}, CD, newStatus);
       const restLocation=document.getElementById('mRestLocation').value;
-      const awayDepot = newStatus==='R' && restLocation==='away' ? document.getElementById('mAwayDepot')?.value||null : null;
+      const awayDepot = newStatus==='R' && restLocation==='away' ? (normalizeCrewDepot(document.getElementById('mAwayDepot')?.value)||null) : null;
       const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,status_segments,awayDepot: newStatus==='R'?awayDepot:null};
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${trainType?' ('+trainType+')':''}${bookTime?' @ '+bookTime:''}`);
@@ -3517,7 +3636,7 @@ async function applyQuickStatus(depot,id,status,opts={}){
     restStarted,
     monthly,
     status_segments,
-    awayDepot:status==='R'?(opts.awayDepot||null):null,
+    awayDepot:status==='R'?(opts.awayDepot?normalizeCrewDepot(opts.awayDepot):null):null,
   };
   setSyncStatus('spin','Saving…');
   try{
@@ -3544,7 +3663,7 @@ async function quickActionBookedOff(depot,id){
     alert(`${c.name} (${getDesignationLabel(c.grade)}) does not qualify for Resting.`);
     return;
   }
-  const dest=currentUser.depot||'HQ';
+  const dest=normalizeCrewDepot(currentUser.depot)||'HQ';
   try{
     await applyQuickStatus(depot,id,'R',{awayDepot:dest,note:`Booked off at ${dest}`,notes:`Booked off at ${dest}`});
     setLog(`${c.name}: Booked Off → Resting at ${dest}`);
@@ -3848,6 +3967,9 @@ window.changeStatusFromDetails = changeStatusFromDetails;
 window.setStatusFromGroup = setStatusFromGroup;
 window.selectMonthDay = selectMonthDay;
 window.selectMonthlyCrewDay = selectMonthlyCrewDay;
+window.selectMonthlyCrew = selectMonthlyCrew;
+window.printSelectedCrew = printSelectedCrew;
+window.printAllCrew = printAllCrew;
 window.addDaySegmentRow = addDaySegmentRow;
 window.removeDaySegmentRow = removeDaySegmentRow;
 window.syncPrimaryStatusFromSegments = syncPrimaryStatusFromSegments;

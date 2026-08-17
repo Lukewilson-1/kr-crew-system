@@ -1,14 +1,6 @@
 <x-filament-widgets::widget>
     <style>
         .kr-rooms-dashboard {
-            --kr-bg: #f6f7f9;
-            --kr-panel: #ffffff;
-            --kr-ink: #1a1a1a;
-            --kr-muted: #555555;
-            --kr-line: #d9dee7;
-            --kr-maroon: #6C1A23;
-            --kr-orange: #F14219;
-            --kr-gold: #FEC000;
             color: var(--kr-ink);
             display: grid;
             gap: 20px;
@@ -185,12 +177,12 @@
         }
 
         .kr-rooms-table-row + .kr-rooms-table-row {
-            border-top: 1px solid #edf0f5;
+            border-top: 1px solid var(--kr-line);
         }
 
         .kr-rooms-table-head {
-            background: #f8fafc;
-            color: #64748b;
+            background: var(--kr-bg);
+            color: var(--kr-ink-soft);
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.1em;
@@ -209,7 +201,7 @@
         }
 
         .kr-rooms-bar {
-            background: #e8edf4;
+            background: var(--kr-line);
             border-radius: 999px;
             height: 9px;
             overflow: hidden;
@@ -229,8 +221,8 @@
 
         .kr-rooms-list-item {
             align-items: center;
-            background: #f8fafc;
-            border: 1px solid #edf0f5;
+            background: var(--kr-bg);
+            border: 1px solid var(--kr-line);
             border-radius: 10px;
             display: flex;
             gap: 12px;
@@ -239,9 +231,9 @@
         }
 
         .kr-rooms-badge {
-            background: #f1f5f9;
+            background: var(--kr-line);
             border-radius: 999px;
-            color: #475569;
+            color: var(--kr-ink-soft);
             font-size: 11px;
             font-weight: 800;
             padding: 4px 9px;
@@ -269,8 +261,8 @@
         }
 
         .kr-rooms-empty {
-            background: #f8fafc;
-            border: 1px dashed #cbd5e1;
+            background: var(--kr-bg);
+            border: 1px dashed var(--kr-line);
             border-radius: 10px;
             color: var(--kr-muted);
             font-size: 14px;
@@ -286,8 +278,8 @@
         }
 
         .kr-rooms-matter-stat {
-            background: #f8fafc;
-            border: 1px solid #edf0f5;
+            background: var(--kr-bg);
+            border: 1px solid var(--kr-line);
             border-radius: 10px;
             padding: 14px;
         }
@@ -339,6 +331,34 @@
             .kr-rooms-table-row {
                 grid-template-columns: 1fr;
             }
+        }
+
+        @media print {
+            .kr-rooms-hero { background: #fff !important; border: 2px solid #1A1A2E !important; color: #1A1A2E !important; padding: 16px !important; border-radius: 6px !important; }
+            .kr-rooms-eyebrow { color: #B71C1C !important; }
+            .kr-rooms-title { font-size: 20px !important; color: #1A1A2E !important; }
+            .kr-rooms-copy { color: #555 !important; }
+            .kr-rooms-stat { background: #f9f9f9 !important; border: 1px solid #ccc !important; border-radius: 4px !important; }
+            .kr-rooms-stat-value { color: #1A1A2E !important; }
+            .kr-rooms-stat-hint { color: #666 !important; }
+            .kr-rooms-action { background: #f5f5f5 !important; border: 1px solid #ccc !important; color: #333 !important; }
+            .kr-rooms-action span { color: #666 !important; }
+            .kr-rooms-card { box-shadow: none !important; border: 1px solid #ccc !important; border-radius: 4px !important; break-inside: avoid; }
+            .kr-rooms-card-title { color: #1A1A2E !important; }
+            .kr-rooms-card-subtitle { color: #666 !important; }
+            .kr-rooms-table { border: 1px solid #999 !important; }
+            .kr-rooms-table-row { border-color: #ccc !important; }
+            .kr-rooms-table-head { background: #f0f0f0 !important; color: #555 !important; }
+            .kr-rooms-name { color: #1A1A2E !important; }
+            .kr-rooms-meta { color: #666 !important; }
+            .kr-rooms-bar { background: #ddd !important; }
+            .kr-rooms-bar-fill { background: #999 !important; }
+            .kr-rooms-pill { background: #eee !important; color: #555 !important; }
+            .kr-rooms-list-item { background: #f9f9f9 !important; border-color: #ccc !important; }
+            .kr-rooms-system-card { background: #f9f9f9 !important; border-color: #ccc !important; }
+            .kr-rooms-empty { color: #999 !important; border-color: #ccc !important; }
+            .kr-rooms-link { color: #B71C1C !important; }
+            .kr-rooms-grid-two, .kr-rooms-grid-three { grid-template-columns: 1fr !important; }
         }
     </style>
 

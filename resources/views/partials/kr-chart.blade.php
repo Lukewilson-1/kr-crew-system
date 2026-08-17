@@ -1,15 +1,9 @@
 @php
-    $chartName = $name ?? 'chart';
+    $chartId = 'apex_' . ($name ?? 'chart') . '_' . substr(md5(json_encode($data)), 0, 8);
     $chartType = $type ?? 'bar';
     $chartData = $data ?? [];
-    $chartOptions = array_replace_recursive([
-        'responsive' => true,
-        'maintainAspectRatio' => false,
-        'plugins' => [
-            'legend' => ['position' => 'bottom'],
-        ],
-    ], $options ?? []);
     $chartHeight = $height ?? 260;
+    $chartOptions = $options ?? [];
 
     $hasData = false;
     foreach ($chartData['datasets'] ?? [] as $ds) {
@@ -17,6 +11,23 @@
             $hasData = true;
         }
     }
+
+    $series = [];
+    $categories = $chartData['labels'] ?? [];
+    foreach ($chartData['datasets'] ?? [] as $ds) {
+        $series[] = ['name' => $ds['label'] ?? '', 'data' => $ds['data'] ?? []];
+    }
+    $colors = $chartData['datasets'][0]['backgroundColor'] ?? ['#6C1A23', '#F14219', '#FEC000', '#16a34a', '#3b82f6'];
+    if (! is_array($colors)) $colors = [$colors];
+
+    $apexType = match($chartType) {
+        'doughnut' => 'donut',
+        'pie' => 'pie',
+        'horizontalBar' => 'bar',
+        default => $chartType,
+    };
+
+    $isHorizontal = ($chartType === 'horizontalBar');
 @endphp
 
 <div class="rounded-lg border p-4 mb-5" style="background: var(--kr-paper-raised); border-color: var(--kr-line);">
@@ -29,24 +40,91 @@
     @if (! $hasData)
         <p class="text-xs" style="color: var(--kr-ink-soft);">No data to display for this selection.</p>
     @else
-        <div wire:key="{{ $chartName }}-{{ md5(json_encode($chartData)) }}" style="position: relative; height: {{ $chartHeight }}px;">
-            <div
-                x-load
-                x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('chart', 'filament/widgets') }}"
-                data-chart-type="{{ $chartType }}"
-                x-data="chart({
-                    cachedData: @js($chartData),
-                    options: @js($chartOptions),
-                    type: @js($chartType),
-                })"
-                style="height: 100%;"
-            >
-                <canvas x-ref="canvas" style="width: 100%; height: 100%;"></canvas>
-                <span x-ref="backgroundColorElement" class="fi-wi-chart-bg-color"></span>
-                <span x-ref="borderColorElement" class="fi-wi-chart-border-color"></span>
-                <span x-ref="gridColorElement" class="fi-wi-chart-grid-color"></span>
-                <span x-ref="textColorElement" class="fi-wi-chart-text-color"></span>
+        <div wire:key="{{ $chartName ?? $name ?? 'chart' }}-apex" style="position: relative; height: {{ $chartHeight }}px;">
+            <div id="{{ $chartId }}" class="no-print" style="width: 100%; height: 100%;"></div>
+            <div class="print-only kr-print-chart-data" style="display: none;">
+                <table class="w-full text-sm">
+                    <thead><tr style="border-bottom: 2px solid var(--kr-line); background: var(--kr-bg);">
+                        <th class="px-3 py-1.5 text-left text-[10px] font-bold uppercase" style="font-family:'Oswald',sans-serif; color: var(--kr-ink);">Category</th>
+                        <th class="px-3 py-1.5 text-center text-[10px] font-bold uppercase" style="font-family:'Oswald',sans-serif; color: var(--kr-ink);">Value</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach($categories as $i => $cat)
+                            <tr style="border-bottom: 1px solid var(--kr-line);">
+                                <td class="px-3 py-1.5 text-sm" style="color: var(--kr-ink);">{{ $cat }}</td>
+                                <td class="px-3 py-1.5 text-center font-mono text-sm" style="color: var(--kr-ink);">{{ $series[0]['data'][$i] ?? 0 }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
         </div>
+
+        @if ($hasData)
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof ApexCharts === 'undefined') return;
+            var el = document.querySelector('#{{ $chartId }}');
+            if (!el) return;
+
+            var opts = {
+                chart: {
+                    type: '{{ $apexType }}',
+                    height: {{ $chartHeight }},
+                    toolbar: { show: false },
+                    fontFamily: 'Segoe UI, system-ui, sans-serif',
+                    @if($isHorizontal)
+                    stacked: false,
+                    @endif
+                },
+                series: @js(collect($chartData['datasets'] ?? [])->map(fn($ds) => ['name' => $ds['label'] ?? '', 'data' => $ds['data'] ?? []])->values()->all()),
+                colors: @js($colors),
+                dataLabels: { enabled: false },
+                grid: { borderColor: '#eee' },
+                legend: { position: 'bottom', fontSize: '11px', markers: { width: 10, height: 10, radius: 2 } },
+                @if(! in_array($apexType, ['donut', 'pie']))
+                xaxis: {
+                    categories: @js($categories),
+                    labels: { style: { fontSize: '10px' } }
+                },
+                yaxis: {
+                    beginAtZero: true,
+                    labels: { style: { fontSize: '10px' } }
+                },
+                plotOptions: {
+                    bar: {
+                        borderRadius: 3,
+                        barPercentage: 0.6,
+                        @if($isHorizontal)
+                        horizontal: true
+                        @endif
+                    }
+                },
+                @endif
+                @if(in_array($apexType, ['donut', 'pie']))
+                plotOptions: {
+                    pie: {
+                        donut: { size: '65%' }
+                    }
+                },
+                stroke: { width: 2, colors: ['#fff'] },
+                @endif
+                tooltip: { shared: true, intersect: false }
+            };
+
+            var chart = new ApexCharts(el, opts);
+            chart.render();
+        });
+        </script>
+        @endif
     @endif
 </div>
+
+<style>
+    @media print {
+        .kr-print-chart-data { display: block !important; }
+        .kr-print-chart-data table { border-collapse: collapse; width: 100%; }
+        .kr-print-chart-data th { background: #f0f0f0; color: #333; font-size: 9px; padding: 5px 8px; border: 1px solid #999; }
+        .kr-print-chart-data td { font-size: 10px; padding: 5px 8px; border: 1px solid #ccc; }
+    }
+</style>

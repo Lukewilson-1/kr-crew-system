@@ -225,7 +225,7 @@
                 <div id="crewModalBody"></div>
                 <div class="modal-btns" style="margin-top:14px">
                     <button class="btn btn-ghost" onclick="closeCrewDetails()">Close</button>
-                    <button class="btn btn-primary" onclick="changeStatusFromDetails()">Change status</button>
+                    <button class="btn btn-primary" id="changeStatusBtn" onclick="changeStatusFromDetails()">Change status</button>
                 </div>
             </div>
         </div>

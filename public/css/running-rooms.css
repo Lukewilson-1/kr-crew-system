@@ -155,14 +155,71 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
 
 /* ── Print ──────────────────────────────────────────────────────────────── */
 @media print{
-  #rr-topbar,#rr-sidebar,.rr-toolbar .rr-btn,.rr-print-hide{display:none !important}
-  #rr-app{height:auto;overflow:visible}
-  #rr-shell{display:block;overflow:visible}
-  #rr-main{padding:0;overflow:visible}
+  @page{size:A4 portrait;margin:12mm}
+  *,*::before,*::after{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  
+  body{background:#fff!important;margin:0;padding:0!important}
+  #rr-topbar,#rr-sidebar,.rr-toolbar .rr-btn,
+  .rr-print-hide,.kr-bell,.no-print,
+  .rr-field input,.rr-field select,.rr-field textarea,
+  .rr-form-actions,.rr-toolbar,.rr-btn-home,
+  .rr-btn-out{display:none !important}
+  
+  #rr-app{height:auto!important;overflow:visible!important;background:#fff!important}
+  #rr-shell{display:block!important;overflow:visible!important}
+  #rr-main{padding:0!important;overflow:visible!important;background:#fff!important}
   .rr-panel{display:none !important}
   .rr-panel.active{display:block !important}
   .rr-panel.active .rr-print-area{display:block}
-  .rr-room-card,.rr-table-wrap,.rr-kpi{box-shadow:none;break-inside:avoid}
+  
+  /* ── KPI cards ── */
+  .rr-kpi-row{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))!important;gap:8px!important;margin-bottom:12px!important}
+  .rr-kpi{box-shadow:none!important;border:1px solid #999!important;border-radius:4px!important;padding:8px 10px!important}
+  .rr-kpi-n{font-size:18px!important}
+  .rr-kpi-l{font-size:9px!important}
+  
+  /* ── Tables ── */
+  .rr-table-wrap{box-shadow:none!important;border:1px solid #999!important;border-radius:4px!important;overflow:visible!important}
+  table.rr-table{font-size:10px!important}
+  .rr-table th{padding:5px 8px!important;font-size:9px!important;background:#F0F0F0!important;color:#333!important;border:1px solid #999!important}
+  .rr-table td{padding:5px 8px!important;border:1px solid #ccc!important;font-size:10px!important}
+  .rr-table tr:hover td{background:transparent!important}
+  .rr-badge{font-size:9px!important;padding:1px 5px!important;border:1px solid #666!important;background:#fff!important;color:#333!important}
+  .rr-badge.in{color:#1B5E20!important;border-color:#1B5E20!important}
+  .rr-badge.out{color:#E65100!important;border-color:#E65100!important}
+  
+  /* ── Room cards — compact grid ── */
+  .rr-room-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))!important;gap:8px!important}
+  .rr-room-card{box-shadow:none!important;border:1px solid #ccc!important;border-radius:4px!important;overflow:visible!important;padding:10px!important}
+  .rr-room-card::before{display:none!important}
+  .rr-berth{width:16px!important;height:16px!important;border-radius:3px!important}
+  .rr-berth.filled{background:#999!important;border-color:#666!important}
+  .rr-berth.empty{background:#fff!important}
+  
+  /* ── Matter cards ── */
+  .rr-matter-grid{grid-template-columns:1fr!important;gap:8px!important}
+  .rr-matter-card{box-shadow:none!important;border:1px solid #ccc!important;border-radius:4px!important;padding:10px!important}
+  .rr-matter-card::before{display:none!important}
+  .rr-matter-photos{display:none!important}
+  
+  /* ── Settings ── */
+  .rr-set-row{box-shadow:none!important;border:1px solid #ccc!important;border-radius:4px!important;grid-template-columns:1fr auto auto!important}
+  
+  /* ── Page breaks ── */
+  .rr-kpi-row{page-break-after:avoid}
+  .rr-room-card,.rr-table-wrap,.rr-matter-card{page-break-inside:avoid}
+  h2{page-break-after:avoid}
+  
+  /* ── KR brand print colors ── */
+  .rr-kpi.rr-k-red .rr-kpi-n{color:#B71C1C!important}
+  .rr-kpi.rr-k-green .rr-kpi-n{color:#1B5E20!important}
+  .rr-kpi.rr-k-amber .rr-kpi-n{color:#E65100!important}
+}
+
+@media print and (orientation:landscape){
+  @page{size:landscape;margin:10mm}
+  .rr-room-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))!important}
+  table.rr-table{font-size:9px!important}
 }
 
 /* ════════════ ACCESSIBILITY PASS — larger, clearer, high-contrast ══════════ */
@@ -234,15 +291,40 @@ a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visib
   .rr-tb-title{font-size:16px}
   #rr-main{padding:16px}
   .rr-kpi-n{font-size:27px}
+  .rr-room-grid{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+  .rr-matter-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+  #rr-sidebar{width:180px}
+  .rr-sb-item{padding:11px 14px;font-size:14px}
+  .rr-sb-sec{padding:12px 14px 4px;font-size:9px}
 }
 @media (max-width:768px){
   .rr-sb-item{padding:12px 14px;font-size:14px}
   #rr-main h2{font-size:19px}
   .rr-room-name{font-size:16px}
+  .rr-room-grid{grid-template-columns:1fr}
+  .rr-matter-grid{grid-template-columns:1fr}
 }
 @media (max-width:640px){
   .rr-kpi-row{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
   .rr-btn{padding:10px 18px}
+  #rr-shell{flex-direction:column}
+  #rr-sidebar{width:100%;max-height:none;flex-direction:row;overflow-x:auto;overflow-y:hidden}
+  .rr-sb-group{display:flex;gap:2px;padding:4px}
+  .rr-sb-sec{display:none}
+  .rr-sb-item{white-space:nowrap;border-left:none;border-bottom:3px solid transparent;font-size:12px;padding:8px 12px}
+  .rr-sb-item.active{border-bottom-color:var(--kr-gold-bright,#F8C808);border-left-color:transparent}
+  .rr-form-grid{grid-template-columns:1fr}
+  .rr-field-wide{grid-column:auto}
+  .rr-toolbar{flex-direction:column;align-items:stretch}
+  .rr-toolbar .rr-field{min-width:0;width:100%}
+  .rr-set-row{grid-template-columns:1fr!important}
+}
+@media (max-width:400px){
+  .rr-kpi-row{grid-template-columns:1fr 1fr!important}
+  .rr-kpi{padding:8px 10px!important}
+  .rr-kpi-n{font-size:20px!important}
+  .rr-room-card{padding:10px!important}
+  .rr-room-name{font-size:14px!important}
 }
 
 /* ════════════ ELEGANT BRAND THEME — Kenya Railways logo palette ══════════

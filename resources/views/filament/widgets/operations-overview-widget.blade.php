@@ -1,14 +1,6 @@
 <x-filament-widgets::widget>
     <style>
         .kr-unified-dashboard {
-            --kr-bg: #f6f7f9;
-            --kr-panel: #ffffff;
-            --kr-ink: #1a1a1a;
-            --kr-muted: #555555;
-            --kr-line: #d9dee7;
-            --kr-maroon: #6C1A23;
-            --kr-orange: #F14219;
-            --kr-gold: #FEC000;
             color: var(--kr-ink);
             display: grid;
             gap: 20px;
@@ -183,9 +175,9 @@
         }
 
         .kr-unified-pill {
-            background: #f1f5f9;
+            background: var(--kr-line);
             border-radius: 999px;
-            color: #475569;
+            color: var(--kr-ink-soft);
             font-size: 12px;
             font-weight: 800;
             padding: 6px 10px;
@@ -207,12 +199,12 @@
         }
 
         .kr-unified-table-row + .kr-unified-table-row {
-            border-top: 1px solid #edf0f5;
+            border-top: 1px solid var(--kr-line);
         }
 
         .kr-unified-table-head {
-            background: #f8fafc;
-            color: #64748b;
+            background: var(--kr-bg);
+            color: var(--kr-ink-soft);
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.1em;
@@ -231,7 +223,7 @@
         }
 
         .kr-unified-bar {
-            background: #e8edf4;
+            background: var(--kr-line);
             border-radius: 999px;
             height: 9px;
             overflow: hidden;
@@ -251,8 +243,8 @@
 
         .kr-unified-list-item {
             align-items: center;
-            background: #f8fafc;
-            border: 1px solid #edf0f5;
+            background: var(--kr-bg);
+            border: 1px solid var(--kr-line);
             border-radius: 10px;
             display: flex;
             gap: 12px;
@@ -266,8 +258,8 @@
         }
 
         .kr-unified-system-card {
-            background: #f8fafc;
-            border: 1px solid #edf0f5;
+            background: var(--kr-bg);
+            border: 1px solid var(--kr-line);
             border-radius: 10px;
             padding: 14px;
         }
@@ -289,8 +281,8 @@
         }
 
         .kr-unified-empty {
-            background: #f8fafc;
-            border: 1px dashed #cbd5e1;
+            background: var(--kr-bg);
+            border: 1px dashed var(--kr-line);
             border-radius: 10px;
             color: var(--kr-muted);
             font-size: 14px;
@@ -331,6 +323,31 @@
             .kr-unified-table-row {
                 grid-template-columns: 1fr;
             }
+        }
+
+        @media print {
+            .kr-unified-hero { background: #fff !important; border: 2px solid #1A1A2E !important; color: #1A1A2E !important; padding: 16px !important; border-radius: 6px !important; }
+            .kr-unified-eyebrow { color: #B71C1C !important; }
+            .kr-unified-title { font-size: 20px !important; color: #1A1A2E !important; }
+            .kr-unified-copy { color: #555 !important; }
+            .kr-unified-stat { background: #f9f9f9 !important; border: 1px solid #ccc !important; border-radius: 4px !important; }
+            .kr-unified-stat-value { color: #1A1A2E !important; }
+            .kr-unified-stat-hint { color: #666 !important; }
+            .kr-unified-action { background: #f5f5f5 !important; border: 1px solid #ccc !important; color: #333 !important; }
+            .kr-unified-action span { color: #666 !important; }
+            .kr-unified-card { box-shadow: none !important; border: 1px solid #ccc !important; border-radius: 4px !important; break-inside: avoid; }
+            .kr-unified-card-title { color: #1A1A2E !important; }
+            .kr-unified-card-subtitle { color: #666 !important; }
+            .kr-unified-table { border: 1px solid #999 !important; }
+            .kr-unified-table-row { border-color: #ccc !important; }
+            .kr-unified-table-head { background: #f0f0f0 !important; color: #555 !important; }
+            .kr-unified-name { color: #1A1A2E !important; }
+            .kr-unified-meta { color: #666 !important; }
+            .kr-unified-bar { background: #ddd !important; }
+            .kr-unified-bar-fill { background: #999 !important; }
+            .kr-unified-pill { background: #eee !important; color: #555 !important; }
+            .kr-unified-list-item { background: #f9f9f9 !important; border-color: #ccc !important; }
+            .kr-unified-grid-two, .kr-unified-grid-three { grid-template-columns: 1fr !important; }
         }
     </style>
 

@@ -3554,6 +3554,10 @@ async function saveModal(){
     const trainType=newStatus==='BK'?document.getElementById('mTrainType').value:'';
     const bookTime=newStatus==='BK'?document.getElementById('mBookTime').value:'';
     const restStartInput=document.getElementById('mRestStart').value;
+    if(newStatus==='BK' && !trainType){
+      alert('Please select a train type when setting status to Booked.');
+      return;
+    }
     if(currentModalInRoom && newStatus!=='R'){
       alert('This crew member is checked into a running room and must remain on Resting. Check them out of the room before changing status.');
       return;
@@ -3586,6 +3590,10 @@ async function saveModal(){
       }
       const finalTrainType=finalStatus==='BK'?document.getElementById('mTrainType').value:'';
       const finalBookTime=finalStatus==='BK'?document.getElementById('mBookTime').value:'';
+      if(finalStatus==='BK' && !finalTrainType){
+        alert('Please select a train type when setting status to Booked.');
+        return;
+      }
       const monthly={...(c.monthly||{})};monthly[`d${editKey.day}`]=finalStatus;
       const status_segments = buildStatusSegmentsForDayList(c, editKey.day, daySegments);
       const restLocation=document.getElementById('mRestLocation').value;
@@ -3964,6 +3972,12 @@ window.openDayEdit = openDayEdit;
 window.openCrewDetails = openCrewDetails;
 window.closeCrewDetails = closeCrewDetails;
 window.changeStatusFromDetails = changeStatusFromDetails;
+window.quickActionBook = quickActionBook;
+window.quickActionBookedOff = quickActionBookedOff;
+window.quickActionTripOff = quickActionTripOff;
+window.quickActionStandby = quickActionStandby;
+window.quickActionRecall = quickActionRecall;
+window.onRestLocationChange = onRestLocationChange;
 window.setStatusFromGroup = setStatusFromGroup;
 window.selectMonthDay = selectMonthDay;
 window.selectMonthlyCrewDay = selectMonthlyCrewDay;

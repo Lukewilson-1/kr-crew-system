@@ -163,7 +163,7 @@
 
                 <div id="trainTypeRow" class="modal-block">
                     <label>Train type</label>
-                    <select id="mTrainType">
+                    <select id="mTrainType" required>
                         <option value="">- Select train type -</option>
                         <option value="Freight">Freight</option>
                         <option value="Commuter">Commuter</option>

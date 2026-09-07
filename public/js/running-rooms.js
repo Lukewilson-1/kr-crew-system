@@ -165,6 +165,15 @@
     state.categories = data.categories || [];
   }
 
+  /* ── status bar ─────────────────────────────────────────────────────── */
+  function setLog(m) {
+    const el = document.getElementById('logText');
+    if (el) {
+      const d = new Date(), p = (n) => String(n).padStart(2, '0');
+      el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' - ' + m;
+    }
+  }
+
   /* ── toast ────────────────────────────────────────────────────────────── */
   function toast(msg, isError) {
     const el = document.getElementById('rrToast');
@@ -500,6 +509,7 @@
         try {
           await api('/running-rooms/api/records', 'POST', payload);
           toast('Crew member checked in.');
+          setLog('Checked in ' + (selectedMember ? selectedMember.name : payload.crew_staff_no || '') + ' -> ' + roomName(payload.room_id || ''));
           await loadData();
           renderAll();
           goTab('checkin');
@@ -514,6 +524,7 @@
       btn.addEventListener('click', () => {
         const recordId = btn.dataset.out;
         const tr = btn.closest('tr');
+        const crewName = tr ? $('td', tr).textContent.trim() : '';
         const outCell = $('.rr-cell-out', tr);
         const today = todayStr();
         const now = new Date().toTimeString().slice(0, 5);
@@ -532,6 +543,7 @@
               departure_time: $('[data-out-time]', tr).value,
             });
             toast('Checked out.');
+            setLog('Checked out ' + crewName);
             await loadData();
             renderAll();
             goTab('checkin');
@@ -868,6 +880,7 @@
         try {
           const created = await api('/running-rooms/api/matters', 'POST', payload);
           toast('Matter logged as ' + (created.ticket_no || 'ticket').toUpperCase() + '.');
+          setLog('Logged ' + (created.ticket_no || 'matter'));
           await loadData();
           renderAll();
           goTab('matters');
@@ -889,6 +902,7 @@
             status: m.status === 'open' ? 'resolved' : 'open',
           });
           toast('Matter updated.');
+          setLog('Updated matter ' + (m.ticket_no || m.id));
           await loadData(); renderAll(); goTab('matters');
         } catch (err) { toast(err.message, true); }
       });
@@ -900,6 +914,7 @@
         try {
           await api('/running-rooms/api/matters/' + btn.dataset.mDel, 'DELETE');
           toast('Matter deleted.');
+          setLog('Deleted matter ' + btn.dataset.mDel);
           await loadData(); renderAll(); goTab('matters');
         } catch (err) { toast(err.message, true); }
       });
@@ -967,6 +982,7 @@
               await api('/running-rooms/api/matters/' + m.id, 'PUT', payload);
               state.editingMatter = null;
               toast('Matter saved.');
+              setLog('Saved matter ' + (m.ticket_no || m.id));
               await loadData(); renderAll(); goTab('matters');
             } catch (err) { toast(err.message, true); }
           });
@@ -1102,6 +1118,7 @@
         try {
           await api('/running-rooms/api/settings/options', 'POST', { designations, categories });
           toast('Register options saved.');
+          setLog('Saved register options');
           await loadData(); renderAll(); goTab('settings');
         } catch (err) { toast(err.message, true); }
       });
@@ -1114,6 +1131,7 @@
         try {
           const res = await api('/running-rooms/api/settings/beds', 'POST', { room_id: btn.dataset.saveBeds, beds: Number(beds) });
           toast(res.warning || 'Bed capacity updated.', !!res.warning);
+          setLog('Set ' + roomName(btn.dataset.saveBeds) + ' capacity to ' + beds);
           await loadData(); renderAll(); goTab('settings');
         } catch (err) { toast(err.message, true); }
       });
@@ -1166,8 +1184,10 @@
 
     try {
       await loadData();
+      setLog('Register loaded - ' + (state.rooms.length || 0) + ' room(s), ' + (state.records.length || 0) + ' record(s).');
     } catch (err) {
       toast('Failed to load register data: ' + err.message, true);
+      setLog('Failed to load register data: ' + err.message);
       document.getElementById('rr-main').innerHTML = `<div class="rr-empty">Failed to load register data. ${esc(err.message)}</div>`;
       return;
     }

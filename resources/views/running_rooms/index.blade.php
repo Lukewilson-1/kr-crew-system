@@ -27,7 +27,6 @@
             <span class="rr-tb-badge" id="rrScopeBadge">{{ $isAttendant ? 'Attendant' : 'Admin' }}</span>
             <div class="tb-live"><div class="tbl-dot"></div><span class="tbl-txt" id="rrLiveTxt">Live</span></div>
             <div class="rr-tb-right">
-                <a href="/" class="rr-btn-home"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a>
                 <div class="kr-bell" id="krBell">
                     <button type="button" class="kr-bell-btn" id="krBellBtn" aria-label="Notifications">
                         <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
@@ -51,6 +50,9 @@
         <div id="rr-shell">
             <aside id="rr-sidebar">
                 <div class="rr-sb-group">
+                    <a href="/" class="rr-sb-item" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a>
+                </div>
+                <div class="rr-sb-group">
                     <div class="rr-sb-sec">Register</div>
                     <button class="rr-sb-item active" data-rr-tab="dashboard" id="rr-sb-dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</button>
                     <button class="rr-sb-item" data-rr-tab="checkin" id="rr-sb-checkin"><svg viewBox="0 0 24 24"><path d="M16 11h6M16 15h6M12 17V9l-5 4z"/><path d="M12 21a9 9 0 1 1 0-18c4 0 7.4 2.6 8.6 6.2"/></svg>Check In / Out</button>
@@ -73,6 +75,11 @@
                     <div class="kr-spa-print-title">Kenya Railways</div>
                 </div>
             </main>
+        </div>
+
+        <div id="logBar" style="background:#0F172A;padding:5px 18px;display:flex;align-items:center;gap:7px;flex-shrink:0">
+            <div style="width:6px;height:6px;border-radius:50%;background:#69F0AE;animation:blink 2s infinite;flex-shrink:0"></div>
+            <span id="logText" style="font-size:11px;color:rgba(255,255,255,.5);font-family:var(--mono)">System ready.</span>
         </div>
     </div>
 

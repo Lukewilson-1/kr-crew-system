@@ -38,6 +38,26 @@ function getCsrfToken() {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
 
+async function responseErrorMessage(resp) {
+  const fallback = `Request failed (${resp.status})`;
+  const text = await resp.text();
+  if (!text) return fallback;
+
+  try {
+    const data = JSON.parse(text);
+    if (data.error) return String(data.error);
+    if (data.message) return String(data.message);
+    if (data.errors && typeof data.errors === 'object') {
+      const first = Object.values(data.errors).flat().find(Boolean);
+      if (first) return String(first);
+    }
+  } catch (_err) {
+    // Fall through to raw text for non-JSON responses.
+  }
+
+  return text;
+}
+
 function deepClone(value) {
   return value === undefined ? value : JSON.parse(JSON.stringify(value));
 }
@@ -251,7 +271,7 @@ async function saveCrewRecord(id, payload) {
     body: JSON.stringify(payload),
   });
   if (!resp.ok) {
-    throw new Error(await resp.text());
+    throw new Error(await responseErrorMessage(resp));
   }
   return resp.json();
 }

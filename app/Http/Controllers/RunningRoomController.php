@@ -351,13 +351,22 @@ class RunningRoomController extends Controller
             return response()->json(['error' => "{$room->name} is full on {$data['arrival_date']}."], 422);
         }
 
-        if ($data['bed_no'] !== null && $data['bed_no'] !== '') {
-            $available = $room->availableBedsOn($data['arrival_date']);
+        $available = $room->availableBedsOn($data['arrival_date']);
+        $requestedBed = trim((string) ($data['bed_no'] ?? ''));
 
-            if (! in_array($data['bed_no'], $available, true)) {
-                return response()->json(['error' => "Bed {$data['bed_no']} is not available in {$room->name} on {$data['arrival_date']}."], 422);
-            }
+        if ($requestedBed === '') {
+            $requestedBed = $available[0] ?? '';
         }
+
+        if ($requestedBed === '') {
+            return response()->json(['error' => "No available bed was found in {$room->name} on {$data['arrival_date']}."], 422);
+        }
+
+        if (! in_array($requestedBed, $available, true)) {
+            return response()->json(['error' => "Bed {$requestedBed} is not available in {$room->name} on {$data['arrival_date']}."], 422);
+        }
+
+        $data['bed_no'] = $requestedBed;
 
         try {
             $record = AttendanceRecord::create([
@@ -365,7 +374,7 @@ class RunningRoomController extends Controller
                 'name' => $member['name'],
                 'staff_no' => $staffNo,
                 'designation' => $member['designation'],
-                'bed_no' => $data['bed_no'] ?? null,
+                'bed_no' => $data['bed_no'],
                 'arrival_date' => $data['arrival_date'],
                 'arrival_time' => $data['arrival_time'],
                 'remarks' => $data['remarks'] ?? null,
@@ -374,11 +383,42 @@ class RunningRoomController extends Controller
         } catch (\Illuminate\Database\QueryException $e) {
             $message = match (true) {
                 str_contains($e->getMessage(), 'active_staff_no') => "Crew member {$member['name']} is already checked in to a room.",
-                str_contains($e->getMessage(), 'active_room_bed') => "Bed {$data['bed_no']} was just taken — please choose another.",
+                str_contains($e->getMessage(), 'active_room_bed') => "Bed {$data['bed_no']} was just taken - please choose another.",
                 default => 'The check-in could not be saved because of a conflict. Please try again.',
             };
 
-            return response()->json(['error' => $message], 422);
+            if (str_contains($e->getMessage(), 'active_room_bed')) {
+                $freshAvailable = $room->fresh()->availableBedsOn($data['arrival_date']);
+                $replacementBed = $freshAvailable[0] ?? '';
+
+                if ($replacementBed !== '' && $replacementBed !== $data['bed_no']) {
+                    try {
+                        $data['bed_no'] = $replacementBed;
+
+                        $record = AttendanceRecord::create([
+                            'room_id' => $room->id,
+                            'name' => $member['name'],
+                            'staff_no' => $staffNo,
+                            'designation' => $member['designation'],
+                            'bed_no' => $data['bed_no'],
+                            'arrival_date' => $data['arrival_date'],
+                            'arrival_time' => $data['arrival_time'],
+                            'remarks' => $data['remarks'] ?? null,
+                            'status' => 'in',
+                        ]);
+                    } catch (\Illuminate\Database\QueryException $retryException) {
+                        $message = match (true) {
+                            str_contains($retryException->getMessage(), 'active_staff_no') => "Crew member {$member['name']} is already checked in to a room.",
+                            str_contains($retryException->getMessage(), 'active_room_bed') => "Bed {$data['bed_no']} was just taken - please choose another.",
+                            default => 'The check-in could not be saved because of a conflict. Please try again.',
+                        };
+                    }
+                }
+            }
+
+            if (! isset($record)) {
+                return response()->json(['error' => $message], 422);
+            }
         }
 
         $this->syncCrewFromCheckIn($staffNo, $room, $data['arrival_date'], $data['arrival_time']);

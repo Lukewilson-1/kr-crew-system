@@ -45,6 +45,7 @@ This project is a crew operations app built on Laravel 11 and PHP 8.5. It includ
 6. Start the application server:
    ```bash
    php artisan serve
+ 
    ```
 
 7. Open the app at `http://127.0.0.1:8000`.

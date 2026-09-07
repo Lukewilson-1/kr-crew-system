@@ -238,9 +238,10 @@
 
     const defaultRoomId = state.rooms.length ? (Number(attendantRoomId) || state.rooms[0].id) : null;
     const defaultDate = todayStr();
-    const bedOptions = defaultRoomId
-      ? availableBedsFor(defaultRoomId, defaultDate).map((b) => `<option value="${esc(b.bed_no)}">${esc(b.bed_no)}</option>`).join('')
-      : '';
+    const defaultBeds = defaultRoomId ? availableBedsFor(defaultRoomId, defaultDate) : [];
+    const bedOptions = defaultBeds.length
+      ? defaultBeds.map((b, index) => `<option value="${esc(b.bed_no)}"${index === 0 ? ' selected' : ''}>${esc(b.bed_no)}</option>`).join('')
+      : '<option value="">No available beds</option>';
 
     const form = `
       <h2>Check In / Out</h2>
@@ -272,7 +273,6 @@
           <div class="rr-field">
             <label>Bed</label>
             <select name="bed_no" id="rrCheckinBed">
-              <option value="">— Select an available bed —</option>
               ${bedOptions}
             </select>
           </div>
@@ -482,8 +482,9 @@
       const roomId = roomSel.value;
       const date = dateSel ? dateSel.value : todayStr();
       const beds = availableBedsFor(roomId, date);
-      bedSel.innerHTML = '<option value="">— Select an available bed —</option>' +
-        beds.map((b) => `<option value="${esc(b.bed_no)}">${esc(b.bed_no)}</option>`).join('');
+      bedSel.innerHTML = beds.length
+        ? beds.map((b, index) => `<option value="${esc(b.bed_no)}"${index === 0 ? ' selected' : ''}>${esc(b.bed_no)}</option>`).join('')
+        : '<option value="">No available beds</option>';
     }
 
     if (roomSel) roomSel.addEventListener('change', refreshBeds);

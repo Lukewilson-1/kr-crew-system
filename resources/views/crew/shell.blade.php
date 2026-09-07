@@ -140,7 +140,7 @@
         </div>
 
         <div class="modal-ov" id="modal">
-            <div class="modal-box modal">
+            <div class="modal-box modal status-modal">
                 <div class="modal-title" id="mTitle">Update crew status</div>
                 <div class="modal-sub" id="mSub"></div>
 

@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Room extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = ['name', 'depot_code', 'beds'];
 
@@ -81,6 +83,11 @@ class Room extends Model
 
         $existing = $this->roomBeds()->orderBy('bed_no')->get();
 
+        $occupiedBedNos = AttendanceRecord::query()
+            ->where('room_id', $this->id)
+            ->where('status', 'in')
+            ->pluck('bed_no');
+
         foreach ($wanted as $bedNo => $unused) {
             if (! $existing->contains('bed_no', $bedNo)) {
                 $this->roomBeds()->create(['bed_no' => $bedNo, 'is_usable' => true]);
@@ -89,13 +96,8 @@ class Room extends Model
 
         foreach ($existing as $bed) {
             if (! isset($wanted[$bed->bed_no])) {
-                $referenced = AttendanceRecord::query()
-                    ->where('room_id', $this->id)
-                    ->where('bed_no', $bed->bed_no)
-                    ->exists();
-
-                if (! $referenced) {
-                    $bed->delete();
+                if (! $occupiedBedNos->contains($bed->bed_no)) {
+                    $bed->forceDelete();
                 }
             }
         }

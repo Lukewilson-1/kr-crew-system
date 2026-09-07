@@ -957,6 +957,21 @@ td{border-bottom:1px solid #F0EAE0}
 .modal select,.modal input,.modal textarea{border-radius:7px;border-color:#D8CDB4}
 .modal select:focus,.modal input:focus,.modal textarea:focus{border-color:var(--kr-gold);box-shadow:0 0 0 3px rgba(248,200,8,.18)}
 
+/* ── Change-status modal — wider, better spaced ─────────────────────────── */
+.modal-box.status-modal{width:min(720px,94vw)}
+.modal-box.status-modal .status-picker{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
+.modal-box.status-modal .modal-grid{grid-template-columns:repeat(3,1fr);gap:12px}
+.modal-box.status-modal .modal-grid>div:nth-child(3n+1){grid-column:auto}
+.modal-box.status-modal .modal-block select{height:auto}
+.modal-box.status-modal .day-segment-editor{margin-top:14px;padding:14px;border-radius:12px;background:#FDFBF2;border-color:#E8E0CF}
+.modal-box.status-modal .day-segment-row{grid-template-columns:minmax(118px,1.3fr) 84px 84px minmax(150px,1fr) 32px;gap:8px}
+@media(max-width:700px){
+  .modal-box.status-modal .modal-grid{grid-template-columns:1fr}
+  .modal-box.status-modal .status-picker{grid-template-columns:repeat(3,1fr)}
+  .modal-box.status-modal .day-segment-row{grid-template-columns:1fr 1fr}
+  .modal-box.status-modal .day-seg-note{grid-column:1/-1}
+}
+
 /* ── Monthly / reports cards ────────────────────────────────────────────── */
 .month-side-card,.rep-card{border-radius:12px;box-shadow:var(--sh-el);border:1px solid #E8E0CF}
 .month-side-card h3,.rep-card h3{color:#17130F}

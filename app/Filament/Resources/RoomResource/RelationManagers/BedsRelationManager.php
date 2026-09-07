@@ -17,6 +17,23 @@ class BedsRelationManager extends RelationManager
 {
     protected static string $relationship = 'roomBeds';
 
+    /** @var array<string, bool>|null */
+    protected ?array $occupancyCache = null;
+
+    protected function bedOccupied(RoomBed $record): bool
+    {
+        $ownerId = $this->getOwnerRecord()->id;
+
+        if ($this->occupancyCache === null) {
+            $this->occupancyCache = RoomBed::occupancyMap(
+                $ownerId,
+                $this->getRelationship()->pluck('bed_no')
+            );
+        }
+
+        return $this->occupancyCache[$record->bed_no] ?? false;
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -31,9 +48,9 @@ class BedsRelationManager extends RelationManager
                     ->boolean(),
                 TextColumn::make('state')
                     ->label('Status')
-                    ->state(fn (RoomBed $record) => $record->isOccupied() ? 'Occupied' : ($record->is_usable ? 'Free' : 'Unusable'))
+                    ->state(fn (RoomBed $record) => $this->bedOccupied($record) ? 'Occupied' : ($record->is_usable ? 'Free' : 'Unusable'))
                     ->badge()
-                    ->color(fn (RoomBed $record) => $record->isOccupied() ? 'danger' : ($record->is_usable ? 'success' : 'gray')),
+                    ->color(fn (RoomBed $record) => $this->bedOccupied($record) ? 'danger' : ($record->is_usable ? 'success' : 'gray')),
             ])
             ->defaultSort('bed_no')
             ->headerActions([
@@ -60,8 +77,8 @@ class BedsRelationManager extends RelationManager
                             ->default(true),
                     ]),
                 DeleteAction::make()
-                    ->hidden(fn (RoomBed $record) => $record->isOccupied())
-                    ->tooltip(fn (RoomBed $record) => $record->isOccupied() ? 'Check the guest out before removing this bed.' : null),
+                    ->hidden(fn (RoomBed $record) => $this->bedOccupied($record))
+                    ->tooltip(fn (RoomBed $record) => $this->bedOccupied($record) ? 'Check the guest out before removing this bed.' : null),
             ]);
     }
 }

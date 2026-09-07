@@ -19,6 +19,25 @@ class RunningRoomDashboard extends Page
 
     protected static ?int $navigationSort = 1;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess();
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'hasPermissionTo')) {
+            return $user->hasPermissionTo('manage_running_rooms');
+        }
+
+        return false;
+    }
+
     protected function getHeaderWidgets(): array
     {
         return [

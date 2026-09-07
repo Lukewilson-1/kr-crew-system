@@ -3,10 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CrewStatusSegment extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'crew_status_segments';
+
+    protected $primaryKey = 'segment_id';
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    public $timestamps = true;
 
     protected $fillable = [
         'segment_id',
@@ -33,5 +45,19 @@ class CrewStatusSegment extends Model
 
     protected $casts = [
         'metadata' => 'array',
+        'day' => 'integer',
+        'sort_order' => 'integer',
+        'rest_started_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
+
+    public function crewRecord(): BelongsTo
+    {
+        return $this->belongsTo(CrewRecord::class, 'crew_record_id', 'record_id');
+    }
+
+    public function getStatusCodeResolvedAttribute(): string
+    {
+        return (string) ($this->status_code ?: $this->status ?: '');
+    }
 }

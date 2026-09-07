@@ -111,13 +111,51 @@ class User extends Authenticatable implements FilamentUser
             return true;
         }
 
-        $permissions = $this->permissions;
-
-        if (is_array($permissions) && in_array($permission, $permissions, true)) {
+        // 1. Check direct JSON permissions column (legacy compat).
+        $directPermissions = $this->permissions;
+        if (is_array($directPermissions) && in_array($permission, $directPermissions, true)) {
             return true;
         }
 
+        // 2. Check user_permissions pivot table.
+        if ($this->permissions()->where('user_permissions.permission_code', $permission)->exists()) {
+            return true;
+        }
+
+        // 3. Check role_permissions pivot table via the user's primary role.
+        if ($this->role_code !== null) {
+            $hasViaRole = \Illuminate\Support\Facades\DB::table('role_permissions')
+                ->where('role_code', $this->role_code)
+                ->where('permission_code', $permission)
+                ->exists();
+            if ($hasViaRole) {
+                return true;
+            }
+        }
+
+        // 4. Check any additional roles from user_roles pivot.
+        $roleCodes = $this->roles()->pluck('roles.role_code');
+        if ($roleCodes->isNotEmpty()) {
+            $hasViaPivotRole = \Illuminate\Support\Facades\DB::table('role_permissions')
+                ->whereIn('role_code', $roleCodes)
+                ->where('permission_code', $permission)
+                ->exists();
+            if ($hasViaPivotRole) {
+                return true;
+            }
+        }
+
         return false;
+    }
+
+    public function hasRole(string ...$roleCodes): bool
+    {
+        if ($this->is_super_admin) {
+            return true;
+        }
+
+        return in_array($this->role_code, $roleCodes, true)
+            || $this->roles()->whereIn('roles.role_code', $roleCodes)->exists();
     }
 
     public function passwordMatches(string $plainPassword): bool
@@ -221,16 +259,6 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        $result = $this->is_active && $this->isGlobalAccess();
-        \Log::debug('canAccessPanel called', [
-            'username' => $this->username,
-            'role_code' => $this->role_code,
-            'depot_code' => $this->depot_code,
-            'is_active' => $this->is_active,
-            'is_hq' => $this->is_hq,
-            'is_super_admin' => $this->is_super_admin,
-            'result' => $result,
-        ]);
-        return $result;
+        return $this->is_active;
     }
 }

@@ -27,6 +27,25 @@ class MonthlyReport extends Page implements HasForms
 
     protected string $view = 'filament.pages.monthly-report';
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess();
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'hasPermissionTo')) {
+            return $user->hasPermissionTo('manage_running_rooms');
+        }
+
+        return false;
+    }
+
     /** @var array{roomId: ?string, period: ?string} */
     public array $data = [];
 

@@ -60,7 +60,7 @@ class SeedSuperAdmin extends Command
                     'name' => 'Super Admin',
                     'depot_code' => 'HQ',
                     'role_code' => 'super_admin',
-                    'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports']),
+                    'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports', 'manage_running_rooms', 'manage_duty_rosters', 'manage_rest_locations']),
                     'password' => $passwordHash,
                     'pw' => $passwordHash,
                     'is_hq' => true,

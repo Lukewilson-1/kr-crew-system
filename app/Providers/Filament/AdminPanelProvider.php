@@ -65,6 +65,9 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 Widgets\AccountWidget::class,
                 \App\Filament\Widgets\OperationsOverviewWidget::class,
+                \App\Filament\Widgets\CrewDepotChartWidget::class,
+                \App\Filament\Widgets\TimelineWidget::class,
+                \App\Filament\Widgets\ReportsActivityWidget::class,
             ])
 
             ->middleware([

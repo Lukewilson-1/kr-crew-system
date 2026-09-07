@@ -31,6 +31,25 @@ class ChallengesSummary extends Page implements HasForms
 
     protected ?\Illuminate\Support\Collection $filtered = null;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess();
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'hasPermissionTo')) {
+            return $user->hasPermissionTo('manage_running_rooms');
+        }
+
+        return false;
+    }
+
     public array $data = [
         'roomId' => 'all',
         'status' => 'all',

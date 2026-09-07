@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon as CarbonInterface;
 use Tonysm\RichTextLaravel\Models\Traits\HasRichText;
 
@@ -13,6 +14,7 @@ class Matter extends Model
 {
     use HasFactory;
     use HasRichText;
+    use SoftDeletes;
 
     protected $fillable = [
         'room_id', 'date', 'category', 'description',

@@ -118,34 +118,69 @@ function printSelectedCrew(){
   if(!crew){alert('Select a crew member first by clicking their name.');return;}
   const maxDay=CD;
   const days=Array.from({length:maxDay},(_,i)=>i+1);
-  const segsByDay=days.map(d=>getDaySegments(crew,d));
   const finalByDay=days.map(d=>getFinalStatusForDay(crew,d)||'');
   const monthSummary=Object.keys(STATUS_META).map(code=>[code,days.filter((_,i)=>finalByDay[i]===code).length]).filter(([,n])=>n>0);
-  let tableRows=days.map((d,i)=>{
-    const segs=segsByDay[i];
-    const code=finalByDay[i];
+  let totalMinutes=0; let eventCount=0;
+  let groupTables='';
+  days.forEach(d=>{
+    const segs=getDaySegments(crew,d);
+    if(!segs.length) return;
     const dt=new Date(CY,CM,d);
     const dayName=DAY_NAMES[dt.getDay()];
     const we=dt.getDay()===0||dt.getDay()===6;
-    const segText=segs.length?segs.map(s=>`${s.start_time}\u2013${s.end_time} ${STATUS_META[s.status_code]?.label||s.status_code}${s.note?' ('+s.note+')':''}`).join(', '):'\u2014';
+    eventCount+=segs.length;
+    totalMinutes+=segs.reduce((acc,s)=>acc+segmentDurationMinutes(s),0);
+    const rows=segs.map(s=>{
+      const meta=STATUS_META[s.status_code]||{label:s.status_code,bg:'#ECEFF1',fg:'#37474F'};
+      const mins=segmentDurationMinutes(s);
+      const hrs=mins>=60?`&nbsp;(${Math.floor(mins/60)}h ${mins%60}m)`:'';
+      return `<tr>
+        <td style="text-align:center;white-space:nowrap">${s.start_time} \u2013 ${s.end_time}${hrs}</td>
+        <td><span class="badge" style="background:${meta.bg};color:${meta.fg}">${s.status_code}</span> ${meta.label}</td>
+        <td>${s.route||(crew.route||'\u2014')}</td>
+        <td style="text-align:center">${crew.staff_number||'\u2014'}</td>
+        <td style="text-align:center">${crew.depot}</td>
+        <td style="text-align:center">${crew.route||'\u2014'}</td>
+        <td>${s.note||'\u2014'}</td>
+      </tr>`;
+    }).join('');
+    const code=finalByDay[d-1];
     const sm=STATUS_META[code]||{label:code,bg:'#ECEFF1',fg:'#37474F'};
-    return `<tr><td style="font-weight:700;${we?'color:#C62828':''}">${dayName} ${d}</td><td><span class="badge" style="background:${sm.bg};color:${sm.fg}">${code}</span> ${sm.label}</td><td style="font-size:10px">${segText}</td></tr>`;
-  }).join('');
+    groupTables+=`<div class="seg-day">
+      <div class="seg-day-h"><span class="seg-day-date" style="${we?'color:#C62828':''}">${dayName} ${d} ${MONTH_NAME.split(' ')[0]}</span><span class="badge" style="background:${sm.bg};color:${sm.fg}">${code} ${sm.label}</span></div>
+      <table><thead><tr><th style="width:150px">Time</th><th>Status</th><th>Route</th><th style="width:70px;text-align:center">Staff No.</th><th style="width:60px;text-align:center">Depot</th><th style="width:100px;text-align:center">Assignment</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  });
   const summaryRows=monthSummary.map(([code,n])=>{
     const sm=STATUS_META[code]||{label:code,bg:'#ECEFF1',fg:'#37474F'};
     return `<tr><td><span class="badge" style="background:${sm.bg};color:${sm.fg}">${code}</span> ${sm.label}</td><td class="sum-cell">${n}</td></tr>`;
   }).join('');
-  const printHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${crew.name} - Monthly Report - ${MONTH_NAME}</title>
-<style>${PRINT_CSS}</style></head><body>
-<div class="kr-p-header"><img src="${PRINT_LOGO}" alt="Kenya Railways"><h1>Kenya Railways</h1><h2>${crew.name} &mdash; Monthly Position Register</h2><div class="meta">Staff No. ${crew.staff_number||'\u2014'} &middot; ${crew.depot} Depot &middot; ${getDesignationLabel(crew.grade)} &middot; ${MONTH_NAME} &middot; Generated ${new Date().toLocaleString()}</div></div>
-<div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:#555"><div><b>Route:</b> ${crew.route||'\u2014'}</div><div><b>Shift:</b> ${getCrewShiftLabel(crew)}</div><div><b>Status:</b> ${STATUS_META[crew.status]?.label||crew.status||'\u2014'}</div></div>
-<h3>Daily Position Register</h3>
-<table><thead><tr><th style="width:120px">Day</th><th style="width:150px">Final Status</th><th>Segments</th></tr></thead><tbody>${tableRows}</tbody></table>
+  const restH=Math.floor(totalMinutes/60), restM=totalMinutes%60;
+  const printHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${crew.name} - Crew Activity Report - ${MONTH_NAME}</title>
+<style>${PRINT_CSS}
+.crew-cards{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.crew-card{background:#f8f9fa;border:1px solid #e2e3e5;border-radius:6px;padding:8px 12px;min-width:150px}
+.crew-card .k{font-size:9px;text-transform:uppercase;color:#667085;letter-spacing:.3px}
+.crew-card .v{font-size:13px;font-weight:700;color:#1a1a1a;margin-top:2px}
+.seg-day{margin-bottom:12px;page-break-inside:avoid}
+.seg-day-h{display:flex;justify-content:space-between;align-items:center;background:#f5f5f5;border:1px solid #ddd;border-bottom:none;padding:5px 8px;font-weight:700;font-size:11px}
+.seg-day-h .seg-day-date{color:#6C1A23}
+</style></head><body>
+<div class="kr-p-header"><img src="${PRINT_LOGO}" alt="Kenya Railways"><h1>Kenya Railways</h1><h2>${crew.name} &mdash; Crew Activity Report</h2><div class="meta">Staff No. ${crew.staff_number||'\u2014'} &middot; ${crew.depot} Depot &middot; ${getDesignationLabel(crew.grade)} &middot; ${MONTH_NAME} &middot; Generated ${new Date().toLocaleString()}</div></div>
+<div class="crew-cards">
+  <div class="crew-card"><div class="k">Route / Assignment</div><div class="v">${crew.route||'\u2014'}</div></div>
+  <div class="crew-card"><div class="k">Shift</div><div class="v">${getCrewShiftLabel(crew)||'\u2014'}</div></div>
+  <div class="crew-card"><div class="k">Current Status</div><div class="v">${STATUS_META[crew.status]?.label||crew.status||'\u2014'}</div></div>
+  <div class="crew-card"><div class="k">Events Recorded</div><div class="v">${eventCount}</div></div>
+  <div class="crew-card"><div class="k">Tracked Time</div><div class="v">${restH}h ${restM}m</div></div>
+</div>
+<h3>Daily Event Timeline (${MONTH_NAME})</h3>
+${groupTables||'<p>No status events recorded this month.</p>'}
 <h3>Monthly Summary</h3>
 <table style="width:auto;min-width:260px"><thead><tr><th>Status</th><th style="width:70px;text-align:center">Days</th></tr></thead><tbody>${summaryRows}</tbody></table>
 <div class="footer">Kenya Railways &middot; KR Crew System &middot; Printed ${new Date().toLocaleString()}</div>
 </body></html>`;
-  printReportOpen(printHtml,`${crew.name} Monthly Report`);
+  printReportOpen(printHtml,`${crew.name} Crew Activity Report`);
 }
 
 function printAllCrew(){
@@ -281,6 +316,7 @@ let listeners=[];
 let currentPage='monthly',activeFilter='all',hqDepotView='all',editKey=null;
 let selectedMonthDay = new Date().getDate();
 let selectedMonthCrewKey = null;
+let showFullMonthTimeline = false;
 let cdInterval=null; // countdown ticker
 let currentModalGrade=null;
 let currentModalInRoom=false;
@@ -1876,16 +1912,62 @@ function renderMonthly(){
         <div class="month-info-note">A crew member can carry several statuses in one day. The stacked cell segments are sized by time held; daily totals count the final status.</div>
       </div>
       <aside class="month-side">
-        <div class="month-side-card"><h3>Day timeline</h3><div class="summary-note">${selectedCrew?`${selectedCrew.name} - ${selectedDay} ${MONTH_NAME.split(' ')[0]}`:'No crew selected'}</div><div class="month-timeline">${selectedSegments.length?selectedSegments.map((seg,index)=>{
-          const meta=STATUS_META[seg.status_code]||{label:seg.status_code,bg:'#ECEFF1',fg:'#37474F'};
-          return `<div class="month-timeline-row"><div class="month-timeline-rail"><span style="background:${meta.fg}"></span>${index<selectedSegments.length-1?'<i></i>':''}</div><div><div class="month-time">${seg.start_time} - ${seg.end_time}</div><div class="month-timeline-title">${statusBadgeHtml(seg.status_code,'month-mini-badge')} ${meta.label}</div><div class="month-timeline-note">${seg.note||meta.label}</div></div></div>`;
-        }).join(''):`<div class="selected-day-none">No status recorded on this date.</div>`}</div></div>
+        <div class="month-side-card">
+          <div class="month-side-head" style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">${showFullMonthTimeline?'Full month timeline':'Day timeline'}</h3>
+            ${selectedCrew?`<button class="btn btn-ghost btn-sm no-print" onclick="toggleFullMonthTimeline()">${showFullMonthTimeline?'Day view':'Full month'}</button>`:''}
+          </div>
+          <div class="summary-note">${selectedCrew?`${selectedCrew.name} · ${showFullMonthTimeline?MONTH_NAME:`${selectedDay} ${MONTH_NAME.split(' ')[0]}`}`:'No crew selected'}</div>
+          ${showFullMonthTimeline && selectedCrew ? buildFullMonthTimeline(selectedCrew) : (()=>{
+            if(!selectedCrew) return '';
+            return `<div class="month-timeline">${selectedSegments.length?selectedSegments.map((seg,index)=>{
+              const meta=STATUS_META[seg.status_code]||{label:seg.status_code,bg:'#ECEFF1',fg:'#37474F'};
+              return `<div class="month-timeline-row"><div class="month-timeline-rail"><span style="background:${meta.fg}"></span>${index<selectedSegments.length-1?'<i></i>':''}</div><div><div class="month-time">${seg.start_time} - ${seg.end_time}</div><div class="month-timeline-title">${statusBadgeHtml(seg.status_code,'month-mini-badge')} ${meta.label}</div><div class="month-timeline-note">${seg.note||meta.label}</div></div></div>`;
+            }).join(''):`<div class="selected-day-none">No status recorded on this date.</div>`}</div>`;
+          })()}
+        </div>
         <div class="month-side-card"><h3>Day summary</h3><div class="status-side-list">${Object.entries(dayMinutes).length?Object.entries(dayMinutes).map(([code,mins])=>`<div class="status-side-item"><span>${STATUS_META[code]?.label||code}</span><strong>${Math.floor(mins/60)}h ${mins%60}m (${Math.round((mins/1440)*100)}%)</strong></div>`).join(''):`<div class="selected-day-none">No time split available.</div>`}</div><div class="summary-row"><div><strong>Final status</strong><div class="summary-note">Used for monthly totals</div></div>${selectedFinal?statusBadgeHtml(selectedFinal,'month-final-badge'):'-'}</div></div>
         <div class="month-side-card"><h3>Monthly summary</h3><div class="status-side-list">${monthSummaryForCrew.length?monthSummaryForCrew.map(([code,total])=>`<div class="status-side-item"><span class="status-side-chip status-${code}">${code}</span><span>${total}</span></div>`).join(''):`<div class="selected-day-none">No monthly records yet.</div>`}</div></div>
       </aside>
     </div>
   </div>`;
   safeSetInner('pbody', html);
+}
+
+function toggleFullMonthTimeline(){
+  showFullMonthTimeline = !showFullMonthTimeline;
+  renderMonthly();
+}
+
+function buildFullMonthTimeline(crew){
+  const days=Array.from({length:CD},(_,i)=>i+1);
+  let html='';
+  days.forEach(d=>{
+    const segs=getDaySegments(crew,d);
+    if(!segs.length) return;
+    const dt=new Date(CY,CM,d);
+    const dayName=DAY_NAMES[dt.getDay()];
+    const we=dt.getDay()===0||dt.getDay()===6;
+    const finalCode=getFinalStatusForDay(crew,d)||'';
+    html+=`<div class="month-full-day" style="margin-bottom:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#F3F4F6;padding:5px 8px;font-size:11px;font-weight:700;${we?'color:#C62828':''}">
+        <span>${dayName} ${d} ${MONTH_NAME.split(' ')[0]}</span>
+        <span>${statusBadgeHtml(finalCode,'month-mini-badge')}</span>
+      </div>
+      <div style="padding:6px 8px">
+        ${segs.map(seg=>{
+          const meta=STATUS_META[seg.status_code]||{label:seg.status_code,bg:'#ECEFF1',fg:'#37474F'};
+          const mins=segmentDurationMinutes(seg);
+          return `<div style="display:flex;gap:6px;align-items:flex-start;padding:3px 0;border-bottom:1px dashed #E5E7EB;font-size:11px">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text2);white-space:nowrap;min-width:78px">${seg.start_time} - ${seg.end_time}</span>
+            <span class="month-timeline-title">${statusBadgeHtml(seg.status_code,'month-mini-badge')} ${meta.label}</span>
+            <span style="font-size:10px;color:var(--text3);margin-left:auto">${Math.floor(mins/60)}h ${mins%60}m</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  return html || '<div class="selected-day-none">No status events recorded this month.</div>';
 }
 /* ════════ REPORTS ═════════════════════════════════════════════════════════ */
 function renderReports(){
@@ -2216,6 +2298,12 @@ function addDaySegmentRow(segment={}){
     <button type="button" class="day-seg-remove" title="Remove segment" onclick="removeDaySegmentRow(this)">x</button>`;
   rows.appendChild(row);
   syncPrimaryStatusFromSegments();
+}
+
+function segmentEditorNextStart(){
+  // A same-day status change begins at the current time. The trailing segment's end
+  // is clamped to this value so the timeline stays contiguous and ordered.
+  return minutesToTime(timeToMinutes(fmtTime(new Date())));
 }
 
 function removeDaySegmentRow(button){
@@ -3299,6 +3387,33 @@ function onStatusChange(){
   const s=document.getElementById('mStatus').value;
   updateStatusPicker();
   updateStatusChangeSummary();
+  // When the daily segment editor is visible, picking a *different* status from the
+  // primary picker appends a new same-day segment (with the next time slot) so multi-
+  // status days record every change in order. Re-selecting the same status just refreshes
+  // the trailing segment instead of stacking a duplicate.
+  if(document.getElementById('daySegmentEditor')?.style.display!=='none'){
+    const rows=document.querySelectorAll('#daySegmentRows .day-segment-row');
+    if(rows.length){
+      const last=rows[rows.length-1];
+      const sel=last.querySelector('.day-seg-status');
+      if(sel){
+        const prevStatus=sel.value;
+        if(prevStatus!==s){
+          const start=segmentEditorNextStart();
+          // Clamp the trailing segment's end so the timeline stays contiguous.
+          const prevEnd=last.querySelector('.day-seg-end');
+          if(prevEnd && timeToMinutes(prevEnd.value) > timeToMinutes(start)){
+            prevEnd.value=start<=0?'00:00':start;
+          }
+          addDaySegmentRow({
+            status_code:s,
+            start_time:start,
+            end_time:'23:59',
+          });
+        }
+      }
+    }
+  }
   if(currentModalInRoom){
     // Force the Resting status while checked into a running room.
     if(s!=='R'){
@@ -3471,16 +3586,18 @@ function changeStatusFromDetails(){
 }
 
 function openUpdate(depot,id){
-  editKey={depot,id,day:null};
+  editKey={depot,id,day:CD};
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   currentModalGrade=c.grade;
   currentModalInRoom=!!(c.rrRoomId && c.rrCheckedOut===false && c.status==='R');
-  setDaySegmentEditorVisible(false);
-  populateStatusSelects(c.status||'SB');
+  const todaySegments=getDaySegments(c,CD);
+  const finalStatus=getFinalStatusForDay(c,CD)||c.status||'SB';
+  populateStatusSelects(finalStatus);
   populateTrainTypeSelect(c.trainType||'');
+  const dt=new Date(CY,CM,CD);
   document.getElementById('mTitle').textContent='Update crew status';
-  document.getElementById('mSub').textContent=`${c.name} · ${c.id} · ${depot}`;
-  document.getElementById('mStatus').value=c.status||'SB';
+  document.getElementById('mSub').textContent=`${c.name} · ${DAY_NAMES[dt.getDay()]} ${CD} ${MONTH_NAME.split(' ')[0]} · ${depot}`;
+  document.getElementById('mStatus').value=finalStatus;
   document.getElementById('mTrainType').value=c.trainType||'';
   document.getElementById('mBookTime').value=c.bookTime||'';
   document.getElementById('mRoute').value=c.route||'';
@@ -3495,7 +3612,9 @@ function openUpdate(depot,id){
   document.getElementById('mRestLocation').value=c.awayDepot && c.awayDepot!==depot?'away':'home';
   setAwayDepotOptions(depot,c.awayDepot);
   onStatusChange();
+  loadDaySegmentEditor(todaySegments);
   document.getElementById('mRemoveBtn').style.display='inline-flex';
+  updateStatusValidation();
   document.getElementById('modal').classList.add('open');
 }
 
@@ -3548,6 +3667,8 @@ function confirmTripOffDay(c,day){
 
 async function saveModal(){
   if(!editKey)return;
+  const saveErrorEl=document.getElementById('statusHint');
+  if(saveErrorEl){saveErrorEl.style.display='none';saveErrorEl.textContent='';}
   setSyncStatus('spin','Saving…');
   try{
     const newStatus=document.getElementById('mStatus').value;
@@ -3617,7 +3738,18 @@ async function saveModal(){
       setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${trainType?' ('+trainType+')':''}${bookTime?' @ '+bookTime:''}`);
     }
     setSyncStatus('ok','Saved');
-  }catch(err){setSyncStatus('err','Save failed');setLog('Error: '+err.message);}
+  }catch(err){
+    const message=(err&&err.message?err.message:String(err||'Save failed')).replace(/^Error:\s*/,'');
+    setSyncStatus('err','Save failed');
+    setLog('Error: '+message);
+    if(saveErrorEl){
+      saveErrorEl.textContent=message;
+      saveErrorEl.style.display='block';
+    } else {
+      alert(message);
+    }
+    return;
+  }
   closeModal();
   refreshPage();
 }
@@ -3969,6 +4101,7 @@ window.openAddModal = openAddModal;
 window.saveAddCrew = saveAddCrew;
 window.openUpdate = openUpdate;
 window.openDayEdit = openDayEdit;
+window.toggleFullMonthTimeline = toggleFullMonthTimeline;
 window.openCrewDetails = openCrewDetails;
 window.closeCrewDetails = closeCrewDetails;
 window.changeStatusFromDetails = changeStatusFromDetails;

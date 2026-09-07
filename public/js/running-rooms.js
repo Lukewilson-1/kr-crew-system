@@ -1166,6 +1166,10 @@
   function renderAll() {
     const main = document.getElementById('rr-main');
     main.innerHTML = '';
+    const hdr = document.createElement('div');
+    hdr.className = 'kr-spa-print-header';
+    hdr.innerHTML = '<img src="/assets/logo.png" alt="Kenya Railways"><div class="kr-spa-print-title">Kenya Railways</div>';
+    main.appendChild(hdr);
     const current = state.tab;
     renderPanel(current);
     $$('.rr-sb-item').forEach((el) => el.classList.toggle('active', el.dataset.rrTab === current));

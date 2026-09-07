@@ -102,6 +102,10 @@
                     @endif
                 </div>
                 <div id="main">
+                    <div class="kr-spa-print-header">
+                        <img src="{{ asset('assets/logo.png') }}" alt="Kenya Railways">
+                        <div class="kr-spa-print-title">Kenya Railways</div>
+                    </div>
                     <div id="phdr">
                         <div><div class="ph-title" id="phTitle">Dashboard</div><div class="ph-sub" id="phSub"></div></div>
                         <div class="ph-actions" id="phActions"></div>

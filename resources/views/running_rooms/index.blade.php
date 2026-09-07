@@ -23,7 +23,9 @@
         <header id="rr-topbar">
             <div class="rr-tb-mark"><img src="{{ asset('assets/logo.png') }}" alt="KR Logo"></div>
             <span class="rr-tb-title">Running Room Register</span>
+            <span class="tb-sep"></span>
             <span class="rr-tb-badge" id="rrScopeBadge">{{ $isAttendant ? 'Attendant' : 'Admin' }}</span>
+            <div class="tb-live"><div class="tbl-dot"></div><span class="tbl-txt" id="rrLiveTxt">Live</span></div>
             <div class="rr-tb-right">
                 <a href="/" class="rr-btn-home"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a>
                 <div class="kr-bell" id="krBell">
@@ -38,6 +40,7 @@
                     </div>
                 </div>
                 <span class="rr-tb-user">{{ $user?->name ?? $user?->username }}</span>
+                <span class="tb-clock" id="rrClock">--:--:--</span>
                 <form method="POST" action="{{ route('logout') }}" style="display:inline">
                     @csrf
                     <button type="submit" class="rr-btn-out">Sign out</button>
@@ -64,7 +67,12 @@
                 @endif
             </aside>
 
-            <main id="rr-main"></main>
+            <main id="rr-main">
+                <div class="kr-spa-print-header">
+                    <img src="{{ asset('assets/logo.png') }}" alt="Kenya Railways">
+                    <div class="kr-spa-print-title">Kenya Railways</div>
+                </div>
+            </main>
         </div>
     </div>
 
@@ -78,5 +86,16 @@
     </script>
     <script src="{{ asset('js/running-rooms.js') }}"></script>
     <script src="{{ asset('js/notification-bell.js') }}"></script>
+    <script>
+        (function () {
+            function rrTick() {
+                const el = document.getElementById('rrClock');
+                if (!el) return;
+                const d = new Date(), p = (n) => String(n).padStart(2, '0');
+                el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+            }
+            rrTick(); setInterval(rrTick, 1000);
+        })();
+    </script>
 </body>
 </html>

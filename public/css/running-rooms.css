@@ -1,7 +1,7 @@
-/* ════════ RUNNING ROOM REGISTER — scoped under #rr-app ════════════════════ */
+﻿/* â•â•â•â•â•â•â•â• RUNNING ROOM REGISTER â€” scoped under #rr-app â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 #rr-app{display:flex;flex-direction:column;height:100vh;overflow:hidden;font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg)}
 
-/* ── Topbar ─────────────────────────────────────────────────────────────── */
+/* â”€â”€ Topbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #rr-topbar{background:linear-gradient(135deg,var(--kr-red) 0%,#8B0000 100%);height:48px;display:flex;align-items:center;padding:0 16px;gap:11px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:100}
 .rr-tb-mark{width:28px;height:28px;background:rgba(255,255,255,.15);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
 .rr-tb-mark img{width:100%;height:100%;object-fit:contain;display:block}
@@ -15,10 +15,10 @@
 .rr-btn-home svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9}
 .rr-btn-home:hover{background:rgba(255,255,255,.24)}
 
-/* ── Shell ──────────────────────────────────────────────────────────────── */
+/* â”€â”€ Shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #rr-shell{display:flex;flex:1;overflow:hidden}
 
-/* ── Sidebar ────────────────────────────────────────────────────────────── */
+/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #rr-sidebar{width:196px;background:#0F172A;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto}
 .rr-sb-group{padding-bottom:8px}
 .rr-sb-group + .rr-sb-group{border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px}
@@ -28,14 +28,14 @@
 .rr-sb-item.active{background:rgba(183,28,28,.2);border-left-color:var(--kr-red);color:#fff;font-weight:600}
 .rr-sb-item svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;flex-shrink:0}
 
-/* ── Main ───────────────────────────────────────────────────────────────── */
+/* â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #rr-main{flex:1;overflow-y:auto;padding:20px 22px}
 #rr-main h2{font-size:16px;font-weight:700;color:var(--dark);margin-bottom:4px}
 #rr-main .rr-sub{font-size:12px;color:var(--text2);margin-bottom:16px}
 .rr-panel{display:none}
 .rr-panel.active{display:block}
 
-/* ── KPI row ────────────────────────────────────────────────────────────── */
+/* â”€â”€ KPI row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:16px}
 .rr-kpi{background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:14px;box-shadow:var(--sh)}
 .rr-kpi-n{font-size:24px;font-weight:800;font-family:var(--mono)}
@@ -44,7 +44,7 @@
 .rr-kpi.rr-k-green .rr-kpi-n{color:var(--countdown-ok)}
 .rr-kpi.rr-k-amber .rr-kpi-n{color:var(--countdown-warn)}
 
-/* ── Room cards ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Room cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
 .rr-room-card{background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:16px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:10px}
 .rr-room-head{display:flex;justify-content:space-between;align-items:baseline}
@@ -62,10 +62,10 @@
 .rr-flag.amber{background:var(--leave-lt);color:var(--leave)}
 .rr-flag.gray{background:var(--border-lt);color:var(--text2)}
 
-/* ── Empty state ────────────────────────────────────────────────────────── */
+/* â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-empty{border:1.5px dashed var(--border);border-radius:var(--rl);padding:30px;text-align:center;color:var(--text3);font-size:13px;background:#fff}
 
-/* ── Forms ──────────────────────────────────────────────────────────────── */
+/* â”€â”€ Forms â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-form-card{background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:18px;box-shadow:var(--sh);margin-bottom:16px}
 .rr-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .rr-field label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:4px}
@@ -99,7 +99,7 @@
 .rr-btn.sm{padding:4px 10px;font-size:11px}
 .rr-btn:disabled{opacity:.5;cursor:not-allowed}
 
-/* ── Tables ─────────────────────────────────────────────────────────────── */
+/* â”€â”€ Tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-table-wrap{background:#fff;border:1px solid var(--border);border-radius:var(--rl);overflow:auto;box-shadow:var(--sh)}
 table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
 .rr-table th{background:#FAFBFC;text-align:left;padding:9px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap}
@@ -112,11 +112,11 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
 .rr-badge.open{background:var(--kr-red-lt);color:var(--kr-red)}
 .rr-badge.resolved{background:#E8F5E9;color:#1B5E20}
 
-/* ── Toolbar (filters / date pickers) ───────────────────────────────────── */
+/* â”€â”€ Toolbar (filters / date pickers) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
 .rr-toolbar .rr-field{min-width:160px}
 
-/* ── Matter cards ───────────────────────────────────────────────────────── */
+/* â”€â”€ Matter cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-matter-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
 .rr-matter-card{background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:14px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:8px}
 .rr-matter-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -137,7 +137,7 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
 .rr-matter-desc h2,.rr-matter-desc h3{font-size:inherit;margin:6px 0}
 .rr-matter-desc a{color:var(--link,#1a5f9c);text-decoration:underline}
 
-/* ── Rich text editor ──────────────────────────────────────────────────── */
+/* â”€â”€ Rich text editor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-richtext{border:1px solid var(--border);border-radius:6px;background:#fff;overflow:hidden}
 .rr-richtext-toolbar{display:flex;gap:4px;padding:6px 8px;background:#F3EFE6;border-bottom:1px solid var(--border)}
 .rr-richtext-toolbar button{min-width:36px;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--dark);font:600 13px/1 system-ui,sans-serif;cursor:pointer}
@@ -148,12 +148,12 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
 .rr-richtext-area h2,.rr-richtext-area h3{font-size:inherit;font-weight:700;margin:6px 0}
 .rr-richtext-area:empty::before{content:attr(data-placeholder);color:var(--text3);pointer-events:none}
 
-/* ── Settings ───────────────────────────────────────────────────────────── */
+/* â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .rr-set-row{display:grid;grid-template-columns:1fr 140px 120px;gap:10px;align-items:end;background:#fff;border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;margin-bottom:10px}
 .rr-set-name{font-weight:700;color:var(--dark)}
 .rr-set-note{font-size:11px;color:var(--text2)}
 
-/* ── Print ──────────────────────────────────────────────────────────────── */
+/* â”€â”€ Print â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media print{
   @page{size:A4 portrait;margin:12mm}
   *,*::before,*::after{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
@@ -172,13 +172,13 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
   .rr-panel.active{display:block !important}
   .rr-panel.active .rr-print-area{display:block}
   
-  /* ── KPI cards ── */
+  /* â”€â”€ KPI cards â”€â”€ */
   .rr-kpi-row{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))!important;gap:8px!important;margin-bottom:12px!important}
   .rr-kpi{box-shadow:none!important;border:1px solid #999!important;border-radius:4px!important;padding:8px 10px!important}
   .rr-kpi-n{font-size:18px!important}
   .rr-kpi-l{font-size:9px!important}
   
-  /* ── Tables ── */
+  /* â”€â”€ Tables â”€â”€ */
   .rr-table-wrap{box-shadow:none!important;border:1px solid #999!important;border-radius:4px!important;overflow:visible!important}
   table.rr-table{font-size:10px!important}
   .rr-table th{padding:5px 8px!important;font-size:9px!important;background:#F0F0F0!important;color:#333!important;border:1px solid #999!important}
@@ -188,7 +188,7 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
   .rr-badge.in{color:#1B5E20!important;border-color:#1B5E20!important}
   .rr-badge.out{color:#E65100!important;border-color:#E65100!important}
   
-  /* ── Room cards — compact grid ── */
+  /* â”€â”€ Room cards â€” compact grid â”€â”€ */
   .rr-room-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))!important;gap:8px!important}
   .rr-room-card{box-shadow:none!important;border:1px solid #ccc!important;border-radius:4px!important;overflow:visible!important;padding:10px!important}
   .rr-room-card::before{display:none!important}
@@ -196,21 +196,21 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
   .rr-berth.filled{background:#999!important;border-color:#666!important}
   .rr-berth.empty{background:#fff!important}
   
-  /* ── Matter cards ── */
+  /* â”€â”€ Matter cards â”€â”€ */
   .rr-matter-grid{grid-template-columns:1fr!important;gap:8px!important}
   .rr-matter-card{box-shadow:none!important;border:1px solid #ccc!important;border-radius:4px!important;padding:10px!important}
   .rr-matter-card::before{display:none!important}
   .rr-matter-photos{display:none!important}
   
-  /* ── Settings ── */
+  /* â”€â”€ Settings â”€â”€ */
   .rr-set-row{box-shadow:none!important;border:1px solid #ccc!important;border-radius:4px!important;grid-template-columns:1fr auto auto!important}
   
-  /* ── Page breaks ── */
+  /* â”€â”€ Page breaks â”€â”€ */
   .rr-kpi-row{page-break-after:avoid}
   .rr-room-card,.rr-table-wrap,.rr-matter-card{page-break-inside:avoid}
   h2{page-break-after:avoid}
   
-  /* ── KR brand print colors ── */
+  /* â”€â”€ KR brand print colors â”€â”€ */
   .rr-kpi.rr-k-red .rr-kpi-n{color:#B71C1C!important}
   .rr-kpi.rr-k-green .rr-kpi-n{color:#1B5E20!important}
   .rr-kpi.rr-k-amber .rr-kpi-n{color:#E65100!important}
@@ -222,91 +222,101 @@ table.rr-table{width:100%;border-collapse:collapse;font-size:12px}
   table.rr-table{font-size:9px!important}
 }
 
-/* ════════════ ACCESSIBILITY PASS — larger, clearer, high-contrast ══════════ */
-#rr-app{font-size:16px}
-#rr-app input,#rr-app select,#rr-app textarea,#rr-app button{font-size:16px}
+/* â•â•â•â•â•â•â•â•â•â•â•â• CLEAN, PROFESSIONAL SIZING â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Matches styles.css â€” balanced for desk ops use. */
+#rr-app{font-size:14px}
+#rr-app input,#rr-app select,#rr-app textarea,#rr-app button{font-size:14px}
 
 #rr-topbar{height:58px;padding:0 18px;gap:14px}
-.rr-tb-title{font-size:18px}
-.rr-tb-badge{font-size:13px;padding:4px 13px}
-.rr-tb-user{font-size:15px}
+.rr-tb-title{font-size:16px}
+.rr-tb-badge{font-size:12px;padding:3px 12px}
+.rr-tb-user{font-size:14px}
 .rr-tb-mark{width:34px;height:34px;border-radius:8px}
 
-#rr-sidebar{width:226px}
+#rr-sidebar{width:224px}
 .rr-sb-sec{padding:16px 16px 6px;font-size:11px;letter-spacing:.08em}
-.rr-sb-item{padding:13px 18px;font-size:16px;gap:12px;min-height:50px}
-.rr-sb-item svg{width:19px;height:19px}
+.rr-sb-item{padding:11px 16px;font-size:14px;gap:11px;min-height:44px}
+.rr-sb-item svg{width:18px;height:18px}
 
-#rr-main{padding:22px 24px}
-#rr-main h2{font-size:22px}
-#rr-main .rr-sub{font-size:15px;margin-bottom:20px}
+#rr-main{padding:20px 22px}
+#rr-main h2{font-size:20px}
+#rr-main .rr-sub{font-size:13px;margin-bottom:16px}
 
-.rr-kpi-row{gap:14px;margin-bottom:20px}
-.rr-kpi{padding:17px}
-.rr-kpi-n{font-size:30px}
-.rr-kpi-l{font-size:12px;letter-spacing:.04em;margin-top:3px}
+.rr-kpi-row{gap:12px;margin-bottom:18px}
+.rr-kpi{padding:14px 16px}
+.rr-kpi-n{font-size:27px}
+.rr-kpi-l{font-size:11px;letter-spacing:.04em;margin-top:2px}
 
-.rr-room-grid{gap:16px}
-.rr-room-card{padding:19px;gap:12px}
-.rr-room-name{font-size:18px}
-.rr-room-meta{font-size:14px}
-.rr-berth{width:26px;height:26px;border-radius:6px}
-.rr-flag{font-size:12px;padding:4px 11px;border-radius:12px}
+/* ── KPI cards — mirror crew dashboard pattern ─────────────────────── */
+.rr-kpi{position:relative;overflow:hidden}
+.rr-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--dark2)}
+.rr-kpi.rr-k-red::before{background:var(--kr-red)}
+.rr-kpi.rr-k-green::before{background:var(--countdown-ok)}
+.rr-kpi.rr-k-amber::before{background:var(--countdown-warn)}
+.rr-kpi-n{font-size:30px;font-weight:700;font-family:var(--font);letter-spacing:-.01em;color:var(--dark);line-height:1;margin-bottom:3px}
+.rr-kpi-l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);margin-top:3px}
 
-.rr-form-card{padding:22px}
-.rr-field label{font-size:12px;margin-bottom:5px}
-.rr-field input,.rr-field select,.rr-field textarea{font-size:16px;padding:11px 12px;border-radius:7px}
-.rr-field textarea{min-height:80px}
-.rr-staff-status{font-size:15px;min-height:22px}
-.rr-form-actions{margin-top:18px;gap:10px}
-.rr-btn{padding:12px 22px;font-size:16px;border-radius:7px;min-height:46px}
-.rr-btn.sm{padding:7px 12px;font-size:14px;min-height:38px}
+.rr-room-grid{gap:13px}
+.rr-room-card{padding:16px;gap:10px}
+.rr-room-name{font-size:16px}
+.rr-room-meta{font-size:13px}
+.rr-berth{width:22px;height:22px;border-radius:5px}
+.rr-flag{font-size:11px;padding:3px 9px;border-radius:11px}
 
-table.rr-table{font-size:15px}
-.rr-table th{padding:11px 14px;font-size:12px}
-.rr-table td{padding:12px 14px}
-.rr-badge{font-size:12px;padding:4px 11px;border-radius:12px}
+.rr-form-card{padding:18px}
+.rr-field label{font-size:11px;margin-bottom:4px}
+.rr-field input,.rr-field select,.rr-field textarea{font-size:14px;padding:10px 11px;border-radius:7px}
+.rr-field textarea{min-height:72px}
+.rr-staff-status{font-size:14px;min-height:19px}
+.rr-form-actions{margin-top:16px;gap:9px}
+.rr-btn{padding:10px 18px;font-size:14px;border-radius:7px;min-height:40px}
+.rr-btn.sm{padding:6px 11px;font-size:13px;min-height:34px}
 
-.rr-toolbar{gap:12px;margin-bottom:20px}
-.rr-toolbar .rr-field{min-width:180px}
+table.rr-table{font-size:14px}
+.rr-table th{padding:10px 13px;font-size:11px}
+.rr-table td{padding:10px 13px}
+.rr-badge{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;border:1px solid transparent;font-size:12px;padding:4px 11px;border-radius:13px}
 
-.rr-matter-grid{gap:14px}
-.rr-matter-card{padding:17px;gap:10px}
-.rr-matter-date{font-size:14px}
-.rr-matter-cat{font-size:13px}
-.rr-matter-desc{font-size:16px;line-height:1.6}
-.rr-matter-foot{font-size:13px}
+.rr-toolbar{gap:10px;margin-bottom:16px}
+.rr-toolbar .rr-field{min-width:170px}
 
-.rr-set-row{padding:15px 16px}
-.rr-set-note{font-size:13px}
+.rr-matter-grid{gap:12px}
+.rr-matter-card{padding:15px;gap:9px}
+.rr-matter-date{font-size:13px}
+.rr-matter-cat{font-size:12px}
+.rr-matter-desc{font-size:14px;line-height:1.55}
+.rr-matter-foot{font-size:12px}
 
-.rr-empty{font-size:16px;padding:40px}
+.rr-set-row{padding:13px 15px}
+.rr-set-note{font-size:12px}
 
-.rr-btn-home{padding:10px 18px;font-size:15px;min-height:42px}
+.rr-empty{font-size:15px;padding:36px}
 
-a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #FFB300;outline-offset:2px;border-radius:5px}
+.rr-btn-home{padding:9px 16px;font-size:14px;min-height:40px}
+
+a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #E0A800;outline-offset:2px;border-radius:5px}
 
 @media (max-width:900px){
   #rr-topbar{padding:10px 14px}
-  .rr-tb-title{font-size:16px}
+  .rr-tb-title{font-size:15px}
   #rr-main{padding:16px}
-  .rr-kpi-n{font-size:27px}
-  .rr-room-grid{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-  .rr-matter-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
-  #rr-sidebar{width:180px}
-  .rr-sb-item{padding:11px 14px;font-size:14px}
+  .rr-kpi-n{font-size:25px}
+  .rr-room-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+  .rr-matter-grid{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+  #rr-sidebar{width:200px}
+  .rr-sb-item{padding:10px 13px;font-size:13px}
   .rr-sb-sec{padding:12px 14px 4px;font-size:9px}
 }
 @media (max-width:768px){
-  .rr-sb-item{padding:12px 14px;font-size:14px}
-  #rr-main h2{font-size:19px}
-  .rr-room-name{font-size:16px}
+  .rr-sb-item{padding:11px 13px;font-size:13px}
+  #rr-main h2{font-size:18px}
+  .rr-room-name{font-size:15px}
   .rr-room-grid{grid-template-columns:1fr}
   .rr-matter-grid{grid-template-columns:1fr}
 }
 @media (max-width:640px){
-  .rr-kpi-row{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
-  .rr-btn{padding:10px 18px}
+  .rr-kpi-row{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+  .rr-btn{padding:9px 16px}
   #rr-shell{flex-direction:column}
   #rr-sidebar{width:100%;max-height:none;flex-direction:row;overflow-x:auto;overflow-y:hidden}
   .rr-sb-group{display:flex;gap:2px;padding:4px}
@@ -318,6 +328,8 @@ a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visib
   .rr-toolbar{flex-direction:column;align-items:stretch}
   .rr-toolbar .rr-field{min-width:0;width:100%}
   .rr-set-row{grid-template-columns:1fr!important}
+  .rr-tb-user,.tb-clock,.tb-sep{display:none}
+  #rr-topbar .tb-live{width:auto}
 }
 @media (max-width:400px){
   .rr-kpi-row{grid-template-columns:1fr 1fr!important}
@@ -327,68 +339,69 @@ a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visib
   .rr-room-name{font-size:14px!important}
 }
 
-/* ════════════ ELEGANT BRAND THEME — Kenya Railways logo palette ══════════
-   Matches styles.css: gold #F8C808 · warm red #D0391F · maroon #681828 */
-#rr-topbar{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));height:62px;position:relative}
+/* â•â•â•â•â•â•â•â•â•â•â•â• KR BRAND THEME â€” clean & restrained â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Matches styles.css â€” gold kept for topbar stripe + sidebar active.
+   Cards, tables and modals stay neutral. */
+#rr-topbar{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));height:58px;position:relative}
 #rr-topbar::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brand-gold-grad,linear-gradient(120deg,#F8C808,#E0A800))}
-.rr-tb-mark{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);box-shadow:0 1px 4px rgba(0,0,0,.2)}
-.rr-tb-title{font-weight:800;letter-spacing:.04em;text-shadow:0 1px 2px rgba(0,0,0,.25)}
-.rr-tb-badge{background:var(--brand-gold-grad,linear-gradient(120deg,#F8C808,#E0A800));color:#5A4200;font-weight:800}
+.rr-tb-mark{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25)}
+.rr-tb-title{font-weight:700;letter-spacing:.02em}
+.rr-tb-badge{background:var(--brand-gold-grad,linear-gradient(120deg,#F8C808,#E0A800));color:#5A4200;font-weight:700}
 .rr-tb-user{color:rgba(255,255,255,.95)}
-.rr-btn-out{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35)}
-.rr-btn-home{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35)}
-.rr-btn-home:hover{background:rgba(255,255,255,.26)}
+.rr-btn-out{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3)}
+.rr-btn-home{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3)}
+.rr-btn-home:hover{background:rgba(255,255,255,.22)}
 
 #rr-sidebar{background:linear-gradient(180deg,#0F172A 0%,#131B2E 100%)}
-.rr-sb-sec{color:var(--kr-gold-bright,#F8C808);font-size:10px;letter-spacing:.14em;padding-top:17px}
+.rr-sb-sec{color:var(--kr-gold-bright,#F8C808);font-size:10px;letter-spacing:.12em;padding-top:16px}
 .rr-sb-item{color:rgba(255,255,255,.72);border-radius:0 8px 8px 0;margin:1px 0}
 .rr-sb-item:hover{background:rgba(255,255,255,.06);color:#fff}
-.rr-sb-item.active{background:linear-gradient(90deg,rgba(216,57,31,.28),rgba(216,57,31,.08));border-left-color:var(--kr-gold-bright,#F8C808);color:#fff}
+.rr-sb-item.active{background:linear-gradient(90deg,rgba(216,57,31,.25),rgba(216,57,31,.06));border-left-color:var(--kr-gold-bright,#F8C808);color:#fff}
 
-#rr-main h2{display:flex;align-items:center;gap:9px;font-size:23px;color:#17130F}
+#rr-main h2{display:flex;align-items:center;gap:9px;color:#111827}
 #rr-main h2::before{content:'';width:5px;height:22px;border-radius:3px;background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));flex-shrink:0}
-#rr-main .rr-sub{font-size:15px;color:var(--text2);padding-left:14px}
+#rr-main .rr-sub{color:var(--text2);padding-left:14px}
 
-.rr-kpi{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF}
-.rr-kpi-n{font-size:32px;letter-spacing:-.01em}
-.rr-kpi-l{font-size:11px;letter-spacing:.06em;color:#6B5A3E}
-.rr-kpi:hover{box-shadow:var(--sh-el-hover,0 12px 30px rgba(104,24,40,.18));transform:translateY(-1px);transition:all .18s}
+.rr-kpi{border-radius:11px;box-shadow:var(--sh-el,0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.06));border:1px solid var(--card-border,#E4E7EE)}
+.rr-kpi-n{letter-spacing:-.01em}
+.rr-kpi-l{color:var(--text2)}
+.rr-kpi:hover{box-shadow:var(--sh-el-hover,0 6px 18px rgba(15,23,42,.11));transform:translateY(-1px);transition:all .18s}
 
-.rr-room-card{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF;position:relative;overflow:hidden}
-.rr-room-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brand-gold-grad,linear-gradient(120deg,#F8C808,#E0A800))}
-.rr-room-card:hover{box-shadow:var(--sh-el-hover,0 12px 30px rgba(104,24,40,.18));transform:translateY(-2px);transition:all .18s}
-.rr-room-name{color:#17130F}
-.rr-berth{width:26px;height:26px;border-radius:6px}
+.rr-room-card{border-radius:11px;box-shadow:var(--sh-el,0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.06));border:1px solid var(--card-border,#E4E7EE);position:relative;overflow:hidden}
+.rr-room-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F))}
+.rr-room-card:hover{box-shadow:var(--sh-el-hover,0 6px 18px rgba(15,23,42,.11));transform:translateY(-2px);transition:all .18s}
+.rr-room-name{color:#111827}
+.rr-berth{border-color:var(--border)}
 .rr-berth.filled{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));box-shadow:inset 0 0 0 2px rgba(255,255,255,.2)}
-.rr-berth.empty{border-color:#D8CDB4;background:#FDFBF4}
-.rr-flag.red{background:#FDE8E4;color:#B71C1C}
-.rr-flag.amber{background:var(--kr-gold-lt,#FBF3D5);color:#8A6A00;border:1px solid #E0C55B}
-.rr-flag.gray{background:#F1EEE6;color:#6B5A3E}
+.rr-berth.empty{background:#fff}
+.rr-flag.red{background:var(--kr-red-lt);color:var(--kr-red)}
+.rr-flag.amber{background:var(--leave-lt);color:var(--leave)}
+.rr-flag.gray{background:#F0F2F5;color:var(--text2)}
 
-.rr-form-card{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF}
-.rr-field label{color:#6B5A3E}
-.rr-field input,.rr-field select,.rr-field textarea{border-radius:7px;border-color:#D8CDB4}
-.rr-field input:focus,.rr-field select:focus,.rr-field textarea:focus{border-color:var(--kr-gold,#C99914);box-shadow:0 0 0 3px rgba(248,200,8,.18)}
-.rr-btn{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,.08)}
-.rr-btn:hover{background:linear-gradient(100deg,#E04A2B,#C4241C 60%,#8F1111);box-shadow:0 4px 10px rgba(104,24,40,.25)}
-.rr-btn.ghost{background:#fff;color:#5A4200;border:1.5px solid #E0C55B}
-.rr-btn.ghost:hover{border-color:var(--kr-gold,#C99914);color:#5A4200;background:var(--kr-gold-lt,#FBF3D5)}
-.rr-btn.green{background:linear-gradient(100deg,#2E7D32,#1B5E20)}
-.rr-btn.amber{background:linear-gradient(100deg,#F59E0B,#E65100)}
+.rr-form-card{border-radius:11px;box-shadow:var(--sh-el,0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.06));border:1px solid var(--card-border,#E4E7EE)}
+.rr-field label{color:var(--text2)}
+.rr-field input,.rr-field select,.rr-field textarea{border-color:var(--border)}
+.rr-field input:focus,.rr-field select:focus,.rr-field textarea:focus{border-color:var(--kr-red);box-shadow:0 0 0 3px rgba(183,28,28,.12)}
+.rr-btn{background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F));border-radius:7px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.rr-btn:hover{background:linear-gradient(100deg,#E04A2B,#C4241C 60%,#8F1111);box-shadow:0 3px 8px rgba(104,24,40,.2)}
+.rr-btn.ghost{background:#fff;color:var(--text2);border:1.5px solid var(--border)}
+.rr-btn.ghost:hover{border-color:var(--mid);color:var(--dark);background:var(--bg)}
+.rr-btn.green{background:linear-gradient(100deg,#388E3C,#1B5E20)}
+.rr-btn.amber{background:var(--countdown-warn)}
 
-.rr-table-wrap{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF}
-.rr-table th{background:linear-gradient(180deg,#FDF7E7,#FBF3D5);color:#5A4200;border-bottom:2px solid #E0C55B}
-.rr-table tr:hover td{background:#FEFBF0}
-.rr-table td{border-bottom:1px solid #F0EAE0}
-.rr-badge{border-radius:12px}
+.rr-table-wrap{border-radius:11px;box-shadow:var(--sh-el,0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.06));border:1px solid var(--card-border,#E4E7EE)}
+.rr-table th{background:#F4F6F9;color:var(--text2);border-bottom:1px solid var(--border)}
+.rr-table tr:hover td{background:#F8FAFC}
+.rr-table td{border-bottom:1px solid var(--border-lt)}
+.rr-badge{border-radius:13px}
 
-.rr-matter-card{border-radius:12px;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12));border:1px solid #E8E0CF;position:relative;overflow:hidden}
-.rr-matter-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F))}
-.rr-matter-desc{color:#17130F}
-.rr-matter-card:hover{box-shadow:var(--sh-el-hover,0 12px 30px rgba(104,24,40,.18));transform:translateY(-2px);transition:all .18s}
+.rr-matter-card{border-radius:11px;box-shadow:var(--sh-el,0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.06));border:1px solid var(--card-border,#E4E7EE);position:relative;overflow:hidden}
+.rr-matter-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--brand-grad,linear-gradient(100deg,#D0391F,#B71C1C 55%,#7E0F0F))}
+.rr-matter-desc{color:#111827}
+.rr-matter-card:hover{box-shadow:var(--sh-el-hover,0 6px 18px rgba(15,23,42,.11));transform:translateY(-2px);transition:all .18s}
 
-.rr-set-row{border-radius:10px;border-color:#E8E0CF;box-shadow:var(--sh-el,0 6px 22px rgba(104,24,40,.12))}
-.rr-empty{border-radius:12px}
+.rr-set-row{border-radius:9px;border-color:var(--card-border,#E4E7EE);box-shadow:var(--sh-el,0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.06))}
+.rr-empty{border-radius:11px}
 
 .rr-staff-status.ok{color:#1B5E20}
 .rr-staff-status.err{color:#B71C1C}
@@ -399,8 +412,9 @@ a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visib
   #rr-topbar::before{height:3px}
   #rr-main h2::before{height:18px}
 }
+
  
-/* ── Notification bell ──────────────────────────────────────────────────── */
+/* â”€â”€ Notification bell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .kr-bell{position:relative}
 .kr-bell-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;cursor:pointer;transition:background .15s;padding:0}
 .kr-bell-btn:hover{background:rgba(255,255,255,.24)}

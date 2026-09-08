@@ -314,6 +314,7 @@ let currentUser=null;
 let state={};        // {depot:{crewId:crewDoc}}
 let listeners=[];
 let currentPage='monthly',activeFilter='all',hqDepotView='all',editKey=null;
+let dayEditorActive=false;
 let selectedMonthDay = new Date().getDate();
 let selectedMonthCrewKey = null;
 let showFullMonthTimeline = false;
@@ -920,6 +921,7 @@ async function loadStatusMeta(){
       order.push({id,order:typeof data.order==='number'?data.order:999});
     });
     order.sort((a,b)=>a.order-b.order);
+    ensureOffStatus(meta, order);
     setStatusConfig(order.map(x=>x.id), meta);
     setStatusMetadata(order.map(x=>({id:x.id,label:meta[x.id].label,bg:meta[x.id].bg,fg:meta[x.id].fg,order:x.order,usesPeriod:meta[x.id].usesPeriod,isRestDay:meta[x.id].isRestDay})));
   }catch(err){
@@ -949,6 +951,7 @@ async function loadLocalStatusMeta(){
   try{
     const data = await fetchLocalAdminMeta();
     const records = (data.statusMeta||[]).map(normalizeStatusMetaRecord).filter(Boolean);
+    if(!records.some(r=>r.id==='OFF')) records.push({...OFF_STATUS_ENTRY});
     const meta={};
     const order=[];
     records.forEach(rec=>{
@@ -1162,6 +1165,17 @@ function getStatusCodes(){
 
 function getStatusMeta(code){
   return STATUS_META && STATUS_META[code] ? STATUS_META[code] : { label: code, bg: '#ECEFF1', fg: '#37474F' };
+}
+
+/* Synthetic "Off" marker produced when excluded weekends fall inside a period
+   without weekend counting. Guaranteed to exist in STATUS_META at load time
+   even when the statusMeta collection was seeded before this marker existed. */
+const OFF_STATUS_ENTRY = { id:'OFF', label:'Off', bg:'#F3F4F6', fg:'#6B7280', order:900, active:true, usesPeriod:false, isRestDay:true };
+function ensureOffStatus(meta, order){
+  if(!meta || meta.OFF) return;
+  meta.OFF = {label:OFF_STATUS_ENTRY.label,bg:OFF_STATUS_ENTRY.bg,fg:OFF_STATUS_ENTRY.fg,order:OFF_STATUS_ENTRY.order,usesPeriod:OFF_STATUS_ENTRY.usesPeriod,isRestDay:OFF_STATUS_ENTRY.isRestDay};
+  if(order) order.push({id:'OFF',order:OFF_STATUS_ENTRY.order});
+  if(order) order.sort((a,b)=>a.order-b.order);
 }
 
 /* Whether a status shows the date-range period fields. Backed by the admin
@@ -2205,11 +2219,11 @@ function getFinalStatusForDay(item, day){
 }
 
 /* ════════ PERIOD (Training / Leave / Sick date-range) ════════════════════ */
-/* A period applies `status` to each covered working day in `monthly`.
-   Excluded days (weekends when countWeekends is off, or the inverse half
-   for half-days) are marked OFF so the roll-up doesn't inflate counts.
+/* A period applies `status` to each covered day in the current month's
+   `monthly` map. Excluded weekends (countWeekends off) are marked OFF so the
+   roll-up doesn't inflate counts. Days outside the viewed month are skipped.
    Returns the merged `monthly` map. */
-function applyPeriodToDays(item, status, period){
+function applyPeriodToDays(item, status, period, monthKey){
   const monthly = { ...(item?.monthly || {}) };
   if (!period || !period.from || !status) return monthly;
   const from = new Date(period.from + 'T00:00:00');
@@ -2218,9 +2232,15 @@ function applyPeriodToDays(item, status, period){
   else to = from; // open-ended uses the start day only
   if (isNaN(from.getTime()) || isNaN(to.getTime())) return monthly;
   if (to < from) return monthly;
+  const refKey = monthKey || MONTH_KEY;
   const countWeekends = period.countWeekends !== false;
-  const dayType = period.dayType || 'full';
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    // The monthly day map only holds the viewed (current) month; dates that
+    // fall in another month (e.g. a period crossing a boundary) are skipped so
+    // they can't clobber the wrong day-of-month cell.
+    const y = d.getFullYear();
+    const m = `${y}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (m !== refKey) continue;
     const day = d.getDate();
     const dow = d.getDay(); // 0=Sun, 6=Sat
     const weekend = dow === 0 || dow === 6;
@@ -3493,7 +3513,7 @@ function onStatusChange(){
   document.getElementById('trainTypeRow').style.display=s==='BK'?'block':'none';
   document.getElementById('restHoursRow').style.display=s==='R'?'block':'none';
   document.getElementById('restLocationRow').style.display=s==='R'?'block':'none';
-  document.getElementById('periodRow').style.display=statusUsesPeriod(s)?'block':'none';
+  document.getElementById('periodRow').style.display=(statusUsesPeriod(s)&&!dayEditorActive)?'block':'none';
   if(s==='R'){
     if(editKey && editKey.depot) setAwayDepotOptions(editKey.depot, document.getElementById('mAwayDepot')?.value||'');
     onRestLocationChange();
@@ -3650,6 +3670,7 @@ function changeStatusFromDetails(){
 
 function openUpdate(depot,id){
   editKey={depot,id,day:CD};
+  dayEditorActive=false;
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   currentModalGrade=c.grade;
   currentModalInRoom=!!(c.rrRoomId && c.rrCheckedOut===false && c.status==='R');
@@ -3698,6 +3719,7 @@ function openUpdate(depot,id){
 
 function openDayEdit(depot,id,day){
   editKey={depot,id,day};
+  dayEditorActive=true;
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
   selectedMonthCrewKey = `${depot}::${id}`;
   selectedMonthDay = day;
@@ -3712,6 +3734,14 @@ function openDayEdit(depot,id,day){
   document.getElementById('mSub').textContent=`${c.name} · ${DAY_NAMES[dt.getDay()]} ${day} ${MONTH_NAME.split(' ')[0]}`;
   document.getElementById('mStatus').value=finalStatus;
   document.getElementById('mTrainType').value='';document.getElementById('mBookTime').value='';
+  const mPeriodFromD=document.getElementById('mPeriodFrom');
+  const mPeriodToD=document.getElementById('mPeriodTo');
+  const mPeriodTypeD=document.getElementById('mPeriodType');
+  const mPeriodWeekendD=document.getElementById('mPeriodWeekend');
+  if(mPeriodFromD) mPeriodFromD.value='';
+  if(mPeriodToD) mPeriodToD.value='';
+  if(mPeriodTypeD) mPeriodTypeD.value='full';
+  if(mPeriodWeekendD) mPeriodWeekendD.checked=true;
   document.getElementById('mRoute').value=c.route||'';
   const staffNumberEl=document.getElementById('mStaffNumber');
   if(staffNumberEl) staffNumberEl.value=c.staff_number||'';
@@ -3726,7 +3756,7 @@ function openDayEdit(depot,id,day){
   document.getElementById('modal').classList.add('open');
 }
 
-function closeModal(){document.getElementById('modal').classList.remove('open');setDaySegmentEditorVisible(false);editKey=null;currentModalGrade=null;currentModalInRoom=false;}
+function closeModal(){document.getElementById('modal').classList.remove('open');setDaySegmentEditorVisible(false);editKey=null;currentModalGrade=null;currentModalInRoom=false;dayEditorActive=false;}
 
 function countTripOffDays(c){
   const monthly=c.monthly||{};
@@ -3798,12 +3828,6 @@ async function saveModal(){
       const restLocation=document.getElementById('mRestLocation').value;
       const awayDepot = finalStatus==='R' && restLocation==='away' ? (normalizeCrewDepot(document.getElementById('mAwayDepot')?.value)||null) : null;
       const upd={monthly,status_segments,awayDepot};
-      const persistPeriod = statusUsesPeriod(finalStatus) ? readPeriodInputs() : null;
-      if(persistPeriod){
-        upd.monthly = applyPeriodToDays(c, finalStatus, persistPeriod);
-        upd.monthly[`d${editKey.day}`] = finalStatus;
-        upd.period = persistPeriod;
-      }
       if(editKey.day===CD){upd.status=finalStatus;upd.trainType=finalTrainType;upd.bookTime=finalBookTime;upd.since=fmtTime(new Date());upd.updatedBy=currentUser.username;if(finalStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);upd.restStarted=rs.toISOString();}else if(finalStatus!=='R')upd.restStarted=null;}
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name} Day ${editKey.day} saved with ${daySegments.length} segment${daySegments.length===1?'':'s'}.`);
@@ -3817,7 +3841,7 @@ async function saveModal(){
       }
       let monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
       if(statusUsesPeriod(newStatus) && period){
-        monthly = applyPeriodToDays(c, newStatus, period);
+        monthly = applyPeriodToDays(c, newStatus, period, MONTH_KEY);
         if(CD < new Date(period.from+'T00:00:00') || CD > new Date((period.to||period.from)+'T00:00:00')){
           // today outside the period window: keep the period but also set today
           monthly[`d${CD}`]=newStatus;

@@ -198,6 +198,30 @@
                     <div style="font-size:11px;color:var(--text2);margin-top:3px" id="restLocationHint"></div>
                 </div>
 
+                <div id="periodRow" class="modal-block">
+                    <label>Period starts (date)</label>
+                    <input type="date" id="mPeriodFrom" value="">
+                    <div style="font-size:11px;color:var(--text2);margin-top:3px">First day of the training / leave / sick period.</div>
+                    <div class="modal-grid" style="margin-top:8px">
+                        <div>
+                            <label>Period ends (date)</label>
+                            <input type="date" id="mPeriodTo" value="">
+                        </div>
+                        <div>
+                            <label>Day type</label>
+                            <select id="mPeriodType">
+                                <option value="full">Full day</option>
+                                <option value="halfAM">Half day (AM)</option>
+                                <option value="halfPM">Half day (PM)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-weight:500">
+                        <input type="checkbox" id="mPeriodWeekend" checked>
+                        Count weekends within the period
+                    </label>
+                </div>
+
                 <div class="modal-grid">
                     <div>
                         <label>Route / Assignment</label>

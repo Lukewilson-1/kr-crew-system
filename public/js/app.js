@@ -851,12 +851,13 @@ async function seedStatusMetaIfEmpty(){
     { id: 'BK', label: 'Booked', bg: '#E8F5E9', fg: '#1B5E20', order: 100, active: true },
     { id: 'SB', label: 'Stand By', bg: '#E3F2FD', fg: '#0D47A1', order: 200, active: true },
     { id: 'R', label: 'Resting', bg: '#F3F5FF', fg: '#4A148C', order: 300, active: true },
-    { id: 'L', label: 'Leave', bg: '#FFF3E0', fg: '#E65100', order: 400, active: true },
-    { id: 'SK', label: 'Sick', bg: '#FFEBEE', fg: '#B71C1C', order: 500, active: true },
+    { id: 'L', label: 'Leave', bg: '#FFF3E0', fg: '#E65100', order: 400, active: true, usesPeriod: true },
+    { id: 'SK', label: 'Sick', bg: '#FFEBEE', fg: '#B71C1C', order: 500, active: true, usesPeriod: true },
     { id: 'ABS', label: 'Absent', bg: '#FEF2F2', fg: '#991B1B', order: 550, active: true },
-    { id: 'T', label: 'Training', bg: '#E0F2F1', fg: '#00695C', order: 600, active: true },
+    { id: 'T', label: 'Training', bg: '#E0F2F1', fg: '#00695C', order: 600, active: true, usesPeriod: true },
     { id: 'NTB', label: 'NTB', bg: '#ECEFF1', fg: '#37474F', order: 700, active: true },
     { id: 'TO', label: 'Trip Off', bg: '#FCE4EC', fg: '#AD1457', order: 800, active: true },
+    { id: 'OFF', label: 'Off', bg: '#F3F4F6', fg: '#6B7280', order: 900, active: true, isRestDay: true },
   ];
 
   const seedStatus = async (record) => {
@@ -913,12 +914,14 @@ async function loadStatusMeta(){
       const data = docSnap.data();
       const id=data.id||docSnap.id;
       if(!id) return;
-      meta[id]={label:data.label||id,bg:data.bg||'#ECEFF1',fg:data.fg||'#37474F'};
+      const usesPeriod = data.usesPeriod === true;
+      const isRestDay = data.isRestDay === true;
+      meta[id]={label:data.label||id,bg:data.bg||'#ECEFF1',fg:data.fg||'#37474F',order:typeof data.order==='number'?data.order:999,usesPeriod,isRestDay};
       order.push({id,order:typeof data.order==='number'?data.order:999});
     });
     order.sort((a,b)=>a.order-b.order);
     setStatusConfig(order.map(x=>x.id), meta);
-    setStatusMetadata(order.map(x=>({id:x.id,label:meta[x.id].label,bg:meta[x.id].bg,fg:meta[x.id].fg,order:x.order})));
+    setStatusMetadata(order.map(x=>({id:x.id,label:meta[x.id].label,bg:meta[x.id].bg,fg:meta[x.id].fg,order:x.order,usesPeriod:meta[x.id].usesPeriod,isRestDay:meta[x.id].isRestDay})));
   }catch(err){
     console.error('Failed to load status metadata',err);
     setStatusConfig([], {});
@@ -936,6 +939,9 @@ function normalizeStatusMetaRecord(docSnapOrData){
     bg:String(data.bg||'#ECEFF1'),
     fg:String(data.fg||'#37474F'),
     order:typeof data.order==='number'?data.order:999,
+    active: data.active !== false,
+    usesPeriod: data.usesPeriod === true,
+    isRestDay: data.isRestDay === true,
   };
 }
 
@@ -946,7 +952,7 @@ async function loadLocalStatusMeta(){
     const meta={};
     const order=[];
     records.forEach(rec=>{
-      meta[rec.id] = {label:rec.label,bg:rec.bg,fg:rec.fg};
+      meta[rec.id] = {label:rec.label,bg:rec.bg,fg:rec.fg,order:rec.order||999,active:rec.active,usesPeriod:rec.usesPeriod,isRestDay:rec.isRestDay};
       order.push({id:rec.id,order:rec.order||999});
     });
     order.sort((a,b)=>a.order-b.order);
@@ -1156,6 +1162,16 @@ function getStatusCodes(){
 
 function getStatusMeta(code){
   return STATUS_META && STATUS_META[code] ? STATUS_META[code] : { label: code, bg: '#ECEFF1', fg: '#37474F' };
+}
+
+/* Whether a status shows the date-range period fields. Backed by the admin
+   `usesPeriod` flag, defaulting on for T/L/SK. */
+function statusUsesPeriod(code){
+  if (!code) return false;
+  if (STATUS_META && STATUS_META[code] && STATUS_META[code].usesPeriod !== undefined) {
+    return STATUS_META[code].usesPeriod === true;
+  }
+  return ['T','L','SK'].includes(code);
 }
 
 function getAbsenceStatusCodes(){
@@ -2188,6 +2204,49 @@ function getFinalStatusForDay(item, day){
   return item?.monthly?.[`d${day}`] || '';
 }
 
+/* ════════ PERIOD (Training / Leave / Sick date-range) ════════════════════ */
+/* A period applies `status` to each covered working day in `monthly`.
+   Excluded days (weekends when countWeekends is off, or the inverse half
+   for half-days) are marked OFF so the roll-up doesn't inflate counts.
+   Returns the merged `monthly` map. */
+function applyPeriodToDays(item, status, period){
+  const monthly = { ...(item?.monthly || {}) };
+  if (!period || !period.from || !status) return monthly;
+  const from = new Date(period.from + 'T00:00:00');
+  let to;
+  if (period.to) to = new Date(period.to + 'T00:00:00');
+  else to = from; // open-ended uses the start day only
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) return monthly;
+  if (to < from) return monthly;
+  const countWeekends = period.countWeekends !== false;
+  const dayType = period.dayType || 'full';
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const day = d.getDate();
+    const dow = d.getDay(); // 0=Sun, 6=Sat
+    const weekend = dow === 0 || dow === 6;
+    let resolved = status;
+    // Excluded weekends within an excluded period become Off.
+    if (weekend && !countWeekends) resolved = 'OFF';
+    // Note: dayType (full/halfAM/halfPM) is captured for reporting; a half-day
+    // still counts as a full status day in the daily roll-up for now.
+    monthly[`d${day}`] = resolved;
+  }
+  return monthly;
+}
+
+/* Read the period fields from the modal. Returns null when blank. */
+function readPeriodInputs(){
+  const from = document.getElementById('mPeriodFrom')?.value || '';
+  const to = document.getElementById('mPeriodTo')?.value || '';
+  if (!from) return null;
+  return {
+    from,
+    to: to || from,
+    dayType: document.getElementById('mPeriodType')?.value || 'full',
+    countWeekends: !!document.getElementById('mPeriodWeekend')?.checked,
+  };
+}
+
 function timeToMinutes(value){
   const match=String(value||'').match(/^(\d{1,2}):(\d{2})$/);
   if(!match) return 0;
@@ -2883,6 +2942,7 @@ async function renderAdmin(){
       <input value="${meta.label}" data-admin-status-label="${meta.id}" style="padding:7px 9px;border:1px solid var(--border);border-radius:var(--r)" placeholder="Label">
       <input type="color" value="${meta.bg||'#ECEFF1'}" data-admin-status-bg="${meta.id}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
       <input type="color" value="${meta.fg||'#37474F'}" data-admin-status-fg="${meta.id}" style="width:60px;height:40px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r);">
+      <label class="admin-checkbox-label" title="Show date-range period fields for this status"><input type="checkbox" ${meta.usesPeriod?' checked':''} data-admin-status-period="${meta.id}"> Period</label>
       <div style="display:flex;gap:6px;justify-content:flex-end">
         <button class="btn btn-primary btn-sm" onclick="saveStatusMetaRecord('${meta.id}')">Save</button>
         <button class="btn btn-danger btn-sm" onclick="deleteStatusMetaRecord('${meta.id}')">Delete</button>
@@ -3227,12 +3287,14 @@ async function saveStatusMetaRecord(statusId){
   const labelEl=document.querySelector(`[data-admin-status-label="${statusId}"]`);
   const bgEl=document.querySelector(`[data-admin-status-bg="${statusId}"]`);
   const fgEl=document.querySelector(`[data-admin-status-fg="${statusId}"]`);
+  const periodEl=document.querySelector(`[data-admin-status-period="${statusId}"]`);
   const meta={
     id:nextId,
     label:(labelEl?.value||nextId).trim(),
     bg:(bgEl?.value||'#ECEFF1').trim(),
     fg:(fgEl?.value||'#37474F').trim(),
     order:STATUS_META[statusId]?.order ?? STATUSES.indexOf(statusId) ?? 999,
+    usesPeriod: statusId==='new' ? false : !!(periodEl?.checked),
   };
   if(!db){
     try{
@@ -3431,6 +3493,7 @@ function onStatusChange(){
   document.getElementById('trainTypeRow').style.display=s==='BK'?'block':'none';
   document.getElementById('restHoursRow').style.display=s==='R'?'block':'none';
   document.getElementById('restLocationRow').style.display=s==='R'?'block':'none';
+  document.getElementById('periodRow').style.display=statusUsesPeriod(s)?'block':'none';
   if(s==='R'){
     if(editKey && editKey.depot) setAwayDepotOptions(editKey.depot, document.getElementById('mAwayDepot')?.value||'');
     onRestLocationChange();
@@ -3600,6 +3663,21 @@ function openUpdate(depot,id){
   document.getElementById('mStatus').value=finalStatus;
   document.getElementById('mTrainType').value=c.trainType||'';
   document.getElementById('mBookTime').value=c.bookTime||'';
+  const mPeriodFrom=document.getElementById('mPeriodFrom');
+  const mPeriodTo=document.getElementById('mPeriodTo');
+  const mPeriodType=document.getElementById('mPeriodType');
+  const mPeriodWeekend=document.getElementById('mPeriodWeekend');
+  if(c.period && c.period.from){
+    if(mPeriodFrom) mPeriodFrom.value=c.period.from||'';
+    if(mPeriodTo) mPeriodTo.value=c.period.to||c.period.from||'';
+    if(mPeriodType) mPeriodType.value=c.period.dayType||'full';
+    if(mPeriodWeekend) mPeriodWeekend.checked = c.period.countWeekends !== false;
+  } else {
+    if(mPeriodFrom) mPeriodFrom.value='';
+    if(mPeriodTo) mPeriodTo.value='';
+    if(mPeriodType) mPeriodType.value='full';
+    if(mPeriodWeekend) mPeriodWeekend.checked=true;
+  }
   document.getElementById('mRoute').value=c.route||'';
   const staffNumberEl=document.getElementById('mStaffNumber');
   if(staffNumberEl) staffNumberEl.value=c.staff_number||'';
@@ -3720,22 +3798,45 @@ async function saveModal(){
       const restLocation=document.getElementById('mRestLocation').value;
       const awayDepot = finalStatus==='R' && restLocation==='away' ? (normalizeCrewDepot(document.getElementById('mAwayDepot')?.value)||null) : null;
       const upd={monthly,status_segments,awayDepot};
+      const persistPeriod = statusUsesPeriod(finalStatus) ? readPeriodInputs() : null;
+      if(persistPeriod){
+        upd.monthly = applyPeriodToDays(c, finalStatus, persistPeriod);
+        upd.monthly[`d${editKey.day}`] = finalStatus;
+        upd.period = persistPeriod;
+      }
       if(editKey.day===CD){upd.status=finalStatus;upd.trainType=finalTrainType;upd.bookTime=finalBookTime;upd.since=fmtTime(new Date());upd.updatedBy=currentUser.username;if(finalStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);upd.restStarted=rs.toISOString();}else if(finalStatus!=='R')upd.restStarted=null;}
       await writeCrewDoc(editKey.depot,editKey.id,upd);
       setLog(`${c.name} Day ${editKey.day} saved with ${daySegments.length} segment${daySegments.length===1?'':'s'}.`);
     } else {
       const c=Object.values(state[editKey.depot]||{}).find(x=>x.id===editKey.id);if(!c){closeModal();return;}
       if(newStatus==='TO' && !confirmTripOffDay(c,CD)) return;
-      const monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
+      const period = readPeriodInputs();
+      if((newStatus==='T') && !period){
+        alert('Please enter the training period start date.');
+        return;
+      }
+      let monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
+      if(statusUsesPeriod(newStatus) && period){
+        monthly = applyPeriodToDays(c, newStatus, period);
+        if(CD < new Date(period.from+'T00:00:00') || CD > new Date((period.to||period.from)+'T00:00:00')){
+          // today outside the period window: keep the period but also set today
+          monthly[`d${CD}`]=newStatus;
+        }
+      }
+      const persistPeriod = statusUsesPeriod(newStatus) ? period : null;
       let restStarted=c.restStarted||null;
       if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);restStarted=rs.toISOString();}
       else if(newStatus!=='R')restStarted=null;
       const status_segments = buildStatusSegmentsForDay({...c,restStarted}, CD, newStatus);
       const restLocation=document.getElementById('mRestLocation').value;
       const awayDepot = newStatus==='R' && restLocation==='away' ? (normalizeCrewDepot(document.getElementById('mAwayDepot')?.value)||null) : null;
-      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,status_segments,awayDepot: newStatus==='R'?awayDepot:null};
+      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,status_segments,awayDepot: newStatus==='R'?awayDepot:null,period:persistPeriod};
       await writeCrewDoc(editKey.depot,editKey.id,upd);
-      setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${trainType?' ('+trainType+')':''}${bookTime?' @ '+bookTime:''}`);
+      let periodSnippet = '';
+      if(persistPeriod){
+        periodSnippet = ' (' + persistPeriod.from + (persistPeriod.to!==persistPeriod.from ? '→'+persistPeriod.to : '') + (persistPeriod.dayType!=='full' ? ', '+persistPeriod.dayType : '') + (persistPeriod.countWeekends ? '' : ', excl. weekends') + ')';
+      }
+      setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${periodSnippet}`);
     }
     setSyncStatus('ok','Saved');
   }catch(err){

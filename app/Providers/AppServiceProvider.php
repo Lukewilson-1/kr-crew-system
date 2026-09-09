@@ -2,7 +2,13 @@
 
 namespace App\Providers;
 
+use App\CrewMember;
+use App\Models\CrewRecord;
 use App\Models\ReportDefinition;
+use App\Observers\EloquentAuditObserver;
+use App\Permission;
+use App\Role;
+use App\User;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Pagination\PaginationState;
@@ -39,7 +45,28 @@ class AppServiceProvider extends ServiceProvider
         // sign-in would set a cookie that the next request cannot validate.
         EncryptCookies::except(['laravel_maintenance']);
 
+        $this->registerAuditObservers();
+
         $this->seedDefaultReports();
+    }
+
+    private function registerAuditObservers(): void
+    {
+        if (! Schema::hasTable('audit_logs')) {
+            return;
+        }
+
+        $sensitiveModels = [
+            User::class,
+            Role::class,
+            Permission::class,
+            CrewMember::class,
+            CrewRecord::class,
+        ];
+
+        foreach ($sensitiveModels as $model) {
+            $model::observe(EloquentAuditObserver::class);
+        }
     }
 
     private function seedDefaultReports(): void

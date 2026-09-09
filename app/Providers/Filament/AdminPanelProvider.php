@@ -95,6 +95,11 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 \Filament\View\PanelsRenderHook::BODY_START,
                 fn () => view('partials.maintenance-banner'),
+            )
+
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::BODY_START,
+                fn () => view('partials.break-glass-banner'),
             );
     }
 }

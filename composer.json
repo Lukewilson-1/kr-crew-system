@@ -2,6 +2,7 @@
     "name": "lukewilson-1/kr-crew-system",
     "description": "KR Crew System converted to Laravel",
     "type": "project",
+    "license": "proprietary",
     "require": {
         "php": "^8.2",
         "filament/filament": "^4.0",

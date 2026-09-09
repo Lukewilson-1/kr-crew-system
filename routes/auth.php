@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\BreakGlassController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
@@ -16,6 +17,13 @@ Route::middleware('guest')->group(function () {
         ->name('register');
 
     Route::post('register', [RegisteredUserController::class, 'store']);
+
+    Route::get('break-glass-login', [BreakGlassController::class, 'show'])
+        ->name('break-glass-login');
+
+    Route::post('break-glass-login', [BreakGlassController::class, 'handle'])
+        ->middleware('throttle:5,1')
+        ->name('break-glass-login.submit');
 
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
@@ -56,4 +64,7 @@ Route::middleware('auth')->group(function () {
 
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
+
+    Route::post('break-glass-logout', [BreakGlassController::class, 'logout'])
+        ->name('break-glass-logout');
 });

@@ -22,7 +22,7 @@ class AuthServiceProvider extends ServiceProvider
         \App\Models\StatusCode::class => \App\Policies\StatusCodePolicy::class,
         \App\Models\ReportDefinition::class => \App\Policies\ReportPolicy::class,
         \App\User::class => \App\Policies\UserPolicy::class,
-        \App\Models\Role::class => \App\Policies\RolePolicy::class,
+        \App\Role::class => \App\Policies\RolePolicy::class,
         \App\Models\RestLocation::class => \App\Policies\RestLocationPolicy::class,
         \App\Models\DutyRoster::class => \App\Policies\DutyRosterPolicy::class,
     ];

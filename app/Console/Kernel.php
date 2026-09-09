@@ -15,6 +15,8 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\SeedDefaultReports::class,
         \App\Console\Commands\CopyEndOfDayStatus::class,
         \App\Console\Commands\AutoCheckoutExpiredRest::class,
+        \App\Console\Commands\PruneAuditLogs::class,
+        \App\Console\Commands\RotateBreakGlassCredentials::class,
     ];
 
     /**
@@ -35,6 +37,9 @@ class Kernel extends ConsoleKernel
         // Bring the site back online automatically once scheduled maintenance
         // has passed its end time. Runs every minute.
         $schedule->command('maintenance:auto-deactivate')->everyMinute();
+
+        // Enforce the audit log retention policy (minimum 12 months).
+        $schedule->command('audit:prune --retention=365')->daily();
     }
 
     /**

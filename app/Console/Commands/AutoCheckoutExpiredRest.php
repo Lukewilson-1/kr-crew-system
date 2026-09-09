@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\AttendanceRecord;
-use App\Models\SystemNotification;
 use App\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -240,17 +239,14 @@ class AutoCheckoutExpiredRest extends Command
             'type' => 'running_room_auto_checkout',
         ];
 
-        $now = now();
-        foreach ($recipients as $username) {
-            SystemNotification::create([
-                'recipient_username' => $username,
-                'type' => 'running_room_auto_checkout',
-                'title' => $title,
-                'body' => $body,
-                'data' => $data,
-                'read_at' => null,
-            ]);
-        }
+        $notificationService = app(\App\Services\NotificationService::class);
+        $notificationService->notifyUsers(
+            $recipients,
+            $title,
+            $body,
+            'running_room_auto_checkout',
+            $data,
+        );
 
         $this->info(sprintf('  -> checked out %s from %s; notified %d user(s)', $record->staff_no, $roomName ?: '?', count($recipients)));
     }

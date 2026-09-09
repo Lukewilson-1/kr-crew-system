@@ -9,8 +9,8 @@
 
 This guide covers the deployment of the KR Crew System to an enterprise production server. It specifies:
 
-- **Minimum / recommended server requirements** sized for **~20 concurrent users**.
-- The supported software stack (PHP, MySQL, web server).
+- **Minimum / recommended server requirements** sized for **~20 concurrent users** (a root-access VPS so system cron can run the Laravel scheduler).
+- The supported software stack (PHP, MySQL, web server) and the cron daemon.
 - Step-by-step deployment, cache/link setup, and scheduled-task configuration.
 - First-boot verification and post-deployment security checklist.
 
@@ -20,25 +20,39 @@ This guide covers the deployment of the KR Crew System to an enterprise producti
 
 ## 2. Deployment Server Requirements (sized for ~20 concurrent users)
 
+> **Hosting model (required):** a **dedicated VPS / cloud IaaS VM with full OS-level access** (root/sudo + usable `crontab`). System cron (§5) is the primary scheduling path, and it **cannot** run on shared-hosting plans (no `crontab`, no persistent scheduler). Platforms such as Microsoft shared hosting / cPanel shared / PHP-only App Service plans are therefore **not** suitable for the default deployment. Budget ~US$30–60/month for an adequate VM; this is justified by the operational-criticality of the scheduled jobs.
+
 The application is a Laravel 11 + Filament 4 app with file-based sessions/cache, a vanilla-JS SPA, and a MySQL database. It is **I/O-light on the web tier** and **database-bound** on report generation. The figures below assume ~20 simultaneous users (peak daily-status entry + running-room ops + monthly register generation).
 
-### 2.1 RMinimum (acceptable) specification
+### 2.1 Minimum (acceptable) specification
 
 | Resource | Requirement | Notes |
 |---|---|---|
+| **Hosting model** | **VPS / cloud VM with root or sudo + `crontab` access** | Mandatory — system cron runs the Laravel scheduler (§5). Verify with `crontab -l` as the deploy user before committing |
 | **CPU** | 2 vCPU (≥2.0 GHz) | Report generation (monthly register) is the heaviest operation |
 | **Memory (RAM)** | **16 GB minimum / 32 GB recommended** | PHP-FPM pool + MySQL buffer pool; the biggest bottleneck for concurrent report generation |
-| **Storage** | 40GB SSD (OS) + 100 GB for database/logs | SSD strongly recommended for MySQL + sessions |
+| **Storage** | 100 GB SSD (OS + data) minimum / **200 GB SSD recommended** | SSD strongly recommended for MySQL, sessions, logs, audit trail, and database backups (retained ≥30 days) |
 | **Swap** | 10 GB swap | Safety under transient spikes |
+| **OS** | Ubuntu 22.04/24.04 LTS (or equivalent) | Linux with cron daemon active by default |
 
+> **Verdict for ~20 concurrent users:** a **2 vCPU / 16 GB RAM cloud VM with root/crontab access** (32 GB recommended) and **≥200 GB SSD** is the recommended target. This comfortably handles the workload, runs the system cron scheduler, and leaves generous headroom for report generation, audit retention, and backups.
 
-> **Verdict for ~20 concurrent users:** A **2 vCPU / 16 GB RAM** cloud VM is the recommended target. This comfortably handles the workload and leaves headroom for report generation and backups.
+### 2.2 Why this server (system-cron support)
+
+| Requirement | Purpose |
+|---|---|
+| **Root or sudo access** | Install/configure Nginx + PHP-FPM + MySQL; manage `crontab` |
+| **Working `crontab`** | `* * * * * php artisan schedule:run` runs the scheduler every minute (see §5) |
+| **Always-on VM** | The scheduler and web site must never sleep/park (excludes most cheap shared plans) |
+| **Static/public IP + TLS** | HTTPS endpoint for `cms.krc.co.ke`; Let's Encrypt or enterprise cert |
+| **SMTP egress (port 587)** | Email notifications deliver via SMTP (§8.5 of `SYSTEM_DOCUMENTATION.md`) |
 
 ### 2.3 Software stack requirements
 
 | Component | Version | Notes |
 |---|---|---|
 | **Operating System** | Ubuntu 22.04/24.04 LTS (or equivalent) | Any modern Linux |
+| **Scheduler** | **cron daemon** (preinstalled on Ubuntu; e.g. `cron`/`cronie`) | Runs `php artisan schedule:run` every minute (§5). Verify: `systemctl status cron` and `crontab -l` |
 | **Web server** | Nginx (recommended) or Apache 2.4 | PHP-FPM with Nginx is preferred |
 | **PHP** | **8.4** (min 8.2) — see `composer.json` | CLI + FPM |
 | **PHP extensions** | `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype`, `json`, `bcmath`, `fileinfo`, `redis` (optional), `intl` (optional) | Confirm `php -m` |
@@ -63,7 +77,9 @@ Before deploying, verify on a staging/local copy:
 - [ ] `php artisan migrate --force` runs against the target DB.
 - [ ] `.env` uses production values (`APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`).
 - [ ] `APP_KEY` is generated (`php artisan key:generate`) and is **not** the default.
-- [ ] Maintenance credentials, `CRON_TOKEN`, and break-glass credentials are rotated to strong production values.
+- [ ] Maintenance credentials and break-glass credentials are rotated to strong production values.
+- [ ] Scheduled tasks run via **system cron** (§5): the `* * * * * ... schedule:run` line is in `crontab` and `php artisan schedule:list` shows all 4 jobs.
+- [ ] `CRON_TOKEN` is rotated/strong **only if** using the shared-hosting webhook fallback (§5); otherwise it may be left unset.
 - [ ] `php artisan storage:link` has been created (if any file uploads are used).
 
 ---
@@ -76,7 +92,7 @@ Before deploying, verify on a staging/local copy:
 
 ```bash
 sudo apt update
-sudo apt install -y nginx php8.4-fpm php8.4-cli php8.4-mysql \
+sudo apt install -y nginx cron php8.4-fpm php8.4-cli php8.4-mysql \
   php8.4-mbstring php8.4-xml php8.4-curl php8.4-zip php8.4-bcmath \
   php8.4-gd php8.4-intl mysql-server composer unzip git
 ```
@@ -119,6 +135,18 @@ DB_HOST=127.0.0.1
 DB_DATABASE=cms
 DB_USERNAME=<app-user>
 DB_PASSWORD=<strong-password>
+
+# Email notifications (see SYSTEM_DOCUMENTATION.md §8.5)
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.office365.com
+MAIL_PORT=587
+MAIL_ENCRYPTION=tls
+MAIL_USERNAME=<smtp-account>
+MAIL_PASSWORD=<smtp-password>
+MAIL_FROM_ADDRESS=crew-system@krc.co.ke
+MAIL_FROM_NAME="KR Crew System"
+NOTIFICATIONS_EMAIL_ENABLED=true
+ALERT_EMAIL_RECIPIENTS=ict-security@krc.co.ke,ict-helpdesk@krc.co.ke
 ```
 
 ### 4.4 Set up the database (MySQL 8)
@@ -229,13 +257,13 @@ php_admin_value[upload_max_filesize] = 25M
 php_admin_value[post_max_size] = 28M
 ```
 
-Tune MySQL for 4 GB RAM (`/etc/mysql/mysql.conf.d/mysqld.cnf`):
+Tune MySQL for 16 GB RAM (use ~50–60% of system RAM; e.g. 8 G on 16 GB, 16 G on 32 GB — `/etc/mysql/mysql.conf.d/mysqld.cnf`):
 
 ```ini
 [mysqld]
-innodb_buffer_pool_size = 1G
-innodb_log_file_size = 128M
-max_connections = 100
+innodb_buffer_pool_size = 8G
+innodb_log_file_size = 256M
+max_connections = 200
 ```
 
 ```bash
@@ -255,14 +283,16 @@ sudo -u krcrew php artisan optimize
 
 ## 5. Scheduled tasks (critical)
 
-The app relies on scheduled jobs that **must** run even though shared hosting lacks a native scheduler. On a dedicated server, use the Laravel scheduler:
+The app relies on scheduled jobs that **must** run. On the target deployment (VPS/dedicated with `crontab` access) use **system cron with the Laravel scheduler** — this is the recommended, primary option:
 
 ```bash
 # Add to crontab (sudo crontab -e)
 * * * * * cd /var/www/kr-crew-system && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-The scheduler then runs (every minute check):
+> **Verify the cron line:** PHP must be reachable as `php` from `crontab`'s shell (add an absolute path, e.g. `/usr/bin/php`, if `which php` differs). The `cd` keeps Laravel's relative paths working regardless of `HOME`. Use a **web-accessible-host crontab** (`crontab -e` logged in as the `krcrew` user, or `sudo -u krcrew crontab -e`) so `storage/` file ownership stays consistent.
+
+The scheduler checks every minute and runs whichever of these is due:
 
 | Command | Frequency | Purpose |
 |---|---|---|
@@ -271,7 +301,13 @@ The scheduler then runs (every minute check):
 | `maintenance:auto-deactivate` | Every 1 min | Auto-exit maintenance mode |
 | `audit:prune --retention=365` | Daily | Enforces audit log retention (≥12 months) |
 
-> **Alternative (if shared hosting):** keep using the cron-job.org webhook (`/running-rooms/cron/auto-checkout?token=...`). You must separately trigger the daily/audit commands. On a dedicated server the Laravel scheduler above is the recommended path.
+Confirm the schedule is registered before/after deploy:
+
+```bash
+php artisan schedule:list
+```
+
+> **Fallback (shared hosting only):** if the hosting platform denies `crontab` access, keep the cron-job.org webhook (`/running-rooms/cron/auto-checkout?token=...`). Note this fallback only triggers the auto-checkout job — the daily `crew:copy-end-of-day-status` and `audit:prune` jobs must then be triggered another way (manual or a second webhook). System cron is preferred and covers all scheduled jobs automatically.
 
 ---
 
@@ -323,6 +359,9 @@ php artisan schedule:list
 # 6. Audit logging works (creates a system audit row)
 php artisan break-glass:rotate --no-audit > /dev/null  # or
 php artisan tinker --execute="\App\Services\AuditLogger::record('deploy','deploy_check','boot');"
+
+# 7. Email notifications deliver (sends a test email via SMTP)
+php artisan notifications:test-email ict-helpdesk@krc.co.ke
 ```
 
 ---
@@ -333,10 +372,11 @@ php artisan tinker --execute="\App\Services\AuditLogger::record('deploy','deploy
 - [ ] `SESSION_SECURE_COOKIE=true` (HTTPS only).
 - [ ] TLS 1.2+ enforced; HSTS header added in Nginx (suggested: `add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;`).
 - [ ] Default seeded `superadmin` password changed.
-- [ ] Maintenance credentials + `CRON_TOKEN` rotated from defaults.
+- [ ] Maintenance credentials rotated from defaults (`CRON_TOKEN` only if using the webhook fallback).
 - [ ] Break-glass disabled (`BREAK_GLASS_ENABLED=false`) unless an outage.
 - [ ] `.env` is **excluded** from version control and not web-accessible.
 - [ ] `storage/` and `bootstrap/cache/` not web-accessible.
+- [ ] SMTP credentials configured and a test email delivered (`php artisan notifications:test-email`).
 - [ ] Daily **database backup** scheduled (retained ≥30 days; see `SYSTEM_DOCUMENTATION.md` §7.5).
 - [ ] Audit-log prune verified (`php artisan audit:prune --retention=365`).
 - [ ] File/dir permissions: web server can only write `storage/`, `bootstrap/cache/`.

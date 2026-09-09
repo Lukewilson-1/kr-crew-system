@@ -10,7 +10,7 @@
 | **System name / ID** | KR Crew System (CM & RM System) · `cms.krc.co.ke` |
 | **Owner (product / engineering)** | Kenya Railways Corporation – ICT Division |
 | **Primary authors** | Engineering Team |
-| **Version** | 1.3 |
+| **Version** | 1.4 |
 | **Last updated** | 2026-09-09 |
 | **Status** | Draft |
 
@@ -22,6 +22,7 @@
 | v1.1 | 2026-09-09 | Engineering Team | Added audit logging implementation (§8.3), closed PII gap (§8.1, §9.7.3), appended AD/Entra SSO implementation plan (Appendix F) |
 | v1.2 | 2026-09-09 | Engineering Team | Implemented break-glass & emergency access (§9.10, `config/breakglass.php`); fixed model namespace inconsistencies; added deployment guide (`docs/DEPLOYMENT_GUIDE.md`); confirmed `users` table stores no `hire_date` |
 | v1.3 | 2026-09-09 | Engineering Team | Added Version 2 Features roadmap (§10): AD/Entra SSO, SMS notifications, driver schedules for trains, automated status changes, rest/leave notifications, and training-gap analysis; renumbered Glossary (§11) and References (§12) |
+| v1.4 | 2026-09-09 | Engineering Team | Implemented email notification service (§8.5): `NotificationService` (multi-channel in-app + email), `SystemNotificationMail` + KR-branded template, `config/notifications.php`, `email_delivered_at` tracking, `notifications:test-email` verification command; auto-checkout notifications now email HQ/booking officers |
 
 ---
 
@@ -60,10 +61,7 @@ This document provides a comprehensive description of the **KR Crew System** (al
 
 **Out of scope:**
 
-- External passenger-facing systems.
-- Financial/billing integration (not yet implemented).
 - Mobile-native applications (the frontend is browser-based SPA).
-- Legacy Firebase authentication (deprecated, not in active use).
 
 ### 2.4 Assumptions & Constraints
 
@@ -749,6 +747,42 @@ php artisan tinker --execute="
 | Data Protection Act (Kenya, 2019) | **Applicable — crew PII stored** (names, staff numbers, hire date, phone, email) | Audit logging implemented; encryption at rest, log mask/redaction of PII, DPIA and data-subject workflows still needed (see Section 9.7.3) |
 | OWASP Top 10 | Best practice | CSRF protection in place; XSS mitigated by Filament/Livewire; input validation implemented |
 
+### 8.5 Email Notification Service (v1.4)
+
+**Objective:** deliver notification emails for operational events (e.g., running-room auto-checkout, alerts to ICT Security/Helpdesk) in addition to the existing in-app `system_notifications` channel.
+
+**Implementation:**
+
+| Component | Location | Role |
+|---|---|---|
+| `NotificationService` | `app/Services/NotificationService.php` | Central service: `notify()` persists an in-app `SystemNotification` and delivers an email copy; `notifyUsers()` batches; `email()`/`emailAdmins()` send alert-channel emails without an in-app row |
+| `SystemNotificationMail` | `app/Mail/SystemNotificationMail.php` | Mailable (subject prefixed with the uppercased `type`, e.g. `[RUNNING_ROOM_AUTO_CHECKOUT] …`) |
+| Email template | `resources/views/email/system-notification.blade.php` | KR-branded HTML template (logo header, type badge, body, meta) |
+| Config | `config/notifications.php` | Email master switch (`NOTIFICATIONS_EMAIL_ENABLED`), alert recipients (`ALERT_EMAIL_RECIPIENTS`), retention placeholder |
+| Env template | `.env.example` | `MAIL_*` SMTP block + `NOTIFICATIONS_*` / `ALERT_EMAIL_RECIPIENTS` |
+| Migration | `2026_09_09_160000_add_email_delivery_to_system_notifications_table` | Adds `email_delivered_at` to `system_notifications` to track successful email copies |
+| Test command | `notifications:test-email {email?}` | Ops verification: sends a test email (`php artisan notifications:test-email ops@krc.co.ke`) |
+
+**Behaviour & guarantees:**
+
+- **Best-effort delivery:** a mail failure is logged (`Notification email delivery failed`) and never prevents the in-app notification from being recorded.
+- **Queue-aware:** when `QUEUE_CONNECTION` ≠ `sync`, emails are `queue()`d; on shared hosting (sync) they are sent synchronously.
+- **Audited:** notification creation flows through `SystemNotification`; delivery status is captured in `email_delivered_at`.
+- **Not PII-leaking:** emails carry operational content only; no credentials or sensitive personal data.
+
+**Email config (from `.env`):**
+
+```
+MAIL_MAILER=smtp            MAIL_HOST=smtp.office365.com
+MAIL_PORT=587               MAIL_ENCRYPTION=tls
+MAIL_USERNAME=...           MAIL_PASSWORD=...
+MAIL_FROM_ADDRESS=crew-system@krc.co.ke   MAIL_FROM_NAME="KR Crew System"
+NOTIFICATIONS_EMAIL_ENABLED=true
+ALERT_EMAIL_RECIPIENTS=ict-security@krc.co.ke,ict-helpdesk@krc.co.ke
+```
+
+**Wiring:** the existing auto-checkout notification (`Command\AutoCheckoutExpiredRest`, scheduled every 5 min) now routes through `NotificationService::notifyUsers()`, so HQ admins and depot booking officers receive both an in-app notification and an email copy.
+
 ---
 
 ## 9. Enterprise Security & Single Sign-On (SSO)
@@ -1077,7 +1111,7 @@ V2 extends the system from a **recording** platform to a **semi-automated operat
 | **Driver scheduling** | No train-to-driver assignment concept | **Driver schedules** linking drivers to specific trains/services |
 | **Crew status updates** | Manual entry + end-of-day copy | **Automated status transitions** driven by schedules |
 | **Rest / leave** | Manual rest tracking with eligibility calculation | **Automated rest & leave notifications** (pre-entitlement, e.g., annual leave) |
-| **Notifications** | In-app notifications only (SystemNotification) | **SMS notifications** to crew/staff (phone numbers already stored on `crew_members`) |
+| **Notifications** | In-app notifications + **email (v1.4, §8.5)** | **SMS notifications** to crew/staff (phone numbers already stored on `crew_members`) |
 | **Training** | Status code `T` (Training) exists, no records | **Training-gap analysis** — identify staff needing training, recertification, or competency-based deployment |
 
 **Business value:** fewer manual entries, lower human-error rate in status recording, faster operational reaction (rest/leave/training alerts), and a single enterprise identity for access.
@@ -1121,9 +1155,10 @@ V2 extends the system from a **recording** platform to a **semi-automated operat
 ```
 Laravel app
   └── NotificationService (app/Services)
+        ├── (v1.4, live) email channel ──→ SMTP (config/notifications.php) §8.5
         ├── (new) SmsService  ──→ SMS Gateway (Africas Talking / Twilio / enterprise SMPP)
         ├── (existing) in-app system_notifications table
-        └── audit_logs integration (every SMS event audited)
+        └── audit_logs integration (every notification event audited)
 ```
 
 - **Gateway abstraction:** single `SmsProvider` interface so the provider (Africa's Talking — common in Kenya — Twilio, or an enterprise SMPP aggregator) can be swapped without touching business logic.
@@ -1346,6 +1381,7 @@ training_courses                 training_records          (derived) competency 
 | Crew Configuration | `config/crew.php` |
 | Maintenance Configuration | `config/maintenance.php` |
 | Break-Glass Configuration | `config/breakglass.php` |
+| Notification Configuration | `config/notifications.php` |
 | Database Migrations | `database/migrations/` |
 | Role & Permission Seeders | `database/seeders/` |
 | Application Routes | `routes/web.php`, `routes/auth.php` |
@@ -1597,4 +1633,4 @@ Default: a user who authenticates but belongs to no mapped group gets **no role*
 
 ---
 
-_Document version 1.3 — Kenya Railways Corporation — ICT Division_
+_Document version 1.4 — Kenya Railways Corporation — ICT Division_

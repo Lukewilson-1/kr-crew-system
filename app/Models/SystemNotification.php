@@ -16,6 +16,7 @@ class SystemNotification extends Model
         'body',
         'data',
         'read_at',
+        'email_delivered_at',
     ];
 
     protected function casts(): array
@@ -23,7 +24,18 @@ class SystemNotification extends Model
         return [
             'data' => 'array',
             'read_at' => 'datetime',
+            'email_delivered_at' => 'datetime',
         ];
+    }
+
+    public function scopeEmailPending($query)
+    {
+        return $query->whereNull('email_delivered_at');
+    }
+
+    public function emailDelivered(): bool
+    {
+        return $this->email_delivered_at !== null;
     }
 
     public function scopeUnread($query)

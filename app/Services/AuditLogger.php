@@ -110,7 +110,7 @@ class AuditLogger
     {
         $normalized = strtolower($key);
 
-        if (in_array($normalized, ['password', 'pw', 'remember_token', 'secret', 'cron_token'], true)) {
+        if (in_array($normalized, ['password', 'remember_token', 'secret', 'cron_token'], true)) {
             return true;
         }
 

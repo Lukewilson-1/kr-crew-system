@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{{ asset('css/running-rooms.css') }}">
 </head>
 <body>
+    @include('partials.maintenance-banner')
     @php
         $user = auth()->user();
         $isAttendant = $user ? $user->isAttendant() : false;

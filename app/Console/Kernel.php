@@ -17,6 +17,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\AutoCheckoutExpiredRest::class,
         \App\Console\Commands\PruneAuditLogs::class,
         \App\Console\Commands\RotateBreakGlassCredentials::class,
+        \App\Console\Commands\RotateMaintenanceCredentials::class,
         \App\Console\Commands\SendTestEmail::class,
     ];
 

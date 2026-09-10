@@ -2,8 +2,7 @@
 
 namespace App\Filament\Pages;
 
-use App\User;
-use Filament\Actions\Action;
+use App\Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -76,7 +75,7 @@ class Maintenance extends Page implements HasForms
     {
         return $schema->components([
             Section::make('Maintenance credentials')
-                ->description('The hardcoded maintenance account is always reachable while the site is down. Your own HQ / superadmin credentials are also accepted.')
+                ->description('The maintenance account (config/maintenance.php) is the only credential accepted. Rotate it with `php artisan maintenance:rotate`.')
                 ->schema([
                     TextInput::make('username')
                         ->label('Email or username')
@@ -164,19 +163,8 @@ class Maintenance extends Page implements HasForms
         $identityMatches = $username === config('maintenance.username')
             || $username === config('maintenance.login');
 
-        if ($identityMatches && hash_equals((string) config('maintenance.password'), $password)) {
-            return true;
-        }
-
-        $user = User::query()
-            ->where('is_active', true)
-            ->where(function ($query) use ($username) {
-                $query->where('username', $username)
-                    ->orWhere('email', $username);
-            })
-            ->first();
-
-        return $user !== null && $user->isGlobalAccess() && $user->passwordMatches($password);
+        return $identityMatches
+            && hash_equals((string) config('maintenance.password'), $password);
     }
 
     protected function maintenanceSecret(): string
@@ -189,7 +177,7 @@ class Maintenance extends Page implements HasForms
         if (! $this->credentialsValid()) {
             Notification::make()
                 ->title('Invalid credentials.')
-                ->body('Use the maintenance account or your own HQ / superadmin credentials.')
+                ->body('Use the maintenance account credentials.')
                 ->danger()
                 ->send();
 
@@ -227,7 +215,7 @@ class Maintenance extends Page implements HasForms
         if (! $this->credentialsValid()) {
             Notification::make()
                 ->title('Invalid credentials.')
-                ->body('Use the maintenance account or your own HQ / superadmin credentials.')
+                ->body('Use the maintenance account credentials.')
                 ->danger()
                 ->send();
 

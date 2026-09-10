@@ -11,6 +11,7 @@ use App\Role;
 use App\User;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Pagination\PaginationState;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
@@ -32,10 +33,12 @@ class AppServiceProvider extends ServiceProvider
             base_path('vendor/laravel/framework/src/Illuminate/Pagination/resources/views')
         );
 
-        // Keep the maintenance sign-in reachable while the site is offline, and
-        // let the token-protected cron webhook keep running during maintenance.
+        // Keep the maintenance sign-in and control page reachable while the site is
+        // offline, and let the token-protected cron webhook keep running during
+        // maintenance.
         PreventRequestsDuringMaintenance::except([
             'maintenance-login',
+            'maintenance',
             'running-rooms/cron/auto-checkout',
         ]);
 
@@ -44,6 +47,24 @@ class AppServiceProvider extends ServiceProvider
         // decrypts cookies. It must therefore never be encrypted, or the maintenance
         // sign-in would set a cookie that the next request cannot validate.
         EncryptCookies::except(['laravel_maintenance']);
+
+        // The maintenance sign-in and control endpoints are the escape hatch during
+        // outages, so they must keep working even when the session or CSRF token is
+        // the very thing that is broken (a stale/expired session renders classic
+        // "419 Page Expired" on the control form). They are pass-phrase gated and
+        // every action is audited (operator, IP, user agent), so we explicitly
+        // exempt them from CSRF rather than lose access to a downed site.
+        VerifyCsrfToken::except([
+            'maintenance-login',
+            'maintenance',
+        ]);
+
+        // Keep a lightweight per-request maintenance flag so portal templates can
+        // render the "system under maintenance" banner for the maintenance
+        // operator for the entire time the site is down.
+        View::composer('*', function ($view) {
+            $view->with('maintenanceNotice', $this->maintenanceNotice());
+        });
 
         $this->registerAuditObservers();
 
@@ -153,5 +174,35 @@ class AppServiceProvider extends ServiceProvider
                 $definition
             );
         }
+    }
+
+    /**
+     * Maintenance state shared with every rendered view. Returns null when the
+     * site is online, or [active, started_at, ends_at, timezone] while the site
+     * is down so the portal templates can keep a banner visible for the entire
+     * maintenance period for the maintenance operator.
+     */
+    private function maintenanceNotice(): ?array
+    {
+        if (! app()->maintenanceMode()->active()) {
+            return null;
+        }
+
+        $data = [];
+        try {
+            $data = app()->maintenanceMode()->data();
+        } catch (\Throwable) {
+            $data = [];
+        }
+
+        $timezone = (string) config('maintenance.timezone');
+        $timezone = $timezone !== '' ? $timezone : 'Africa/Nairobi';
+
+        return [
+            'active' => true,
+            'started_at' => $data['started_at'] ?? null,
+            'ends_at' => $data['ends_at'] ?? null,
+            'timezone' => $timezone,
+        ];
     }
 }

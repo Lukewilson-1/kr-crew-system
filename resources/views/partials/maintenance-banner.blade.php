@@ -1,62 +1,42 @@
-@php
-    $active = app()->maintenanceMode()->active();
-    $endsAt = null;
-
-    if ($active) {
-        try {
-            $data = app()->maintenanceMode()->data();
-            if (filled($data['ends_at'] ?? null)) {
-                $endsAt = \Illuminate\Support\Carbon::parse($data['ends_at'])->toIso8601String();
-            }
-        } catch (\Throwable) {
-            $endsAt = null;
-        }
-    }
-@endphp
-
-@if ($active)
-    <div
-        x-data="{
-            endsAt: @js($endsAt),
-            now: Date.now(),
-            timer: null,
-            tick() { this.now = Date.now(); },
-            init() {
-                this.tick();
-                if (this.endsAt) this.timer = setInterval(() => this.tick(), 1000);
-            },
-            destroyed() { if (this.timer) clearInterval(this.timer); },
-            remaining() {
-                if (! this.endsAt) return null;
-                const ms = Date.parse(this.endsAt) - this.now;
-                if (ms <= 0) return 'ended';
-                const d = Math.floor(ms / 86400000);
-                const h = Math.floor((ms % 86400000) / 3600000);
-                const m = Math.floor((ms % 3600000) / 60000);
-                const pad = (v) => String(v).padStart(2, '0');
-                return d > 0
-                    ? `${d}d ${pad(h)}h ${pad(m)}m`
-                    : `${pad(h)}:${pad(m)}`;
-            },
-        }"
-        class="fi-maintenance-banner"
-        style="background: #6C1A23; color: #ffffff;"
-    >
-        <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-xs font-semibold tracking-wide">
-            <span class="inline-flex items-center gap-1.5 uppercase" style="letter-spacing: 0.06em;">
-                <span class="w-1.5 h-1.5 rounded-full inline-block" style="background: #FEC000;"></span>
-                Maintenance mode is ON
-            </span>
-
-            <template x-if="endsAt">
-                <span class="tabular-nums" x-text="`- ends in ${remaining()}`"></span>
-            </template>
-
-            <a href="{{ route('filament.admin.pages.maintenance') }}"
-               class="underline underline-offset-2"
-               style="color: #FEC000;">
-                Manage
-            </a>
+@if (! empty($maintenanceNotice['active'] ?? null))
+    @php
+        $endsAt = $maintenanceNotice['ends_at'] ?? null;
+        $timezone = $maintenanceNotice['timezone'] ?? 'Africa/Nairobi';
+    @endphp
+    <div class="kr-maintenance-banner" role="status">
+        <div class="kmb-left">
+            <span class="kmb-dot"></span>
+            <span class="kmb-title">SYSTEM UNDER MAINTENANCE</span>
+            @if ($endsAt)
+                <span class="kmb-sub">Scheduled to end at {{ \Illuminate\Support\Carbon::parse($endsAt)->timezone($timezone)->format('d M Y, H:i T') }}</span>
+            @else
+                <span class="kmb-sub">No scheduled end time</span>
+            @endif
         </div>
+        <a class="kmb-ctrl" href="{{ url('/maintenance') }}">Maintenance control&nbsp;&rarr;</a>
     </div>
+    <style>
+        .kr-maintenance-banner {
+            position: sticky;
+            top: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: #6C1A23;
+            color: #ffffff;
+            padding: 8px 16px;
+            font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            font-size: 13px;
+            line-height: 1.3;
+        }
+        .kmb-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .kmb-dot { width: 10px; height: 10px; border-radius: 50%; background: #FEC000; box-shadow: 0 0 0 4px rgba(254, 192, 0, .25); animation: kmb-pulse 1.6s infinite; flex-shrink: 0; }
+        @keyframes kmb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+        .kmb-title { font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+        .kmb-sub { opacity: .85; font-size: 12px; color: #ffd9d3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kmb-ctrl { color: #ffffff; background: rgba(255, 255, 255, .14); border-radius: 999px; padding: 4px 12px; font-weight: 600; text-decoration: none; font-size: 12px; white-space: nowrap; }
+        .kmb-ctrl:hover { background: rgba(255, 255, 255, .28); color: #ffffff; }
+    </style>
 @endif

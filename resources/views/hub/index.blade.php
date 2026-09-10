@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{{ asset('css/hub.css') }}">
 </head>
 <body>
+    @include('partials.maintenance-banner')
     <div id="hubPage">
         <div class="hub-bg"></div>
         <header class="hub-topbar">

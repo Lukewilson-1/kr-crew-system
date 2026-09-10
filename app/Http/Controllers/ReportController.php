@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ReportDefinition;
+use App\Reports\ReportRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -122,7 +123,7 @@ class ReportController extends Controller
         ]);
     }
 
-    public function dailyStatus()
+public function dailyStatus()
     {
         return redirect('/reports');
     }
@@ -145,5 +146,44 @@ class ReportController extends Controller
     public function printable()
     {
         return redirect('/reports');
+    }
+
+    /**
+     * Index of the built-in system reports (decision-support analytics).
+     */
+    public function systemIndex(Request $request)
+    {
+        $reports = ReportRegistry::for($request->user());
+
+        return view('reports.system', compact('reports'));
+    }
+
+    /**
+     * Render one system report with its filters applied.
+     */
+    public function systemShow(string $slug, Request $request)
+    {
+        $user = $request->user();
+        $report = ReportRegistry::find($slug) ?? abort(404);
+        abort_unless($report->allows($user), 403);
+
+        $filterValues = $report->resolveFilters($request, $user);
+        $result = $report->generate($request, $user, $filterValues);
+
+        return view('reports.show', compact('report', 'user', 'filterValues', 'result') + [
+            'logoDataUri' => $this->reportLogoDataUri(),
+        ]);
+    }
+
+    protected function reportLogoDataUri(): string
+    {
+        $logo = public_path('assets/logo.png');
+        if (is_file($logo)) {
+            $mime = function_exists('mime_content_type') ? (string) mime_content_type($logo) : 'image/png';
+
+            return 'data:'.($mime ?: 'image/png').';base64,'.base64_encode((string) file_get_contents($logo));
+        }
+
+        return '';
     }
 }

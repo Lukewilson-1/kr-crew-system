@@ -10,8 +10,8 @@
 | **System name / ID** | KR Crew System (CM & RM System) · `cms.krc.co.ke` |
 | **Owner (product / engineering)** | Kenya Railways Corporation – ICT Division |
 | **Primary authors** | Engineering Team |
-| **Version** | 1.4 |
-| **Last updated** | 2026-09-09 |
+| **Version** | 1.6 |
+| **Last updated** | 2026-09-10 |
 | **Status** | Draft |
 
 ### Change History
@@ -23,6 +23,8 @@
 | v1.2 | 2026-09-09 | Engineering Team | Implemented break-glass & emergency access (§9.10, `config/breakglass.php`); fixed model namespace inconsistencies; added deployment guide (`docs/DEPLOYMENT_GUIDE.md`); confirmed `users` table stores no `hire_date` |
 | v1.3 | 2026-09-09 | Engineering Team | Added Version 2 Features roadmap (§10): AD/Entra SSO, SMS notifications, driver schedules for trains, automated status changes, rest/leave notifications, and training-gap analysis; renumbered Glossary (§11) and References (§12) |
 | v1.4 | 2026-09-09 | Engineering Team | Implemented email notification service (§8.5): `NotificationService` (multi-channel in-app + email), `SystemNotificationMail` + KR-branded template, `config/notifications.php`, `email_delivered_at` tracking, `notifications:test-email` verification command; auto-checkout notifications now email HQ/booking officers |
+| v1.5 | 2026-09-09 | Engineering Team | Switched scheduler documentation from external cron-job.org webhook to system cron on the production VPS (see `docs/scheduled-tasks.md`); added Matters Arising download/print report (§8.6, route `GET /running-rooms/report/matters`): multi-room + period + status + category filters, KPIs, room/category summaries, and embedded photographic evidence; removed legacy `pw` password-hash bridge from `users` (migration `2026_09_09_170000_remove_legacy_pw_from_users`) |
+| v1.6 | 2026-09-10 | Engineering Team | Added Analytics & Decision-Support reports (§8.7): 13 built-in reports across Operations, Crew & Workforce, Matters Arising and Governance & Security with filters, print/download and KR letterhead (`app/Reports`, routes `/reports/system` and `/reports/system/{slug}`); restricted the maintenance gate to the maintenance account only (superadmin/HQ credentials no longer accepted), with a standalone control page `GET/POST /maintenance` to activate (optional scheduled end, anchored to `Africa/Nairobi`) or deactivate, target-account sign-in via `MAINTENANCE_LOGIN_AS`, audit events (`maintenance_login`, `maintenance_activated`, `maintenance_deactivated`, `maintenance_sessions_revoked`, `maintenance_credentials_rotated`), a `maintenance:rotate` command mirroring break-glass rotation, hard lock-down on activation (`MAINTENANCE_LOCKDOWN`: every session and `remember_token` revoked, operator bypass cookie dropped), CSRF exemptions for the maintenance endpoints so they survive broken sessions, and a persistent `System Under Maintenance` banner for the operator while the site is down |
 
 ---
 
@@ -70,7 +72,7 @@ This document provides a comprehensive description of the **KR Crew System** (al
 - Users access the system via modern browsers (Chrome, Edge, Firefox) on the Kenya Railways internal network or approved VPN.
 - Corporate identity infrastructure (Active Directory) is available for future SSO integration.
 - The Microsoft shared hosting environment provides PHP runtime and MySQL database access.
-- Scheduled tasks rely on an external cron-job.org webhook due to the absence of a native server scheduler.
+- The production server is a **Linux VPS with system cron** (see `docs/DEPLOYMENT_GUIDE.md` §5) running the Laravel scheduler for automated tasks.
 
 **Constraints:**
 
@@ -109,8 +111,8 @@ This document provides a comprehensive description of the **KR Crew System** (al
 | System | Relationship |
 |---|---|
 | **Active Directory / Azure AD** | Potential future identity provider for SSO |
-| **MySQL Database (`cms`)** | Primary data store, hosted on Microsoft infrastructure |
-| **cron-job.org** | External scheduler for automated tasks (auto-checkout, end-of-day status copy, maintenance deactivation) |
+| **MySQL Database (`cms`)** | Primary data store |
+| **System cron + Laravel scheduler** | Runs automated tasks (auto-checkout, end-of-day status copy, maintenance deactivation) |
 | **Filament Admin Panel** | Admin UI framework providing CRUD, RBAC, and dashboard widgets |
 | **Filament Apex Charts** | Visualization library for operational dashboards |
 | **Laravel Echo / Pusher** | Real-time event broadcasting (configured, usage TBD) |
@@ -376,8 +378,12 @@ php artisan view:cache
 | `DB_DATABASE` | MySQL database name (`cms`) |
 | `CREW_PAST_DAY_EDIT_WINDOW_DAYS` | Number of days crew status remains editable (default: 2) |
 | `CRON_TOKEN` | Secret token for cron webhook authentication |
-| `MAINTENANCE_USERNAME` | Maintenance mode admin username |
-| `MAINTENANCE_PASSWORD` | Maintenance mode admin password |
+| `MAINTENANCE_USERNAME` | Maintenance mode admin username (email alias) |
+| `MAINTENANCE_LOGIN` | Maintenance mode admin login (short alias) |
+| `MAINTENANCE_PASSWORD` | Maintenance mode admin password (rotate via `maintenance:rotate`) |
+| `MAINTENANCE_LOGIN_AS` | App account the maintenance sign-in operates as (default `superadmin`) |
+| `MAINTENANCE_LOCKDOWN` | Hard lockdown on activate (default `true`): wipes every session + "remember me" token and drops the operator's bypass cookie, so no one stays logged in — entry only via `/maintenance-login` |
+| `MAINTENANCE_TIMEZONE` | Timezone used to anchor scheduled end times (default `Africa/Nairobi`) |
 
 ### 5.7 API & Integration Details
 
@@ -391,11 +397,12 @@ php artisan view:cache
 | `GET /mysql/users/*` | User management data |
 | `GET /mysql/crew-view/*` | Crew view data (legacy admin-meta compatibility) |
 | `/running-rooms/api/*` | Running room data, crew search, records, checkout, matters, beds, options, notifications |
+| `GET /running-rooms/report/matters` | Standalone, print/downloadable "Matters Arising" report (multi-room, period, status, category; evidence embedded) — §8.6 |
 | `/reports/*` | Report builder, daily-status, monthly-register, utilization, absence, printable |
 
 **External integrations:**
 
-- **cron-job.org:** Scheduled webhook at `/running-rooms/cron/auto-checkout?token=...` (Job ID: 8273192, runs every 5 minutes) to trigger auto-checkout of rested crew.
+- **System cron + Laravel scheduler:** `* * * * * php artisan schedule:run` triggers auto-checkout (every 5 min), end-of-day status copy (00:01), and maintenance deactivation (every 1 min).
 
 **Webhooks / events:** Laravel Echo/Pusher is configured for real-time broadcasting (usage scope TBD).
 
@@ -477,8 +484,8 @@ php artisan view:cache
 
 - Laravel session-based authentication with a custom `Login` page supporting email-or-username entry.
 - Password verification via `User::passwordMatches()` with bcrypt hashing.
-- Legacy `pw` column bridge for gradual migration from plaintext/hashed legacy passwords.
-- Maintenance-mode authentication via separate `/maintenance-login` endpoint with hardcoded credentials.
+- The legacy `pw` password-hash column bridge was removed in v1.5 (migration `2026_09_09_170000_remove_legacy_pw_from_users`); password verification is now exclusively bcrypt.
+- Maintenance-mode authentication via the `/maintenance-login` endpoint (maintenance account only, rotated like break-glass via `maintenance:rotate`); standalone control page at `/maintenance`. Activating defaults to a hard lock-down (`MAINTENANCE_LOCKDOWN`): every session and `remember_token` is revoked and the operator's bypass cookie is dropped, so no one stays logged in — re-entry is only via `/maintenance-login`. While the site is down, a persistent `System Under Maintenance` banner is shown on every portal page for the maintenance operator. Both maintenance endpoints are CSRF-exempt (they are passphrase-gated and fully audited) so they keep working when sessions/CSRF are broken.
 
 **Authorization model:**
 
@@ -555,10 +562,10 @@ php artisan view:cache
 │  └──────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────┘
           ▲
-          │ Webhook (every 5 min)
+          │ system cron: php artisan schedule:run (every 1 min)
 ┌─────────┴───────────────────────────────────────────────┐
-│              EXTERNAL SCHEDULER                          │
-│         cron-job.org (Job ID: 8273192)                   │
+│              SCHEDULER (SYSTEM CRON)                     │
+│         Linux cron daemon + Laravel scheduler            │
 │         Triggers: auto-checkout, end-of-day,             │
 │                   maintenance deactivation               │
 └─────────────────────────────────────────────────────────┘
@@ -572,7 +579,7 @@ php artisan view:cache
 | **Crew Management Module** | Daily status tracking, roster management, rest eligibility | Laravel Services | JSON API endpoints, Filament widgets |
 | **Running Room Module** | Occupancy management, check-in/checkout, matters | Laravel Services + Controllers | JSON API endpoints (`/running-rooms/api/*`) |
 | **Report Engine** | Generate daily, monthly, utilization, and absence reports | Laravel Services | `/reports/*` endpoints |
-| **Scheduler (External)** | Automated periodic tasks | cron-job.org → webhook | `GET /running-rooms/cron/auto-checkout?token=...` |
+| **Scheduler** | Automated periodic tasks | System cron → Laravel scheduler | `* * * * * php artisan schedule:run` |
 
 ### 6.3 Infrastructure & Environments
 
@@ -581,9 +588,9 @@ php artisan view:cache
 | **Production** | Live system at `https://cms.krc.co.ke` | Kenya Railways internal network / VPN |
 | **Local Development** | Developer workstations | `php artisan serve` on localhost |
 
-**Hosting model:** Microsoft shared hosting (PHP + MySQL). No container orchestration, load balancing, or CDN currently in place.
+**Hosting model:** Linux VPS (see `docs/DEPLOYMENT_GUIDE.md` §2). No container orchestration, load balancing, or CDN currently in place.
 
-**Key infrastructure note:** The absence of a native server scheduler necessitates the external cron-job.org integration. This is a single point of failure for automated tasks — if the webhook is blocked or the cron-job.org service is unavailable, auto-checkout and end-of-day status copy will not run.
+**Key infrastructure note:** All automated tasks are driven by the **system cron daemon** running the Laravel scheduler once per minute, so there is no external scheduler dependency or single point of failure outside the server itself (see `docs/scheduled-tasks.md`).
 
 ### 6.4 Non-Functional Requirements
 
@@ -607,9 +614,9 @@ php artisan view:cache
 
 | Task | Frequency | Method |
 |---|---|---|
-| End-of-day crew status copy | Daily (automated) | Cron webhook → `crew:copy-end-of-day-status` |
-| Auto-checkout of rested crew | Every 5 minutes (automated) | Cron webhook → `running-rooms:auto-checkout-rested` |
-| Maintenance mode deactivation | Periodic (automated) | Cron webhook → `maintenance:auto-deactivate` |
+| End-of-day crew status copy | Daily (automated) | System cron → `crew:copy-end-of-day-status` |
+| Auto-checkout of rested crew | Every 5 minutes (automated) | System cron → `running-rooms:auto-checkout-rested` (token-protected webhook `GET /running-rooms/cron/auto-checkout` as fallback) |
+| Maintenance mode deactivation | Every minute (automated) | System cron → `maintenance:auto-deactivate` (fires only once the scheduled `ends_at` has passed; audited) |
 | Database backups | _(To be documented)_ | _(To be documented)_ |
 | User provisioning / deprovisioning | As needed | Manual via admin panel |
 
@@ -647,9 +654,9 @@ _(Enhanced request-ID logging is recommended — see Section 7.2.)_
 | Failure Mode | Diagnostic Steps | Resolution |
 |---|---|---|
 | Database connection failure | Check MySQL service status; verify `.env` credentials | Restart MySQL; verify credentials; check hosting status |
-| Cron webhook not firing | Check cron-job.org job status (ID: 827392); verify token validity | Restart cron job; verify `CRON_TOKEN` in `.env` |
+| Scheduled jobs not running | Check `systemctl status cron` and `crontab -l`; confirm the `schedule:run` line and PHP path | Restart cron; fix the crontab line (see `docs/DEPLOYMENT_GUIDE.md` §5); review `storage/logs/laravel.log` |
 | Auth failure (users locked out) | Check `users` table for account status; verify password hashes | Reset password via admin panel; check legacy `pw` column migration |
-| Maintenance mode stuck | Check `laravel_maintenance` cookie; verify `maintenance.php` config | Clear cookie; manually deactivate via `/maintenance-login` |
+| Maintenance mode stuck | Check `laravel_maintenance` cookie; verify `maintenance.php` config | Clear cookie; manually deactivate via `/maintenance` |
 
 **Escalation path:** ICT Helpdesk → ICT Division Manager → External hosting support (if infrastructure issue).
 
@@ -783,6 +790,67 @@ ALERT_EMAIL_RECIPIENTS=ict-security@krc.co.ke,ict-helpdesk@krc.co.ke
 
 **Wiring:** the existing auto-checkout notification (`Command\AutoCheckoutExpiredRest`, scheduled every 5 min) now routes through `NotificationService::notifyUsers()`, so HQ admins and depot booking officers receive both an in-app notification and an email copy.
 
+### 8.6 Matters Arising Report — download & print (v1.5)
+
+**Objective:** from the Running Rooms module, produce a professional, self-contained report of the issues raised (matters) with **all attached photographic evidence**, for download or printing.
+
+**Entry points:** "Download / print report" buttons on the **Matters Arising** and **Challenges Summary** toolbars open the report (carrying the current filters); the report page itself also has its own options panel.
+
+**Report page:** `GET /running-rooms/report/matters` → `RunningRoomController@mattersReport` → `resources/views/running_rooms/matters_report.blade.php`.
+
+| Capability | Detail |
+|---|---|
+| **Rooms (multi-select)** | "All rooms" or any combination of the user's visible rooms (`?room[]=1&room[]=2`); scope is enforced server-side via `visibleRoomIds()` — attendants always report on their own room only |
+| **Period** | Free `from`/`to` range; default = rolling window (`running_rooms.history_months`, default 6) so the report matches the on-screen register |
+| **Status & category** | Optional filters for `open`/`resolved` and matter category |
+| **Verdict set** | KPIs (total / open / resolved / resolution rate) + "Summary by room" + "Summary by category" tables + full matters register |
+| **Evidence** | Photos embedded as base64 data URIs (size cap `running_rooms.report_embed_max_bytes`, default 2 MB; larger/missing files fall back to an "view online" link), so printed and downloaded reports carry the evidence offline |
+| **Typography** | Helvetica (Helvetica Neue / Arial fallback) at 12 pt across the report, on screen and in print |
+| **Output** | "Print / Save as PDF" (browser print, A4 portrait, KR letterhead, page-break rules) and "Download (HTML)" — a single self-contained `.html` file that works offline |
+
+**Implementation:**
+
+- Route: `routes/web.php` → `running-rooms.matters-report` (under `auth`).
+- Controller: `RunningRoomController@mattersReport` (filters, scoping, evidence embedding via `embeddedPhoto()`, KPI/summary aggregation, brand logo data URI via `reportLogoDataUri()`).
+- View: fully self-contained (inline styles + embedded logo/images) so the downloaded HTML and the printed PDF carry no external dependencies.
+- SPA: `public/js/running-rooms.js` → `openMattersReport()` builds the URL from the active toolbar filters (room, status, category, from/to).
+
+**Governance:** data is scoped to the signed-in user's visible rooms; no PII beyond crew names/roles used in matters is exposed; evidence photos remain on-server (only the bounded, purpose-built embed is inlined into the generated report).
+
+---
+
+### 8.7 Analytics & Decision-Support Reports (v1.6)
+
+**Objective:** a set of built-in decision-support reports spanning operations, crew & workforce, matters arising, and governance & security, each renderable (filter → print → save as PDF → download HTML) like the Matters Arising report.
+
+**Index pages:** `GET /reports/system` (`reports.system`) lists every report the signed-in user may open, grouped by category; each card links to its own report page. A "Decision-support reports" button is present on `/reports`.
+
+**Report pages:** `GET /reports/system/{slug}` (`reports.system.show`) → `ReportController@systemShow` → `resources/views/reports/show.blade.php` (self-contained HTML, Helvetica 12, KR letterhead, print/download — same presentation family as §8.6).
+
+**Engine:** `app/Reports/` — `Contracts/SystemReport` (slug/title/category/icon/description/`allows()`/filters/generate); `BaseReport` (per-user room/depot scoping, shared rest-computation helpers: 12 h at the crew home depot, 10 h away); `ReportRegistry` (discovery + per-user filtering). Every report returns `kpis`, `sections` (title/note/columns/rows) and `filters_applied`, rendered by the shared view.
+
+| Report (route slug) | Category | Purpose |
+|---|---|---|
+| `depot-scorecard` | Operations | Monthly per-depot snapshot: crew strength, admissions, rest compliance, open/resolved matters |
+| `room-occupancy` | Operations | Bed utilisation %, average/peak occupancy per room, overflow days |
+| `rest-compliance` | Operations | Share of completed stays meeting the required rest (12 h home / 10 h away), by room |
+| `duty-turnaround` | Operations | Per-crew rest frequency, average rest duration, turnaround gap between rests |
+| `duty-coverage` | Crew & Workforce | Daily on-duty / resting / leave / sick / absent / training headcount per depot |
+| `rest-readiness` | Crew & Workforce | Live snapshot of crew currently on rest, elapsed vs required, READY flag |
+| `absence-heatmap` | Crew & Workforce | Daily leave, sick and absent per depot for a month |
+| `matter-aging` | Matters Arising | Open matters bucketed by age (0–3, 4–7, 8–14, 15–30, 31+ days) + oldest list |
+| `recurring-issues` | Matters Arising | Room × category recurrence counts to expose repeat problems (≥3 = recurring) |
+| `resolution-sla` | Matters Arising | Days-to-resolve per category/room, median, share within 3 and 7 days |
+| `secure-access` | Governance & Security | Break-glass session register: actor, target, IP, justification, expiry, failures |
+| `pii-audit` | Governance & Security | Who changed personnel records (users, crew members, crew records) and when |
+| `login-security` | Governance & Security | Account inventory: role, depot, last login, super-admin/HQ flags, inactive accounts |
+
+**Access control:** operational, crew and matters reports are available to every active user (data scoped to their visible rooms/depots); all three **Governance & Security** reports require `isGlobalAccess()` (`ReportRegistry` + `SystemReport::allows()`).
+
+**Implementation:** `app/Reports/…` report classes; `ReportController@systemIndex/systemShow`; routes `routes/web.php` (`reports.system`, `reports.system.show`).
+
+**Governance:** governance/security reports are privileged (global access only) and surfaced from the existing `audit_logs`; PII shown is limited to usernames/IPs already stored for audit purposes — this report set adds no new data collection.
+
 ---
 
 ## 9. Enterprise Security & Single Sign-On (SSO)
@@ -797,8 +865,8 @@ The KR Crew System currently implements **application-level authentication** usi
 
 ```
 Browser ←──HTTPS──→ Laravel App ←──TCP──→ MySQL Database
-                                              │
-                                    cron-job.org (webhook)
+                               │
+                   system cron (server-local scheduler)
 ```
 
 **Trust boundaries (target, with SSO):**
@@ -823,7 +891,7 @@ Browser ←──HTTPS──→ Laravel App ←──TCP──→ MySQL Database
 | **SSO via SAML 2.0** | Planned | Azure AD or Okta integration (see Section 9.2.2 and **Appendix F**) |
 | **SSO via OIDC/OAuth 2.0** | Planned | Alternative to SAML if IdP supports OIDC natively (**recommended** — see Appendix F) |
 | **Service Accounts** | Not implemented | Future: for API integrations and automated processes |
-| **Maintenance Mode Auth** | Active (restricted) | Separate credentials for system maintenance access |
+| **Maintenance Mode Auth** | Active (restricted) | Separate maintenance credential; activating signs out all sessions (hard lock-down) until re-entry via `/maintenance-login` |
 
 #### 9.2.2 SSO Integration Details (Planned)
 
@@ -1244,7 +1312,7 @@ train_services                driver_schedules                 crew_members (dri
 - `config/crew.php` extended with automation rules (enable flags, thresholds).
 - `StatusAutomationService` generating candidate transitions.
 - A Filament page/action "Apply suggested status changes" per depot/date.
-- Cron/webhook variant for end-of-day automation (reuse cron-job.org pattern).
+- Cron/webhook variant for end-of-day automation (either the system-cron scheduler or the retained fallback webhook).
 
 ### 10.6 Feature V2.E — Leave & Rest Notifications (pre-entitlement awareness)
 
@@ -1377,7 +1445,7 @@ training_courses                 training_records          (derived) competency 
 |---|---|
 | Project README | `README.md` |
 | Deployment Guide | `docs/DEPLOYMENT_GUIDE.md` |
-| Scheduled Tasks Documentation | `docs/scheduled-tasks-cron.md` |
+| Scheduled Tasks Documentation | `docs/scheduled-tasks.md` |
 | Crew Configuration | `config/crew.php` |
 | Maintenance Configuration | `config/maintenance.php` |
 | Break-Glass Configuration | `config/breakglass.php` |
@@ -1413,9 +1481,19 @@ CREW_PAST_DAY_EDIT_WINDOW_DAYS=2
 CRON_TOKEN=your-secure-token-here
 
 # Maintenance Mode
-MAINTENANCE_USERNAME=admin
-MAINTENANCE_LOGIN=maintenance
+MAINTENANCE_USERNAME=site@maintenance.com
+MAINTENANCE_LOGIN=sitemaintenance
 MAINTENANCE_PASSWORD=your-secure-password
+MAINTENANCE_LOGIN_AS=superadmin
+MAINTENANCE_LOCKDOWN=true
+MAINTENANCE_TIMEZONE=Africa/Nairobi
+
+# Break-Glass & Emergency Access
+BREAK_GLASS_ENABLED=false
+BREAK_GLASS_USERNAME=your-emergency-user
+BREAK_GLASS_PASSWORD=your-secure-password
+BREAK_GLASS_LOGIN_AS=superadmin
+BREAK_GLASS_SESSION_HOURS=8
 ```
 
 ### Appendix B: Seeded Roles & Permissions

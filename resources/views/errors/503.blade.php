@@ -105,10 +105,11 @@
         <span class="brand">Crew Management System</span>
         <h1>System under maintenance</h1>
         <p>
-            The system is temporarily offline. Authorised staff (superadmin, HQ,
-            or the maintenance account) can sign in below to continue working.
+            The system is temporarily offline. Authorised staff can sign in below
+            with the maintenance account to continue working.
         </p>
-        <a href="{{ url('/maintenance-login') }}">Sign in</a>
+        <a href="{{ url('/maintenance-login') }}">Sign in &amp; enter system</a><br><br>
+        <a href="{{ url('/maintenance') }}" style="color:#6C1A23;">Maintenance control</a>
     </div>
 </body>
 </html>

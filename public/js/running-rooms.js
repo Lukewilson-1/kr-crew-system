@@ -797,6 +797,18 @@
   }
 
   /* ═════════════════════════ MATTERS ARISING ════════════════════════════ */
+  function openMattersReport() {
+    const f = state.challengeFilters || {};
+    const params = new URLSearchParams();
+    if (f.room && f.room !== 'all') params.set('room', f.room);
+    if (f.status && f.status !== 'all') params.set('status', f.status);
+    if (f.category && f.category !== 'all') params.set('category', f.category);
+    if (f.from) params.set('from', f.from);
+    if (f.to) params.set('to', f.to);
+    if (!params.has('status') && state.mattersFilter && state.mattersFilter !== 'all') params.set('status', state.mattersFilter);
+    window.open('/running-rooms/report/matters' + (params.toString() ? '?' + params.toString() : ''), '_blank', 'noopener');
+  }
+
   function photoStrip(photos) {
     if (!Array.isArray(photos) || photos.length === 0) return '';
     return `<div class="rr-matter-photos">${photos.map((p) =>
@@ -839,6 +851,9 @@
             <option value="open"${filter === 'open' ? ' selected' : ''}>Open</option>
             <option value="resolved"${filter === 'resolved' ? ' selected' : ''}>Resolved</option>
           </select>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="rr-btn" id="rrReport" title="Open the printable/downloadable report">Download / print report</button>
         </div>
       </div>`;
 
@@ -890,6 +905,9 @@
 
     const filterEl = $('#rrMatterFilter', root);
     if (filterEl) filterEl.addEventListener('change', (e) => { state.mattersFilter = e.target.value; renderAll(); goTab('matters'); });
+
+    const reportBtn = $('#rrReport', root);
+    if (reportBtn) reportBtn.addEventListener('click', () => openMattersReport());
 
     $$('[data-m-toggle]', root).forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -1042,6 +1060,7 @@
         <div class="rr-field"><label>Category</label><select id="rrChCat">${catOptions}</select></div>
         <div class="rr-field"><label>From</label><input type="date" id="rrChFrom" value="${f.from}"></div>
         <div class="rr-field"><label>To</label><input type="date" id="rrChTo" value="${f.to}"></div>
+        <button class="rr-btn" id="rrChReport">Download / print report</button>
         <button class="rr-btn" id="rrChPrint">Print</button>
       </div>
       <div class="rr-print-area">
@@ -1072,6 +1091,8 @@
     bind('#rrChTo', 'to');
     const printBtn = $('#rrChPrint', root);
     if (printBtn) printBtn.addEventListener('click', () => window.print());
+    const reportBtn = $('#rrChReport', root);
+    if (reportBtn) reportBtn.addEventListener('click', () => openMattersReport());
   }
 
   /* ═════════════════════════ SETTINGS (admin) ═══════════════════════════ */

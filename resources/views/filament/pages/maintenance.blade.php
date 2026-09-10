@@ -21,7 +21,7 @@
 
                         <p class="mt-4 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
                             {{ $this->isMaintenanceActive()
-                                ? 'Visitors are being shown the maintenance page and must sign in with the maintenance account, or an HQ / superadmin account, to continue working.'
+                                ? 'Visitors are being shown the maintenance page and must sign in with the maintenance account to continue working.'
                                 : 'Everything is online. Use the toggle above to take the site offline for scheduled work or emergencies.' }}
                         </p>
                     </div>
@@ -96,7 +96,8 @@
 
                 <div class="mt-4 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
                     <span class="font-semibold">Tip:</span>
-                    The maintenance account is hardcoded and always reachable while the site is down, so you can
+                    Only the maintenance account can toggle maintenance. Credentials are rotated with
+                    <code>maintenance:rotate</code> and are always reachable while the site is down, so you can
                     never be locked out. Only HQ / superadmin accounts can access this page.
                 </div>
             </x-filament::section>

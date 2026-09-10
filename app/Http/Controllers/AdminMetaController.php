@@ -119,7 +119,6 @@ class AdminMetaController extends Controller
                     'role_code' => 'super_admin',
                     'permissions' => json_encode(['manage_depots', 'manage_users', 'manage_crew', 'manage_roles', 'manage_rosters', 'manage_reports']),
                     'password' => $passwordHash,
-                    'pw' => $passwordHash,
                     'is_hq' => true,
                     'is_super_admin' => true,
                     'is_active' => true,
@@ -433,10 +432,9 @@ class AdminMetaController extends Controller
                 'created_at' => now(),
             ];
 
-            if (isset($payload['password']) && trim((string) $payload['password']) !== '') {
+if (isset($payload['password']) && trim((string) $payload['password']) !== '') {
                 $passwordHash = $this->normalizePassword((string) $payload['password']);
                 $updateData['password'] = $passwordHash;
-                $updateData['pw'] = $passwordHash;
             }
 
             DB::table($table)->updateOrInsert(
@@ -588,7 +586,6 @@ class AdminMetaController extends Controller
                     'isSuperAdmin' => (bool) $row->is_super_admin,
                     'is_active' => (bool) $row->is_active,
                     'password' => $row->password ?? '',
-                    'legacy_pw' => $row->pw ?? '',
                 ];
             }
         }
@@ -606,7 +603,6 @@ class AdminMetaController extends Controller
                     'isSuperAdmin' => !empty($payload['isSuperAdmin']),
                     'is_active' => $payload['is_active'] ?? true,
                     'password' => $payload['password'] ?? '',
-                    'legacy_pw' => $payload['pw'] ?? '',
                 ];
             }
         }
@@ -620,7 +616,7 @@ class AdminMetaController extends Controller
             return response()->json(['error' => 'Account is inactive.'], 403);
         }
 
-        $hash = $user['password'] ?: ($user['legacy_pw'] ?? '');
+        $hash = $user['password'];
         $valid = $hash !== '' && Hash::check($password, $hash);
         if (!$valid) {
             RateLimiter::hit($throttleKey, 60);
@@ -629,16 +625,13 @@ class AdminMetaController extends Controller
 
         RateLimiter::clear($throttleKey);
 
-        // Promote a legacy hash and upgrade weak hashes to the canonical column.
-        if ((($user['password'] ?? '') === '' && ($user['legacy_pw'] ?? '') !== '')) {
-            $passwordHash = $hash;
-            if (password_needs_rehash($passwordHash, PASSWORD_BCRYPT)) {
-                $passwordHash = Hash::make($password);
-            }
+        // Upgrade weak hashes to the current canonical algorithm so they are
+        // re-hashed on the next password change.
+        if ($hash !== '' && password_needs_rehash($hash, PASSWORD_BCRYPT)) {
+            $passwordHash = Hash::make($password);
             if ($this->hasTable('users')) {
                 DB::table('users')->where('username', $username)->update([
                     'password' => $passwordHash,
-                    'pw' => $passwordHash,
                     'updated_at' => now(),
                 ]);
             }
@@ -659,7 +652,7 @@ class AdminMetaController extends Controller
             }
         }
 
-        unset($user['password'], $user['legacy_pw']);
+        unset($user['password']);
         return response()->json($user);
     }
 

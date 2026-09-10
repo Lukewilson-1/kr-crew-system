@@ -143,6 +143,176 @@ class RunningRoomController extends Controller
     }
 
     /**
+     * Standalone, print-ready "Matters Arising" report. Rendered as a fully
+     * self-contained HTML page (styles + brand assets inline, evidence photos
+     * embedded as base64 data URIs up to a size cap) so it can be printed to
+     * PDF or downloaded as a single HTML file that works offline.
+     */
+    public function mattersReport(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return redirect('/login');
+        }
+
+        if (! $user->canAccessRunningRooms()) {
+            return redirect('/');
+        }
+
+        $validator = Validator::make($request->query(), [
+            'from' => 'nullable|date_format:Y-m-d',
+            'to' => 'nullable|date_format:Y-m-d',
+            'status' => 'nullable|in:open,resolved',
+            'room' => 'nullable',
+            'category' => 'nullable|string|max:120',
+        ]);
+
+        if ($validator->fails()) {
+            abort(422, 'Invalid report filters.');
+        }
+
+        $roomIds = $this->visibleRoomIds($user);
+
+        // Multi-room selection: accepts ?room[]=1&room[]=2 (report options form)
+        // or a single ?room=1 (SPA toolbar). No selection = all visible rooms.
+        $rawRoom = $request->query('room');
+        $requestedRoomIds = $rawRoom === null ? [] : (array) $rawRoom;
+        $selectedRoomIds = array_values(array_filter(array_map('intval', $requestedRoomIds)));
+        $selectedRoomIds = array_values(array_intersect($selectedRoomIds, $roomIds));
+
+        $query = Matter::query()
+            ->with('photos')
+            ->whereIn('room_id', ! empty($selectedRoomIds) ? $selectedRoomIds : $roomIds);
+
+        $status = $validator->validated()['status'] ?? null;
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $category = $validator->validated()['category'] ?? null;
+        if ($category) {
+            $query->where('category', $category);
+        }
+
+        $from = $validator->validated()['from'] ?? null;
+        $to = $validator->validated()['to'] ?? null;
+
+        // Match the rolling window shown on screen when no explicit range is given.
+        if ($from === null && $to === null) {
+            $from = now()->subMonths(max(1, (int) config('running_rooms.history_months', 6)))->toDateString();
+        }
+        if ($from) {
+            $query->where('date', '>=', $from);
+        }
+        if ($to) {
+            $query->where('date', '<=', $to);
+        }
+
+        $matters = $query->orderBy('date', 'desc')->orderBy('id', 'desc')->get();
+
+        $rooms = Room::query()
+            ->whereIn('id', $roomIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'depot_code']);
+
+        $roomNames = $rooms->pluck('name', 'id');
+
+        $byRoom = [];
+        $byCategory = [];
+        foreach ($matters as $matter) {
+            $name = $roomNames[$matter->room_id] ?? ('Room #'.$matter->room_id);
+            $byRoom[$name] ??= ['total' => 0, 'open' => 0, 'resolved' => 0];
+            $byRoom[$name]['total']++;
+            $byRoom[$name][$matter->status === 'open' ? 'open' : 'resolved']++;
+            $byCategory[$matter->category] = ($byCategory[$matter->category] ?? 0) + 1;
+        }
+
+        ksort($byRoom);
+        uksort($byCategory, fn ($a, $b) => $byCategory[$b] <=> $byCategory[$a]);
+
+        $categories = array_values(array_unique(array_filter(array_merge(
+            $this->categories(),
+            array_keys($byCategory),
+            $category ? [$category] : [],
+        ))));
+
+        return view('running_rooms.matters_report', [
+            'logoDataUri' => $this->reportLogoDataUri(),
+            'rooms' => $rooms,
+            'matters' => $matters->map(function (Matter $matter) use ($roomNames) {
+                return [
+                    'ticket_no' => $matter->ticket_no,
+                    'date' => $matter->date?->format('d M Y'),
+                    'room' => $roomNames[$matter->room_id] ?? ('Room #'.$matter->room_id),
+                    'category' => $matter->category,
+                    'status' => $matter->status,
+                    'reported_by' => $matter->reported_by ?: '—',
+                    'resolved_date' => $matter->resolved_date?->format('d M Y'),
+                    'description' => $matter->description ? (string) $matter->description->toHtml() : '',
+                    'photos' => $matter->photos->map(fn (MatterPhoto $photo) => $this->embeddedPhoto($photo))->values(),
+                ];
+            })->values(),
+            'byRoom' => $byRoom,
+            'byCategory' => $byCategory,
+            'categories' => $categories,
+            'scope' => [
+                'roomIds' => $selectedRoomIds,
+                'roomsAll' => $rooms->pluck('name')->all(),
+                'roomsSelected' => collect($selectedRoomIds)
+                    ->map(fn ($id) => $roomNames[$id] ?? null)
+                    ->filter()
+                    ->values()
+                    ->all(),
+                'status' => $status,
+                'category' => $category,
+                'from' => $from,
+                'to' => $to,
+            ],
+            'generatedBy' => $user->name ?: $user->username,
+        ]);
+    }
+
+    /**
+     * Embed a matter photo as a base64 data URI (bounded size) so downloaded and
+     * printed reports carry the original evidence offline. Oversized or missing
+     * files fall back to a plain web URL.
+     */
+    protected function embeddedPhoto(MatterPhoto $photo): array
+    {
+        $url = asset($photo->filename);
+        $path = public_path($photo->filename);
+
+        if (is_file($path)) {
+            $maxBytes = max(64 * 1024, (int) config('running_rooms.report_embed_max_bytes', 2 * 1024 * 1024));
+            $size = filesize($path);
+            if ($size > 0 && $size <= $maxBytes) {
+                $mime = function_exists('mime_content_type') ? (string) mime_content_type($path) : null;
+                if ($mime && str_starts_with($mime, 'image/')) {
+                    return [
+                        'src' => 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path)),
+                        'embedded' => true,
+                        'url' => $url,
+                    ];
+                }
+            }
+        }
+
+        return ['src' => $url, 'embedded' => false, 'url' => $url];
+    }
+
+    protected function reportLogoDataUri(): string
+    {
+        $logo = public_path('assets/logo.png');
+        if (is_file($logo)) {
+            $mime = function_exists('mime_content_type') ? (string) mime_content_type($logo) : 'image/png';
+            return 'data:'.($mime ?: 'image/png').';base64,'.base64_encode((string) file_get_contents($logo));
+        }
+
+        return '';
+    }
+
+    /**
      * Rooms the user may manage. Attendants are tied to one room; depot users
      * (booking/station officers) may only manage the rooms in their own depot;
      * HQ/admin users see every room. A depot user still sees the rest status of

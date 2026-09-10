@@ -11,9 +11,14 @@ use Illuminate\Support\Facades\Route;
 require __DIR__.'/auth.php';
 
 // Maintenance-mode sign-in. This route stays reachable while the site is down
-// so visitors can authenticate with the hardcoded maintenance credentials.
+// so visitors can authenticate with the maintenance credentials.
 Route::get('/maintenance-login', [MaintenanceController::class, 'showLogin'])->name('maintenance.login');
 Route::post('/maintenance-login', [MaintenanceController::class, 'login'])->name('maintenance.login.attempt');
+
+// Standalone maintenance control page: activate (with optional schedule) or
+// deactivate maintenance using the maintenance credentials.
+Route::get('/maintenance', [MaintenanceController::class, 'control'])->name('maintenance.control');
+Route::post('/maintenance', [MaintenanceController::class, 'controlSubmit'])->name('maintenance.control.attempt');
 
 // Public authentication endpoint used by the in-app sign-in panel. It is
 // session-less (JSON), but hardened: it uses Auth::attempt (bcrypt only),
@@ -51,13 +56,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/utilization', [App\Http\Controllers\ReportController::class, 'utilization'])->name('reports.utilization');
     Route::get('/reports/absence', [App\Http\Controllers\ReportController::class, 'absence'])->name('reports.absence');
     Route::get('/reports/printable', [App\Http\Controllers\ReportController::class, 'printable'])->name('reports.printable');
+    Route::get('/reports/system', [App\Http\Controllers\ReportController::class, 'systemIndex'])->name('reports.system');
+    Route::get('/reports/system/{slug}', [App\Http\Controllers\ReportController::class, 'systemShow'])->name('reports.system.show');
     Route::get('/running-rooms', [RunningRoomController::class, 'index'])->name('running-rooms.index');
+    Route::get('/running-rooms/report/matters', [RunningRoomController::class, 'mattersReport'])->name('running-rooms.matters-report');
     Route::get('/running-rooms/monthly', [RunningRoomController::class, 'index'])->name('running-rooms.monthly');
     Route::get('/running-rooms/challenges', [RunningRoomController::class, 'index'])->name('running-rooms.challenges');
     Route::get('/running-rooms/settings', [RunningRoomController::class, 'index'])->name('running-rooms.settings');
-Route::get('/running-rooms/api/data', [RunningRoomController::class, 'data']);
-Route::get('/running-rooms/api/crew/search', [RunningRoomController::class, 'crewSearch']);
-Route::get('/running-rooms/api/crew/{staffNo}', [RunningRoomController::class, 'crewLookup']);
+    Route::get('/running-rooms/api/data', [RunningRoomController::class, 'data']);
+    Route::get('/running-rooms/api/crew/search', [RunningRoomController::class, 'crewSearch']);
+    Route::get('/running-rooms/api/crew/{staffNo}', [RunningRoomController::class, 'crewLookup']);
     Route::post('/running-rooms/api/records', [RunningRoomController::class, 'storeRecord'])->middleware('throttle:120,1');
     Route::post('/running-rooms/api/records/{id}/checkout', [RunningRoomController::class, 'checkoutRecord'])->middleware('throttle:120,1');
     Route::delete('/running-rooms/api/records/{id}', [RunningRoomController::class, 'deleteRecord'])->middleware('throttle:120,1');

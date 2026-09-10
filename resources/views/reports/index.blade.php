@@ -10,7 +10,10 @@
             </div>
             <p style="margin:6px 0 0 16px;color:#555555;">Available reports are managed from the admin panel.</p>
         </div>
-        <a href="/admin/reports" style="padding:9px 16px;border-radius:8px;background:#681828;color:#fff;text-decoration:none;font-weight:600;font-size:13px;">Manage reports</a>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <a href="{{ route('reports.system') }}" style="padding:9px 16px;border-radius:8px;background:#681828;color:#fff;text-decoration:none;font-weight:600;font-size:13px;">Decision-support reports</a>
+            <a href="/admin/reports" style="padding:9px 16px;border-radius:8px;background:#f6f7f9;border:1px solid #d9dee7;color:#1a1a1a;text-decoration:none;font-weight:600;font-size:13px;">Manage reports</a>
+        </div>
     </div>
 
     @if($reports->isEmpty())

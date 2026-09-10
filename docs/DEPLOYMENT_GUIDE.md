@@ -115,7 +115,7 @@ sudo -u krcrew git pull origin main   # or copy release artifact here
 cd /var/www/kr-crew-system
 sudo -u krcrew cp .env.example .env
 sudo -u krcrew php artisan key:generate
-# Edit .env with production values (see §6 below)
+# Edit .env with production values (see §6 mail and §7 break-glass below)
 ```
 
 **Key `.env` values for production:**
@@ -307,11 +307,85 @@ Confirm the schedule is registered before/after deploy:
 php artisan schedule:list
 ```
 
-> **Fallback (shared hosting only):** if the hosting platform denies `crontab` access, keep the cron-job.org webhook (`/running-rooms/cron/auto-checkout?token=...`). Note this fallback only triggers the auto-checkout job — the daily `crew:copy-end-of-day-status` and `audit:prune` jobs must then be triggered another way (manual or a second webhook). System cron is preferred and covers all scheduled jobs automatically.
+> **Fallback (shared hosting only):** if the hosting platform denies `crontab` access, the token-protected webhook `/running-rooms/cron/auto-checkout?token=...` can trigger the auto-checkout job. Note this fallback only triggers auto-checkout — the daily `crew:copy-end-of-day-status` and `audit:prune` jobs must then be triggered another way (manual or a second scheduler). System cron (above) is the supported path and covers all scheduled jobs automatically.
 
 ---
 
-## 6. Break-glass & emergency access setup
+## 6. Mail / email notification setup
+
+Email delivery is a **required** part of the operational alerting chain: HQ admins and depot booking officers receive an email copy for auto-checkout notifications, and ICT Security/Helpdesk receive alert-channel emails. Delivery is best-effort — a failure is logged (`Notification email delivery failed`) and never blocks the in-app notification.
+
+### 6.1 Prerequisites
+
+| Prerequisite | Detail |
+|---|---|
+| **SMTP account** | An authenticated SMTP mailbox (recommended: a dedicated service account, e.g. `crew-system@krc.co.ke`). On KR's Microsoft 365 this is the **smtp.office365.com** endpoint |
+| **Egress on port 587** | Server outbound TCP **587** (STARTTLS) must be allowed in the VPS firewall/security group |
+| **SPF/DKIM/DMARC** | Publish SPF to allow the VPS IP to send on behalf of `krc.co.ke`; align DKIM per provider docs (otherwise recipient mail servers may quarantine alerts) |
+
+### 6.2 Configure SMTP in `.env`
+
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.office365.com
+MAIL_PORT=587
+MAIL_ENCRYPTION=tls
+MAIL_USERNAME=crew-system@krc.co.ke
+MAIL_PASSWORD=<smtp-account-password>
+
+# From address shown to recipients
+MAIL_FROM_ADDRESS=crew-system@krc.co.ke
+MAIL_FROM_NAME="KR Crew System"
+
+# Master switch for email copies of notifications
+NOTIFICATIONS_EMAIL_ENABLED=true
+
+# Operational / security alert recipients (comma-separated)
+ALERT_EMAIL_RECIPIENTS=ops@krc.co.ke,ict@krc.co.ke
+```
+
+> **Microsoft 365 note:** use an app password or modern-auth-enabled SMTP credential.
+> Enable **SMTP AUTH** for the mailbox in Exchange admin (Settings → Mail flow → SMTP AUTH) or the `Set-CASMailbox -SmtpClientAuthenticationDisabled $false` cmdlet, otherwise the send fails with `535 5.7.3 Authentication unsuccessful`.
+
+After editing, refresh the cached config on the server:
+
+```bash
+sudo -u krcrew php artisan config:clear
+sudo -u krcrew php artisan optimize
+```
+
+### 6.3 Test email delivery
+
+Send a test message (no recipient arg uses the first `ALERT_EMAIL_RECIPIENTS` entry; give one explicitly to target a mailbox):
+
+```bash
+sudo -u krcrew php artisan notifications:test-email ictsupport@krc.co.ke
+```
+
+Expect: `Test email queued/sent to ictsupport@krc.co.ke.` — then check the mailbox (including Junk, first time only).
+
+**Troubleshooting** (`storage/logs/laravel.log`):
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `Connection could not be established … 535` | SMTP AUTH disabled / wrong password | Enable SMTP AUTH; verify the mailbox credential |
+| `Connection … timed out` | Egress 587 blocked | Open port 587 in firewall/security group |
+| No email but no error | `NOTIFICATIONS_EMAIL_ENABLED=false` | Set to `true`, `config:clear` |
+| Email not delivered in-app banner | In-app row still created (best-effort) | Fix SMTP; in-app notifications unaffected |
+| Recipient never receives | SPF/DKIM missing | Add SPF record; check server IP ranges |
+
+### 6.4 Verification checklist (email)
+
+- [ ] `NOTIFICATIONS_EMAIL_ENABLED=true` and SMTP credentials populated in `.env`.
+- [ ] Outbound TCP 587 allowed from the VPS.
+- [ ] `php artisan notifications:test-email <mailbox>` delivers.
+- [ ] Auto-checkout run (or `running-rooms:auto-checkout-rested`) produces an email; confirmed via `laravel.log` + mailbox.
+- [ ] `ALERT_EMAIL_RECIPIENTS` points to live ICT addresses.
+- [ ] SPF record published so KR mail servers accept sender.
+
+---
+
+## 7. Break-glass & emergency access setup
 
 Break-glass credentials are **disabled by default**. When required:
 
@@ -336,9 +410,34 @@ php artisan break-glass:rotate --update-env
 
 > Break-glass is intended for **SSO/local-login outages**. Every attempt (success and failure) is written to `audit_logs`. Rotate credentials quarterly per Section 9.10 of the system documentation.
 
+### 7.1 Maintenance account setup & rotation
+
+The maintenance account is the **only** credential that can pass the maintenance gate (`/maintenance-login` and the control page `/maintenance`). Set **production** `.env`:
+
+```env
+MAINTENANCE_USERNAME=site@maintenance.com
+MAINTENANCE_LOGIN=sitemaintenance
+MAINTENANCE_PASSWORD=<strong-generated-value>
+MAINTENANCE_LOGIN_AS=superadmin
+MAINTENANCE_LOCKDOWN=true
+MAINTENANCE_TIMEZONE=Africa/Nairobi
+```
+
+`MAINTENANCE_LOCKDOWN=true` (default) means **activating maintenance signs out every session across the system** (file + DB session store, and "remember me" tokens) and removes the operator's bypass cookie — nobody stays logged in. The only way back in is `/maintenance-login` with the maintenance credentials (which signs in as `MAINTENANCE_LOGIN_AS` and re-issues the bypass cookie). While maintenance is active, a `System Under Maintenance` banner stays visible on every portal page for the operator; scheduled end times are anchored to `MAINTENANCE_TIMEZONE` (default `Africa/Nairobi`).
+
+Generate a passphrase and write it back to `.env` (mirrors `break-glass:rotate`):
+
+```bash
+php artisan maintenance:rotate --update-env
+```
+
+- Rotate the maintenance passphrase **quarterly with the break-glass passphrase**.
+- The maintenance sign-in operates as `MAINTENANCE_LOGIN_AS` (default `superadmin`) once the maintenance credentials are accepted.
+- All maintenance activity (login, activate, deactivate, credential rotation) is written to `audit_logs`.
+
 ---
 
-## 7. Post-deployment verification
+## 8. Post-deployment verification
 
 ```bash
 # 1. App responds
@@ -361,12 +460,12 @@ php artisan break-glass:rotate --no-audit > /dev/null  # or
 php artisan tinker --execute="\App\Services\AuditLogger::record('deploy','deploy_check','boot');"
 
 # 7. Email notifications deliver (sends a test email via SMTP)
-php artisan notifications:test-email ict-helpdesk@krc.co.ke
+php artisan notifications:test-email ictsupport@krc.co.ke
 ```
 
 ---
 
-## 8. Post-deployment security checklist
+## 9. Post-deployment security checklist
 
 - [ ] `APP_DEBUG=false` and `APP_ENV=production`.
 - [ ] `SESSION_SECURE_COOKIE=true` (HTTPS only).
@@ -383,7 +482,7 @@ php artisan notifications:test-email ict-helpdesk@krc.co.ke
 
 ---
 
-## 9. Rollback
+## 10. Rollback
 
 1. Revert code to the previous release (git tag or previous artifact).
 2. `composer install --no-dev --optimize-autoloader`.
@@ -393,7 +492,7 @@ php artisan notifications:test-email ict-helpdesk@krc.co.ke
 
 ---
 
-## 10. Recommended backup strategy (~20 concurrent users)
+## 11. Recommended backup strategy (~20 concurrent users)
 
 | Item | Frequency | Retention |
 |---|---|---|
@@ -408,8 +507,8 @@ php artisan notifications:test-email ict-helpdesk@krc.co.ke
 
 ---
 
-## 11. Reference
+## 12. Reference
 
 - System documentation: `docs/SYSTEM_DOCUMENTATION.md`
-- Scheduled tasks: `docs/scheduled-tasks-cron.md`
+- Scheduled tasks: `docs/scheduled-tasks.md`
 - Composer config: `composer.json` (PHP ^8.2, Laravel ^11, Filament ^4)

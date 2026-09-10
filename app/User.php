@@ -38,7 +38,6 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'name',
         'password',
-        'pw',
         'depot_code',
         'role_code',
         'permissions',
@@ -48,7 +47,7 @@ class User extends Authenticatable implements FilamentUser
         'metadata',
     ];
 
-    protected $hidden = ['password', 'pw'];
+    protected $hidden = ['password'];
 
     protected $casts = [
         'permissions' => 'array',
@@ -92,7 +91,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function getAuthPassword(): string
     {
-        return (string) ($this->getAttribute('password') ?: $this->getAttribute('pw') ?: '');
+        return (string) $this->getAttribute('password') ?: '';
     }
 
     public function getAuthIdentifierName(): string
@@ -160,26 +159,12 @@ class User extends Authenticatable implements FilamentUser
 
     public function passwordMatches(string $plainPassword): bool
     {
-        $canonicalHash = (string) ($this->getAttribute('password') ?? '');
-        $legacyHash = (string) ($this->getAttribute('pw') ?? '');
-        $candidateHashes = array_values(array_filter([$canonicalHash, $legacyHash]));
-
-        foreach ($candidateHashes as $stored) {
-            if ($stored === '') {
-                continue;
-            }
-
-            if (Hash::check($plainPassword, $stored)) {
-                if ($canonicalHash === '' && $legacyHash !== '') {
-                    $this->forceFill(['password' => $stored, 'pw' => $stored]);
-                    $this->saveQuietly();
-                }
-
-                return true;
-            }
+        $storedHash = (string) ($this->getAttribute('password') ?? '');
+        if ($storedHash === '') {
+            return false;
         }
 
-        return false;
+        return Hash::check($plainPassword, $storedHash);
     }
 
     public function setPasswordAttribute(?string $value): void
@@ -190,25 +175,6 @@ class User extends Authenticatable implements FilamentUser
 
         $hashed = $this->isPasswordHash($value) ? $value : Hash::make($value);
         $this->attributes['password'] = $hashed;
-        $this->attributes['pw'] = $hashed;
-    }
-
-    public function setPwAttribute(?string $value): void
-    {
-        if ($value === null || $value === '') {
-            return;
-        }
-
-        if ($this->isPasswordHash($value)) {
-            $this->attributes['pw'] = $value;
-            $this->attributes['password'] ??= $value;
-
-            return;
-        }
-
-        $hashed = Hash::make($value);
-        $this->attributes['pw'] = $hashed;
-        $this->attributes['password'] ??= $hashed;
     }
 
     private function isPasswordHash(string $value): bool

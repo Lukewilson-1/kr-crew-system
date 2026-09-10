@@ -42,6 +42,7 @@
         <script src="{{ asset('js/notification-bell.js') }}"></script>
     </head>
     <body>
+        @include('partials.maintenance-banner')
         <div id="syncBadge" class="hide"><div class="sd sd-ok" id="syncDot"></div><span id="syncLabel">Connected</span></div>
 
         <div id="app">

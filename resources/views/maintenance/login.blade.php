@@ -157,9 +157,13 @@
         <h1>System under maintenance</h1>
         <p>
             The system is temporarily offline for scheduled maintenance.
-            Authorised staff (superadmin, HQ, or the maintenance account)
-            can sign in below to continue working.
+            Authorised staff can sign in below with the maintenance account
+            to continue working.
         </p>
+
+        @if (session('status'))
+            <div class="error" style="background:#eaf6ec;color:#1B5E20;">{{ session('status') }}</div>
+        @endif
 
         @if ($errors->any())
             <div class="error">
@@ -179,8 +183,12 @@
                 <label for="password">Password</label>
                 <input id="password" type="password" name="password" autocomplete="off" required>
             </div>
-            <button type="submit">Sign in</button>
+            <button type="submit">Sign in &amp; enter system</button>
         </form>
+
+        <p style="margin-top:18px;margin-bottom:0;font-size:12px;">
+            <a href="{{ route('maintenance.control') }}" style="color:#6C1A23;font-weight:600;text-decoration:none;">Maintenance control &rarr;</a>
+        </p>
     </div>
 </body>
 </html>

@@ -507,8 +507,22 @@ php artisan notifications:test-email ictsupport@krc.co.ke
 
 ---
 
+## 11.1 Disaster recovery & MySQL replication
+
+Production data is replicated to a **DR server** (read-only MySQL replica) and its
+restore-ability is proven by a **semi-annual DR drill** (RPO ≤ 5 min, RTO ≤ 1 h).
+
+- Source (Production): `scripts/mysql/enable-mysql-source.sh`
+- Replica (DR): `scripts/mysql/setup-mysql-replica.sh --source-host <PROD_IP>`
+- Drill (DR): `scripts/mysql/dr-drill.sh --db cms` (exit 0 = PASS)
+
+Full failover/fallback runbook: **`docs/disaster-recovery.md`**.
+
+---
+
 ## 12. Reference
 
 - System documentation: `docs/SYSTEM_DOCUMENTATION.md`
 - Scheduled tasks: `docs/scheduled-tasks.md`
+- Disaster recovery: `docs/disaster-recovery.md`
 - Composer config: `composer.json` (PHP ^8.2, Laravel ^11, Filament ^4)

@@ -23,9 +23,10 @@ header. Documents requiring business input contain section-level placeholders ma
 | 08 | [Training](08-Training.md) | Template | SYSTEM_DOCUMENTATION.md §4 |
 | 09 | [Commissioning (Go-Live)](09-Commissioning.md) | Template + checklist | DEPLOYMENT_GUIDE.md |
 | 10 | [System Manuals](10-System-Manuals.md) | Index | SYSTEM_DOCUMENTATION.md |
-| 11 | Credentials Register | Template (dev defaults only) | config files + seeders |
+| 11 | [Credentials Register](11-Credentials.md) | Template (dev defaults only) | config files + seeders |
 | 12 | [Server Environment Requirements (Dev/Test/Prod)](12-Server-Environment-Requirements.md) | **Drafted** | composer.json, requirements, Ubuntu 24.x |
 | 13 | [Official ICT Request Note](13-Official-ICT-Request-Note.md) | Template | — (to submit) |
+| 14 | [System Implementation Design (SID v1.1)](14-System-Implementation-Design-SID.md) | **Completed against KR template** | Template v1.1 + this pack (full 11-section submission with Appendices A–F) |
 
 ## Companion documents (outside this pack)
 
@@ -33,6 +34,8 @@ header. Documents requiring business input contain section-level placeholders ma
   developer guide, architecture, security, appendices.
 - `../DEPLOYMENT_GUIDE.md` — deployment, environments, maintenance rotation.
 - `../scheduled-tasks.md` — scheduled tasks and cron webhook reference.
+- `../disaster-recovery.md` — DR runbook (MySQL replication, semi-annual drill,
+  failover/fallback); scripts in `scripts/mysql/`.
 
 ## Version control of this pack
 

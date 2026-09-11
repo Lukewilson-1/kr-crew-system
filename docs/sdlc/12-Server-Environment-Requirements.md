@@ -9,7 +9,7 @@ request (`13-Official-ICT-Request-Note.md`).
 
 ## 1. Requirement summary
 
-Provision **three (3) Linux servers**, one per environment, isolated from each other,
+Provision **four (4) Linux servers**, one per environment, isolated from each other,
 running the KR Crew System with the stack below. Minimum security: SSH key-only access,
 host firewall, TLS, and backups.
 
@@ -18,24 +18,27 @@ host firewall, TLS, and backups.
 | **DEV** | Developer integration & fixes | `APP_ENV=local` |
 | **TEST** | UAT, training, staging validation (mirrors prod config) | `APP_ENV=test` (or `staging`) |
 | **PROD** | Live operations | `APP_ENV=production` |
+| **DR** | MySQL replica + failover target for Production | Recovers `production` data |
 
 ## 2. Recommended baseline specifications
 
 > Strategy: Test ≈ Production configuration (so UAT is trustworthy); Dev can be lighter.
 
-| Item | DEV | TEST | PROD |
-|---|---|---|---|
-| vCPU | 2 | 2 | 4 |
-| RAM | 4 GB | 4 GB | 8 GB |
-| System disk | 40 GB SSD | 60 GB SSD | 80 GB SSD (min) |
-| Additional data volume | optional | optional | 50 GB (DB + `matter-photos`) |
-| Backups | snapshots (weekly) | snapshots (weekly) | DB + file backups (daily, off-site) |
-| Network | office/LAN | LAN | 100 Mbps+; static public IP w/ reverse proxy/TLS |
-| OS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
+| Item | DEV | TEST | PROD | DR |
+|---|---|---|---|---|
+| vCPU | 2 | 2 | 4 | 2 |
+| RAM | 4 GB | 4 GB | 8 GB | 4 GB |
+| System disk | 40 GB SSD | 60 GB SSD | 80 GB SSD (min) | 80 GB SSD |
+| Additional data volume | optional | optional | 50 GB (DB + `matter-photos`) | — |
+| Backups | snapshots (weekly) | snapshots (weekly) | DB + file backups (daily, off-site) | MySQL GTID replication (live) + semi-annual drill |
+| Network | office/LAN | LAN | LAN | LAN |
+| OS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
 
-*Tune upward if concurrent depot users > ~200 or asset counts grow; Laravel is
-single-app on the box, Eloquent over MySQL — 4 vCPU/8 GB sustains the expected depot
-workloads (currently small datasets).*
+*The **DR** server runs a read-only MySQL replica of Production (GTID, per
+`docs/disaster-recovery.md`); it restores/fails over when Production is unavailable
+(RPO ≤ 5 min, RTO ≤ 1 h). Tune upward if concurrent depot users > ~200 or asset
+counts grow; Laravel is single-app on the box, Eloquent over MySQL — 4 vCPU/8 GB
+sustains the expected depot workloads (currently small datasets).*
 
 ## 3. Software stack (each server)
 
@@ -77,11 +80,13 @@ workloads (currently small datasets).*
 
 ## 6. Provisioning checklist (ICT)
 
-- [ ] Order/allocate 3 VMs per §2 (Ubuntu 24.04).
+- [ ] Order/allocate **4** VMs per §2 (Dev, Test, Prod, DR — Ubuntu 24.04).
 - [ ] Create OS users + SSH keys (Dev & ICT).
 - [ ] Apply firewall + OS hardening (§4).
 - [ ] Install stack (§3) per server.
 - [ ] Configure MySQL (DB/user per env) + backups.
+- [ ] **Provision DR**: `scripts/mysql/enable-mysql-source.sh` on Prod → `scripts/mysql/setup-mysql-replica.sh` on DR (see `docs/disaster-recovery.md`).
+- [ ] Run the **first DR drill** (`scripts/mysql/dr-drill.sh`) and attach the PASS report to the Helpdesk record.
 - [ ] Deploy code from `master`/tag, per DEPLOYMENT_GUIDE.md.
 - [ ] Set `.env` per env; rotate secrets; fill `11-Credentials.md`.
 - [ ] Enable cron (`schedule:run`) — Production only for auto-tasks; Test optional.

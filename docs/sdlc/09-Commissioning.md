@@ -44,6 +44,9 @@ flowchart LR
 - [ ] TLS certificate configured; `APP_URL=https://…`.
 - [ ] `storage`, `public/matter-photos` writable by web user; chmod/ACL verified.
 - [ ] Backups: `mysqldump` (or equivalent) + storage backup scheduled; restore drill done.
+- [ ] **DR replication live**: `enable-mysql-source.sh` on Prod + `setup-mysql-replica.sh`
+      on DR run; first **DR drill** (`dr-drill.sh`) PASSed; report attached
+      (`docs/disaster-recovery.md`).
 - [ ] SMS/email alert recipients configured (`ALERT_EMAIL_RECIPIENTS`) + test e-mail sent.
 - [ ] Caches built: `config:cache`, `route:cache` (view cache optional per deployment notes).
 - [ ] Scheduled tasks installed in cron: `* * * * * php artisan schedule:run`.

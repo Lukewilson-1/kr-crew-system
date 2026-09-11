@@ -223,8 +223,25 @@ class User extends Authenticatable implements FilamentUser
         return (bool) ($this->is_super_admin || $this->is_hq || $this->role_code === 'hq_admin' || $this->depot_code === 'HQ');
     }
 
+    public function hasSystemConsolePermission(): bool
+    {
+        if ($this->isGlobalAccess()) {
+            return true;
+        }
+
+        if ($this->permissions()->exists()) {
+            return true;
+        }
+
+        if ($this->role_code !== null && \Illuminate\Support\Facades\DB::table('role_permissions')->where('role_code', $this->role_code)->exists()) {
+            return true;
+        }
+
+        return $this->roles()->whereHas('permissions')->exists();
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->is_active;
+        return $this->is_active && $this->hasSystemConsolePermission();
     }
 }

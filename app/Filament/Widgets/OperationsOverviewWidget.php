@@ -24,6 +24,11 @@ class OperationsOverviewWidget extends Widget
 
     protected static ?int $sort = 1;
 
+    public static function canView(): bool
+    {
+        return auth()->check() && auth()->user()->isGlobalAccess();
+    }
+
     protected function getViewData(): array
     {
         $crewTotal = $this->tableExists('crew_members') ? DB::table('crew_members')->count() : 0;

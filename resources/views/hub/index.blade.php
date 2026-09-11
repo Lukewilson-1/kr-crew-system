@@ -69,10 +69,21 @@
                         </div>
                         <div class="hub-card-go">&rarr;</div>
                     </a>
+                @elseif ($canOpsConsole)
+                    <a class="hub-card" href="/admin">
+                        <div class="hub-card-icon hub-icon-admin">
+                            <svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>
+                        </div>
+                        <div class="hub-card-body">
+                            <h2>Operations Console</h2>
+                            <p>Manage your enabled tools, such as duty rosters, rest locations and running room configuration.</p>
+                        </div>
+                        <div class="hub-card-go">&rarr;</div>
+                    </a>
                 @endif
             </div>
 
-            @unless ($canCrew || $canRunningRooms || $canAdmin)
+            @unless ($canCrew || $canRunningRooms || $canAdmin || $canOpsConsole)
                 <div class="hub-empty">You do not have access to any systems yet. Please contact your administrator.</div>
             @endunless
         </main>

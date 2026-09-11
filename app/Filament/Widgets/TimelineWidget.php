@@ -13,6 +13,11 @@ class TimelineWidget extends Widget
 
     protected int | string | array $columnSpan = 1;
 
+    public static function canView(): bool
+    {
+        return auth()->check() && auth()->user()->isGlobalAccess();
+    }
+
     protected function getViewData(): array
     {
         $items = [];

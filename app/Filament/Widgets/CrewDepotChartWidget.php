@@ -16,6 +16,11 @@ class CrewDepotChartWidget extends ApexChartWidget
 
     protected static ?int $sort = 3;
 
+    public static function canView(): bool
+    {
+        return auth()->check() && auth()->user()->isGlobalAccess();
+    }
+
     protected function getOptions(): array
     {
         $byDepot = [];

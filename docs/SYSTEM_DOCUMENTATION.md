@@ -486,6 +486,7 @@ php artisan view:cache
 - Password verification via `User::passwordMatches()` with bcrypt hashing.
 - The legacy `pw` password-hash column bridge was removed in v1.5 (migration `2026_09_09_170000_remove_legacy_pw_from_users`); password verification is now exclusively bcrypt.
 - Maintenance-mode authentication via the `/maintenance-login` endpoint (maintenance account only, rotated like break-glass via `maintenance:rotate`); standalone control page at `/maintenance`. Activating defaults to a hard lock-down (`MAINTENANCE_LOCKDOWN`): every session and `remember_token` is revoked and the operator's bypass cookie is dropped, so no one stays logged in — re-entry is only via `/maintenance-login`. While the site is down, a persistent `System Under Maintenance` banner is shown on every portal page for the maintenance operator. Both maintenance endpoints are CSRF-exempt (they are passphrase-gated and fully audited) so they keep working when sessions/CSRF are broken.
+- The `/admin` panel is reachable only by active accounts with either global access or at least one panel permission (`canAccessPanel()`). The hub shows `Admin Center` (users, depots, roles, system settings) only to global-access accounts; permissioned station users instead see an `Operations Console` tile for their enabled tools, and the admin dashboard's national widget set (operations overview, depot chart, roster timeline, reports activity) is hidden for non-global users.
 
 **Authorization model:**
 

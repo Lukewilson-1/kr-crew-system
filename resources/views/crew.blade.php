@@ -15,6 +15,7 @@
                     'isHQ' => (bool) auth()->user()->is_hq || (bool) auth()->user()->is_super_admin || auth()->user()->role_code === 'hq_admin' || (auth()->user()->depot_code === 'HQ'),
                     'isSuperAdmin' => (bool) auth()->user()->is_super_admin || auth()->user()->role_code === 'super_admin',
                     'role' => auth()->user()->role_code ?? '',
+                    'canAdmin' => auth()->user()->isGlobalAccess(),
                 ];
             @endphp
             <script>
@@ -77,7 +78,9 @@
                     </div>
                     <div class="sb-group" id="adminSection" style="display:none">
                         <div class="sb-sec">Admin</div>
+                    @if ($currentUserPayload['canAdmin'])
                     <div class="sb-item" onclick="window.location.href='/admin'" id="sb-admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 9.7 8 10 4.6-.3 8-5 8-10V6z"/><path d="M9 12h6M12 9v6"/></svg>Admin Center</div>
+                    @endif
                     </div>
                 </div>
                 <div id="main">

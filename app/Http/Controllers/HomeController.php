@@ -18,7 +18,8 @@ class HomeController extends Controller
             'user' => $user,
             'canCrew' => $user->canAccessCrewSystem(),
             'canRunningRooms' => $user->canAccessRunningRooms(),
-            'canAdmin' => $user->canAccessPanel(app('filament')->getPanel('admin')),
+            'canAdmin' => $user->is_active && $user->isGlobalAccess(),
+            'canOpsConsole' => $user->is_active && ! $user->isGlobalAccess() && $user->hasSystemConsolePermission(),
         ]);
     }
 }

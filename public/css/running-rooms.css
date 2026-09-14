@@ -318,11 +318,10 @@ a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visib
   .rr-kpi-row{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
   .rr-btn{padding:9px 16px}
   #rr-shell{flex-direction:column}
-  #rr-sidebar{width:100%;max-height:none;flex-direction:row;overflow-x:auto;overflow-y:hidden}
-  .rr-sb-group{display:flex;gap:2px;padding:4px}
+  #rr-sidebar{width:100%;max-height:none}
+  .rr-sb-group{display:flex;flex-direction:column;gap:2px;padding:4px}
   .rr-sb-sec{display:none}
-  .rr-sb-item{white-space:nowrap;border-left:none;border-bottom:3px solid transparent;font-size:12px;padding:8px 12px}
-  .rr-sb-item.active{border-bottom-color:var(--kr-gold-bright,#F8C808);border-left-color:transparent}
+  .rr-sb-item{font-size:12px;padding:8px 12px}
   .rr-form-grid{grid-template-columns:1fr}
   .rr-field-wide{grid-column:auto}
   .rr-toolbar{flex-direction:column;align-items:stretch}
@@ -337,6 +336,60 @@ a:focus-visible,button:focus-visible,.rr-sb-item:focus-visible,input:focus-visib
   .rr-kpi-n{font-size:20px!important}
   .rr-room-card{padding:10px!important}
   .rr-room-name{font-size:14px!important}
+}
+
+/* ── Mobile slide-out sidebar drawer ─────────────────────────────────────── */
+.rr-sb-toggle{display:none;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:7px;color:#fff;width:36px;height:36px;cursor:pointer;padding:0;align-items:center;justify-content:center;flex-shrink:0}
+.rr-sb-toggle svg{width:20px;height:20px}
+.rr-sb-backdrop{display:none}
+@media(max-width:768px){
+  .rr-sb-toggle{display:inline-flex}
+  #rr-sidebar{
+    position:fixed;top:58px;left:0;bottom:0;width:260px;z-index:50;
+    transform:translateX(-100%);transition:transform .28s ease;
+    box-shadow:4px 0 20px rgba(0,0,0,.35);
+    max-height:none!important;overflow-y:auto!important;flex-direction:column!important
+  }
+  #rr-sidebar .rr-sb-group{padding:4px 6px}
+  #rr-sidebar .rr-sb-sec{padding:10px 10px 3px}
+  #rr-sidebar .rr-sb-item{padding:10px 14px}
+  .rr-sb-backdrop{
+    display:none;position:fixed;inset:0;top:58px;z-index:49;
+    background:rgba(0,0,0,.45)
+  }
+  #rr-app.sb-open #rr-sidebar{transform:translateX(0)}
+  #rr-app.sb-open .rr-sb-backdrop{display:block}
+  #rr-shell{flex-direction:column}
+  .rr-tb-user,.tb-clock,.tb-sep{display:none}
+}
+@media(max-width:520px){
+  #rr-sidebar{width:240px}
+}
+
+/* ── Mobile phone refinement (running rooms) ── */
+@media(max-width:768px){
+  html,body{font-size:12.5px}
+  .rr-tb-title{font-size:14px}
+  .rr-tb-badge{display:none!important}
+  #rr-topbar .tb-live{display:none!important}
+  .rr-kpi-n{font-size:20px}
+  .rr-kpi-l{font-size:9px}
+  .rr-btn{font-size:12px;min-height:36px}
+  #rr-main{padding:12px}
+  #rr-main h2{font-size:16px}
+  table{font-size:11px}
+  th{font-size:9px;padding:6px 8px;white-space:nowrap}
+  td{padding:7px 8px;font-size:11px}
+  .rr-room-name{font-size:14px}
+  .rr-empty,.rr-note{font-size:12px}
+}
+@media(max-width:480px){
+  html,body{font-size:12px}
+  table{font-size:10px}
+  th{font-size:8px;padding:5px 6px}
+  td{padding:6px 6px;font-size:10px}
+  .rr-kpi-n{font-size:18px}
+  .rr-kpi-l{font-size:8px}
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â• KR BRAND THEME â€” clean & restrained â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

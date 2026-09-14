@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>{{ config('app.name', 'Laravel') }} - Crew</title>
-        <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
+        <link rel="stylesheet" href="{{ asset('css/styles.css') }}?v=4">
         @if (auth()->user())
             @php
                 $authUser = auth()->user();
@@ -48,6 +48,9 @@
         <div id="app">
             <div id="topBar">
                 <div class="tb-mark"><img src="{{ asset('assets/logo.png') }}" alt="KR Logo"></div>
+                <button class="sb-toggle" id="sbToggle" type="button" aria-label="Toggle navigation">
+                    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+                </button>
                 <span class="tb-title">KR Crew System</span>
                 <div class="tb-sep"></div>
                 <span class="tb-badge" id="tbBadge"></span>
@@ -73,6 +76,7 @@
                 </div>
             </div>
             <div id="shell">
+                <div class="sb-backdrop" id="sbBackdrop"></div>
                 <div id="sidebar">
                     <div class="sb-group">
                         <a href="/" class="sb-item"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a>
@@ -295,6 +299,40 @@
                     <button class="btn btn-green" onclick="saveAddCrew()" id="addSaveBtn">Add crew member</button>
                 </div>
             </div>
-        </div>
-    </body>
+    </div>
+
+    <script>
+    (function(){
+        var app = document.getElementById('app');
+        var toggle = document.getElementById('sbToggle');
+        var backdrop = document.getElementById('sbBackdrop');
+        if(toggle){
+            toggle.addEventListener('click',function(){ app.classList.toggle('sb-open'); });
+        }
+        if(backdrop){
+            backdrop.addEventListener('click',function(){ app.classList.remove('sb-open'); });
+        }
+        var navItems = document.querySelectorAll('#sidebar .sb-item, #sidebar .sb-depot');
+        navItems.forEach(function(el){
+            el.addEventListener('click',function(){
+                if(window.innerWidth <= 768) app.classList.remove('sb-open');
+            });
+        });
+    })();
+    (function(){
+        document.addEventListener('click',function(e){
+            if(window.innerWidth > 768) return;
+            if(e.target.closest('button,a,input,select,textarea')) return;
+            var hdr = e.target.closest ? e.target.closest('.sec-hdr') : null;
+            if(!hdr) return;
+            var collapsed = hdr.classList.toggle('collapsed');
+            var el = hdr.nextElementSibling;
+            while(el && !el.classList.contains('sec-hdr') && !el.classList.contains('divider')){
+                el.style.display = collapsed ? 'none' : '';
+                el = el.nextElementSibling;
+            }
+        });
+    })();
+    </script>
+</body>
 </html>

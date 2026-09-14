@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'Laravel') }} - Running Room Register</title>
-    <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/running-rooms.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/styles.css') }}?v=4">
+    <link rel="stylesheet" href="{{ asset('css/running-rooms.css') }}?v=3">
 </head>
 <body>
     @include('partials.maintenance-banner')
@@ -25,6 +25,9 @@
             <div class="rr-tb-mark"><img src="{{ asset('assets/logo.png') }}" alt="KR Logo"></div>
             <span class="rr-tb-title">Running Room Register</span>
             <span class="tb-sep"></span>
+            <button class="sb-toggle rr-sb-toggle" id="sbToggle" type="button" aria-label="Toggle navigation">
+                <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+            </button>
             <span class="rr-tb-badge" id="rrScopeBadge">{{ $isAttendant ? 'Attendant' : 'Admin' }}</span>
             <div class="tb-live"><div class="tbl-dot"></div><span class="tbl-txt" id="rrLiveTxt">Live</span></div>
             <div class="rr-tb-right">
@@ -49,6 +52,7 @@
         </header>
 
         <div id="rr-shell">
+            <div class="sb-backdrop rr-sb-backdrop" id="sbBackdrop"></div>
             <aside id="rr-sidebar">
                 <div class="rr-sb-group">
                     <a href="/" class="rr-sb-item" style="text-decoration:none"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</a>
@@ -92,7 +96,7 @@
             data: @json($initialData ?? null),
         };
     </script>
-    <script src="{{ asset('js/running-rooms.js') }}"></script>
+    <script src="{{ asset('js/running-rooms.js') }}?v=3"></script>
     <script src="{{ asset('js/notification-bell.js') }}"></script>
     <script>
         (function () {
@@ -104,6 +108,25 @@
             }
             rrTick(); setInterval(rrTick, 1000);
         })();
+    </script>
+    <script>
+    (function(){
+        var app = document.getElementById('rr-app');
+        var toggle = document.getElementById('sbToggle');
+        var backdrop = document.getElementById('sbBackdrop');
+        if(toggle){
+            toggle.addEventListener('click',function(){ app.classList.toggle('sb-open'); });
+        }
+        if(backdrop){
+            backdrop.addEventListener('click',function(){ app.classList.remove('sb-open'); });
+        }
+        var navItems = document.querySelectorAll('#rr-sidebar .rr-sb-item');
+        navItems.forEach(function(el){
+            el.addEventListener('click',function(){
+                if(window.innerWidth <= 768) app.classList.remove('sb-open');
+            });
+        });
+    })();
     </script>
 </body>
 </html>

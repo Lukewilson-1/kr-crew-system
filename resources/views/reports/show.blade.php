@@ -77,6 +77,26 @@
 
   .rp-foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);padding:4px 4px 0}
 
+  @media(max-width:768px){
+    .rp-page{padding:16px 12px 32px}
+    .rp-head{flex-direction:column;align-items:flex-start;gap:10px}
+    .rp-head .rp-h-meta{margin-left:0;text-align:left}
+    .rp-head .rp-h-title{font-size:18px}
+    .rp-kpis{grid-template-columns:repeat(2,1fr);gap:8px}
+    .rp-kpi .k-n{font-size:18px}
+    .rp-meta{grid-template-columns:1fr 1fr}
+    .rp-section{padding:12px 14px}
+    table.rp-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .rp-actions{flex-direction:column}
+    .rp-btn{justify-content:center;width:100%}
+  }
+  @media(max-width:480px){
+    .rp-kpis{grid-template-columns:1fr 1fr;gap:6px}
+    .rp-meta{grid-template-columns:1fr}
+    .rp-head .rp-h-title{font-size:16px}
+    .rp-options .rp-opt-grid{grid-template-columns:1fr}
+  }
+
   @media print{
     @page{size:A4 portrait;margin:10mm 11mm}
     html,body{background:#fff !important}

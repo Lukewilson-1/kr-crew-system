@@ -126,6 +126,29 @@
   }
   .rp-no-print{display:inline-flex}
 
+  @media(max-width:768px){
+    .rp-page{padding:16px 12px 32px}
+    .rp-head{flex-direction:column;align-items:flex-start;gap:10px}
+    .rp-head .rp-h-meta{margin-left:0;text-align:left}
+    .rp-head .rp-h-title{font-size:18px}
+    .rp-kpis{grid-template-columns:repeat(2,1fr);gap:8px}
+    .rp-kpi .k-n{font-size:20px}
+    .rp-meta{grid-template-columns:1fr 1fr}
+    .rp-section{padding:12px 14px}
+    table.rp-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .rp-actions{flex-direction:column}
+    .rp-btn{justify-content:center;width:100%}
+    .rp-rooms{grid-template-columns:1fr}
+    .rp-options .rp-opt-grid{grid-template-columns:1fr}
+    .rp-fig{width:calc(50% - 5px)}
+  }
+  @media(max-width:480px){
+    .rp-kpis{grid-template-columns:1fr 1fr;gap:6px}
+    .rp-meta{grid-template-columns:1fr}
+    .rp-head .rp-h-title{font-size:16px}
+    .rp-fig{width:100%}
+  }
+
   /* ── Print ─────────────────────────────────────────── */
   @media print{
     @page{size:A4 portrait;margin:10mm 11mm}

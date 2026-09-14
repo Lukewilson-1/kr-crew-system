@@ -1001,6 +1001,33 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   .ph-title::before{height:18px}
 }
 
+/* ── Mobile slide-out sidebar drawer ─────────────────────────────────────── */
+.sb-toggle{display:none;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:7px;color:#fff;width:36px;height:36px;cursor:pointer;padding:0;align-items:center;justify-content:center;flex-shrink:0}
+.sb-toggle svg{width:20px;height:20px}
+.sb-backdrop{display:none}
+@media(max-width:768px){
+  .sb-toggle{display:inline-flex}
+  #sidebar{
+    position:fixed;top:58px;left:0;bottom:0;width:260px;z-index:50;
+    transform:translateX(-100%);transition:transform .28s ease;
+    box-shadow:4px 0 20px rgba(0,0,0,.35);
+    max-height:none!important;overflow-y:auto!important;
+  }
+  #sidebar .sb-group{padding:4px 6px}
+  #sidebar .sb-sec{padding:10px 10px 3px}
+  #sidebar .sb-item,#sidebar .sb-depot{padding:10px 14px}
+  .sb-backdrop{
+    display:none;position:fixed;inset:0;top:58px;z-index:49;
+    background:rgba(0,0,0,.45)
+  }
+  #app.sb-open #sidebar{transform:translateX(0)}
+  #app.sb-open .sb-backdrop{display:block}
+  .tb-right{flex-wrap:wrap;gap:6px}
+  .tb-clock,.tb-user{display:none}
+}
+@media(max-width:520px){
+  #sidebar{width:240px}
+}
  
 /* ── Notification bell (crew app) ──────────────────────────────────────── */
 .kr-bell{position:relative}
@@ -1032,4 +1059,52 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   }
   .kr-spa-print-header img{height:76px;width:auto;object-fit:contain}
   .kr-spa-print-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.2em;color:#1A1A2E}
+}
+
+/* ── Mobile phone refinement: compact sizing + hide non-essential chrome ─── */
+@media(max-width:768px){
+  html,body{font-size:12.5px}
+  input,select,textarea,button{font-size:13px}
+  #logBar{display:none!important}
+  #syncBadge{display:none!important}
+  .tb-badge{display:none!important}
+  .tb-live{display:none!important}
+  #topBar{align-items:center;padding:8px 12px;column-gap:8px}
+  #topBar .btn-out{width:auto;justify-content:center;padding:7px 12px;font-size:11px}
+  #pbody{padding:10px 12px 28px}
+  #phdr{padding:10px 12px;gap:6px}
+  .ph-title{font-size:16px}
+  table{font-size:11px}
+  th{font-size:9px;padding:6px 8px;white-space:nowrap}
+  td{padding:7px 8px;font-size:11px}
+  .nm strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+  .nm span{font-size:10px}
+  .avt{width:26px;height:26px;font-size:9px}
+  .badge{font-size:10px;padding:2px 8px}
+  .pill{font-size:10px;padding:3px 8px}
+  .btn{font-size:12px;min-height:36px}
+  .btn-sm{font-size:11px;min-height:30px}
+  .kpi-n{font-size:20px}
+  .kpi-l{font-size:9px}
+  #sidebar .sb-item{font-size:12px;padding:9px 14px}
+  #sidebar .sb-sec{padding:9px 14px 3px}
+}
+@media(max-width:480px){
+  html,body{font-size:12px}
+  input,select,textarea,button{font-size:12px}
+  #topBar .tb-title{font-size:14px}
+  .ph-title{font-size:15px}
+  table{font-size:10px}
+  th{font-size:8px;padding:5px 6px}
+  td{padding:6px 6px;font-size:10px}
+  .nm strong{max-width:120px}
+  .badge{font-size:9px}
+  .pill{font-size:9px}
+  .kpi-n{font-size:18px}
+  .kpi-l{font-size:8px}
+}
+@media(max-width:768px){
+  .sec-hdr{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+  .sec-hdr::after{content:'';width:7px;height:7px;margin:2px 2px 0 0;flex-shrink:0;border-right:2px solid var(--text2);border-bottom:2px solid var(--text2);transform:rotate(45deg);transition:transform .15s ease}
+  .sec-hdr.collapsed::after{transform:rotate(-45deg)}
 }

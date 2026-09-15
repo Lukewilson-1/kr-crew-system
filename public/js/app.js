@@ -555,6 +555,10 @@ function hasGlobalAccess(){
   return !!currentUser && (currentUser.isHQ || currentUser.isSuperAdmin);
 }
 
+function canWrite(){
+  return !!currentUser && currentUser.canWrite !== false && !currentUser.isViewer;
+}
+
 function canManageCrew(depot){
   return hasGlobalAccess() || String(currentUser?.depot||'').toLowerCase()===String(depot||'').toLowerCase();
 }
@@ -636,7 +640,9 @@ function normalizeCurrentUser(user){
     name: user.name || user.username || '',
     isHQ: !!user.isHQ,
     isSuperAdmin: !!user.isSuperAdmin,
+    isViewer: !!user.isViewer,
     role: user.role || user.role_code || '',
+    canWrite: user.canWrite !== undefined ? !!user.canWrite : !user.isViewer,
   };
 }
 
@@ -647,6 +653,7 @@ function setCurrentUser(user){
   window.currentUser = currentUser;
   const tbBadgeEl = document.getElementById('tbBadge');
   if(tbBadgeEl) tbBadgeEl.textContent = getTopAccessLabel();
+  if(tbBadgeEl && !canWrite()) tbBadgeEl.innerHTML += ` <span class="view-only-pill">VIEW ONLY</span>`;
   const tbUserEl = document.getElementById('tbUser');
   if(tbUserEl) tbUserEl.textContent = currentUser.name || currentUser.username || '';
   updateSidebarSections();
@@ -666,7 +673,9 @@ function persistSession(){
     name:currentUser.name,
     isHQ:currentUser.isHQ,
     isSuperAdmin:currentUser.isSuperAdmin,
+    isViewer:currentUser.isViewer,
     role:currentUser.role,
+    canWrite:currentUser.canWrite,
     hqDepotView: currentUser.isHQ ? hqDepotView : 'all',
     currentPage
   }));
@@ -693,7 +702,9 @@ async function restoreSession(){
     name: serverUser.name,
     isHQ: serverUser.isHQ,
     isSuperAdmin: serverUser.isSuperAdmin,
+    isViewer: serverUser.isViewer,
     role: serverUser.role,
+    canWrite: serverUser.canWrite,
     hqDepotView: saved?.hqDepotView || 'all',
     currentPage: saved?.currentPage || 'monthly',
   };
@@ -1505,6 +1516,7 @@ async function doLogin(){
         name: data.name || user,
         isHQ: !!data.isHQ || !!data.is_hq || role === 'super_admin' || role === 'hq_admin' || depot === 'HQ',
         isSuperAdmin: !!data.isSuperAdmin || !!data.is_super_admin || role === 'super_admin',
+        isViewer: !!data.isViewer || role === 'viewer',
         role,
       };
     } catch (authErr) {
@@ -1519,7 +1531,7 @@ async function doLogin(){
     err.style.display='block';
     return;
   }
-  setCurrentUser({ username:user,depot:acct.depot,name:acct.name,isHQ:acct.isHQ,isSuperAdmin:!!acct.isSuperAdmin,role:acct.role||'' });
+  setCurrentUser({ username:user,depot:acct.depot,name:acct.name,isHQ:acct.isHQ,isSuperAdmin:!!acct.isSuperAdmin,isViewer:!!acct.isViewer,role:acct.role||'',canWrite:!acct.isViewer });
   if(document.getElementById('app')){
     document.getElementById('app').classList.add('show');
   }
@@ -1685,7 +1697,7 @@ function renderDashboard(){
     });
     html+=`</div>`;
   } else {
-    html+=`<div class="sec-hdr"><span class="sec-title">Today - ${currentUser.depot}</span><button class="btn btn-green btn-sm no-print" onclick="openAddModal()">+ Add crew</button></div>`;
+    html+=`<div class="sec-hdr"><span class="sec-title">Today - ${currentUser.depot}</span>${canWrite()?`<button class="btn btn-green btn-sm no-print" onclick="openAddModal()">+ Add crew</button>`:''}</div>`;
     html+=crewTableHtml(currentUser.depot,false,true);
   }
   safeSetInner('pbody', html);
@@ -1698,7 +1710,7 @@ function renderRoster(){
   safeSetText('phSub', `${label} · ${MONTH_NAME}`);
   const allCrew=getAllCrew(state, depots);const c=cts(allCrew);
   safeSetInner('phActions', currentUser.isHQ?''
-    :`<button class="btn btn-ghost btn-sm no-print" onclick="openAddModal()">+ Add crew</button>`);
+    :`${canWrite()?`<button class="btn btn-ghost btn-sm no-print" onclick="openAddModal()">+ Add crew</button>`:''}`);
 
   let html='';
   if(currentUser.isHQ){
@@ -1754,7 +1766,7 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
     }
     html+=`<tr>
       <td style="font-size:11px;color:var(--text3);font-family:var(--mono)">${getCrewStaffNumberLabel(c)}</td>
-      <td><div class="nm nm-click" onclick="openCrewDetails('${c.depot}','${c.id}')" title="View details & status history"><div class="avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div><strong>${c.name}</strong><span>${getDesignationLabel(c.grade)}</span></div></div></td>
+      <td><div class="nm nm-click" onclick="openCrewDetails('${c.depot}','${c.id}',${canWrite()?'true':'false'})" title="View details & status history"><div class="avt" style="background:${abg};color:${afc}">${initials(c.name)}</div><div><strong>${c.name}</strong><span>${getDesignationLabel(c.grade)}</span></div></div></td>
       ${showDepotCol?`<td><span style="color:${dc};font-weight:700">${c.depot}</span></td>`:''}
       <td style="font-size:11px;color:${c.awayDepot?'var(--kr-red)':'var(--text3)'}">${c.awayDepot?`${c.awayDepot} (away)`:'Home'}${c.rrRoomName?` · <span style="font-size:10px;color:${c.rrCheckedOut?'var(--standby)':'var(--kr-red)'}">${c.rrRoomName}${c.rrRoomDepot&&c.rrRoomDepot!==c.depot?` (${c.rrRoomDepot})`:''} ${c.rrCheckedOut?'· out':'· in'}</span>`:''}</td>
       <td style="font-size:11px">${c.route||'-'}</td>
@@ -2880,7 +2892,7 @@ async function renderAdmin(){
   const errorPanel = '<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Unable to render admin interface. Check console for details.</div>';
   safeSetText('phSub', 'Manage MySQL-backed configuration');
   safeSetInner('phActions', hasGlobalAccess()?'<button class="btn btn-ghost btn-sm no-print" onclick="reloadAdminData()">Reload</button>':'');
-  if(!hasGlobalAccess()){
+  if(!hasGlobalAccess() || !canWrite()){
     if(pbody) pbody.innerHTML='<div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:18px;color:var(--text2)">Admin tools are available to HQ users only.</div>';
     return;
   }
@@ -3669,6 +3681,7 @@ function changeStatusFromDetails(){
 }
 
 function openUpdate(depot,id){
+  if(!canWrite()){setLog('View-only (Control Desk) accounts cannot modify crew status.');return;}
   editKey={depot,id,day:CD};
   dayEditorActive=false;
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);if(!c)return;
@@ -3775,6 +3788,7 @@ function confirmTripOffDay(c,day){
 
 async function saveModal(){
   if(!editKey)return;
+  if(!canWrite()){setLog('View-only (Control Desk) accounts cannot save changes.');return;}
   const saveErrorEl=document.getElementById('statusHint');
   if(saveErrorEl){saveErrorEl.style.display='none';saveErrorEl.textContent='';}
   setSyncStatus('spin','Saving…');
@@ -3881,6 +3895,7 @@ async function saveModal(){
 
 /* ════════ QUICK STATUS ACTIONS ════════════════════════════════════════════ */
 async function applyQuickStatus(depot,id,status,opts={}){
+  if(!canWrite()){setLog('View-only (Control Desk) accounts cannot modify crew status.');return;}
   const c=Object.values(state[depot]||{}).find(x=>x.id===id);
   if(!c)return;
   const now=new Date();
@@ -3997,6 +4012,7 @@ async function removeCrewDoc(depot,id){
 
 /* ════════ ADD CREW ════════════════════════════════════════════════════════ */
 async function openAddModal(){
+  if(!canWrite()){setLog('View-only (Control Desk) accounts cannot add crew.');return;}
   const canChooseDepot = hasGlobalAccess() || currentUser?.depot === 'HQ';
   const defaultDepot = hqDepotView !== 'all' ? hqDepotView : (currentUser?.depot || getActiveDepots()[0] || 'HQ');
   document.getElementById('addModalSub').textContent='Depot: '+(canChooseDepot?'Select below':currentUser.depot);
@@ -4088,6 +4104,7 @@ function getBulkRowValue(row, headerMap, names, position, fallback=''){
 }
 
 async function saveAddCrew(){
+  if(!canWrite()){setLog('View-only (Control Desk) accounts cannot add crew.');return;}
   const canChooseDepot = hasGlobalAccess() || currentUser?.depot === 'HQ';
   const depot=canChooseDepot?(document.getElementById('addDepot')?.value||hqDepotView||getActiveDepots()[0]||'HQ'):currentUser.depot;
   if(depot==='all'||depot==='HQ'||!depot){alert('Please select a specific depot first.');return;}

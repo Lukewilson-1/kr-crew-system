@@ -16,8 +16,10 @@
                     'isHQ' => (bool) $authUser->is_hq || (bool) $authUser->is_super_admin || $authUser->role_code === 'hq_admin' || ($authUser->depot_code === 'HQ'),
                     'isSuperAdmin' => (bool) $authUser->is_super_admin || $authUser->role_code === 'super_admin',
                     'role' => $authUser->role_code ?? '',
+                    'isViewer' => $authUser->isViewer(),
+                    'canWrite' => $authUser->canEditCrew(),
                     'canRunningRooms' => $authUser->canAccessRunningRooms(),
-                    'canAdmin' => $authUser->isGlobalAccess(),
+                    'canAdmin' => $authUser->isGlobalAccess() && !$authUser->isViewer(),
                 ];
             @endphp
             <script>

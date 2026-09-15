@@ -368,6 +368,7 @@ return new class extends Migration
                 'station_officer' => ['Station Officer', 'Station and depot operations'],
                 'booking_officer' => ['Booking Officer', 'Crew booking and registers'],
                 'crew_admin' => ['Crew Admin', 'Crew maintenance and lookup data'],
+                'viewer' => ['Viewer (Control Desk)', 'View-only access to crew status and reports. Cannot edit data or use the admin console.'],
             ];
 
             foreach ($seedRoles as $code => [$name, $description]) {

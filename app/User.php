@@ -210,6 +210,20 @@ class User extends Authenticatable implements FilamentUser
         return (bool) $this->is_active;
     }
 
+    /**
+     * View-only accounts (Control Desk) may view crew status and download reports
+     * but must not modify any data or access the admin console.
+     */
+    public function isViewer(): bool
+    {
+        return $this->is_active && strtolower((string) $this->role_code) === 'viewer';
+    }
+
+    public function canEditCrew(): bool
+    {
+        return $this->is_active && ! $this->isViewer();
+    }
+
     public function canAccessRunningRooms(): bool
     {
         return $this->is_active && (
@@ -242,6 +256,6 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->is_active && $this->hasSystemConsolePermission();
+        return $this->is_active && ! $this->isViewer() && $this->hasSystemConsolePermission();
     }
 }

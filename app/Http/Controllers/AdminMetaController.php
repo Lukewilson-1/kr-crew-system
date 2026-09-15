@@ -584,6 +584,7 @@ if (isset($payload['password']) && trim((string) $payload['password']) !== '') {
                     'role' => $row->role_code ?? '',
                     'isHQ' => (bool) $row->is_hq,
                     'isSuperAdmin' => (bool) $row->is_super_admin,
+                    'isViewer' => strtolower((string) $row->role_code) === 'viewer',
                     'is_active' => (bool) $row->is_active,
                     'password' => $row->password ?? '',
                 ];
@@ -601,6 +602,7 @@ if (isset($payload['password']) && trim((string) $payload['password']) !== '') {
                     'role' => $payload['role'] ?? '',
                     'isHQ' => !empty($payload['isHQ']),
                     'isSuperAdmin' => !empty($payload['isSuperAdmin']),
+                    'isViewer' => strtolower((string) ($payload['role'] ?? '')) === 'viewer',
                     'is_active' => $payload['is_active'] ?? true,
                     'password' => $payload['password'] ?? '',
                 ];

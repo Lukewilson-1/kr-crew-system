@@ -95,6 +95,7 @@ input,select,textarea,button{font-family:inherit;font-size:13px}button{cursor:po
 .tb-title{color:#fff;font-size:14px;font-weight:700;letter-spacing:.01em}
 .tb-sep{width:1px;height:20px;background:rgba(255,255,255,.2)}
 .tb-badge{background:rgba(255,255,255,.16);color:#fff;font-size:11px;padding:2px 9px;border-radius:20px;font-weight:500}
+.view-only-pill{background:#FFC107;color:#3E2723;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle}
 .tb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
 .tb-live{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.12);padding:3px 9px;border-radius:20px}
 .tbl-dot{width:6px;height:6px;border-radius:50%;background:#69F0AE;animation:blink 2s infinite;flex-shrink:0}

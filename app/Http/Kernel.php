@@ -53,5 +53,6 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'break-glass' => \App\Http\Middleware\EnsureBreakGlassSession::class,
+        'ensure.can.write' => \App\Http\Middleware\EnsureCanWrite::class,
     ];
 }

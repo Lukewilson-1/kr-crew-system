@@ -26,3 +26,6 @@
 .DS_Store
 Thumbs.db
 
+
+# Operator-only gap register (see working notes; never commit)
+/docs/GAP-REGISTER.md

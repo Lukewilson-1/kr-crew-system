@@ -532,18 +532,27 @@
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <input type="date" value="${today}" data-out-date>
             <input type="time" value="${now}" data-out-time style="width:88px">
+            <select data-out-reason style="max-width:170px">
+              <option value="">Check out (Standby)</option>
+              <option value="no-show">No-show - Absent</option>
+              <option value="late">Late - not to board</option>
+              <option value="sick">Sick without cover - NTB</option>
+            </select>
             <button class="rr-btn green sm" data-out-save="${recordId}">Save</button>
             <button class="rr-btn ghost sm" data-out-cancel>Cancel</button>
           </div>`;
         const saveBtn = $('[data-out-save]', tr);
         saveBtn.addEventListener('click', async () => {
           try {
-            await api('/running-rooms/api/records/' + recordId + '/checkout', 'POST', {
+            const body = {
               departure_date: $('[data-out-date]', tr).value,
               departure_time: $('[data-out-time]', tr).value,
-            });
+            };
+            const cancellation = $('[data-out-reason]', tr).value;
+            if (cancellation) body.cancellation = cancellation;
+            await api('/running-rooms/api/records/' + recordId + '/checkout', 'POST', body);
             toast('Checked out.');
-            setLog('Checked out ' + crewName);
+            setLog('Checked out ' + crewName + (cancellation ? ' (crew-caused cancellation)' : ''));
             await loadData();
             renderAll();
             goTab('checkin');

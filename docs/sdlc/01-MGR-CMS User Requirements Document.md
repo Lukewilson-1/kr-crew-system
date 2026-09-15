@@ -162,7 +162,7 @@ to proceeding to system design and development.
 | Name | Role | Signature | Date |
 |---|---|---|---|
 | Emmanuel Kahindi | Prepared By |  |  |
-|  | Reviewed By |  |  |
+| Philemon sagala | Reviewed By |  |  |
 |  | Approved By |  |  |
 
 ---

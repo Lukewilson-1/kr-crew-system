@@ -306,6 +306,18 @@ class PromotePendingBookings extends Command
             $svc->email($crewEmail, $title, $body, 'crew_booking_1hr', $data);
         }
 
+        $mobile = $this->crewMobile($row, $payload);
+        if ($mobile !== '') {
+            $serviceId = (string) ($pb['serviceId'] ?? '');
+            if ($serviceId !== '') {
+                app(\App\Services\SmsService::class)->sendDepartureReminder($mobile, $serviceId, $depot, $departureTime);
+            }
+        } else {
+            // No mobile on record: fall through silently — the email above has
+            // already covered the alert, so the existing email path is unbroken.
+            $this->info(sprintf('  -> no mobile on record for %s (%s); SMS skipped', $crewName ?: $row->record_id, $staffNo ?: '?'));
+        }
+
         $this->info(sprintf('  -> T-1hr notice for %s (%s)', $crewName ?: $row->record_id, $staffNo ?: '?'));
     }
 
@@ -315,6 +327,26 @@ class PromotePendingBookings extends Command
             'payload' => json_encode($payload),
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * Crew mobile number for SMS reminders. Primary source is
+     * crew_records.payload.contact.mobile (register spec); falls back to the
+     * top-level payload mobile/phone keys if present. Blank when unset so the
+     * caller can skip gracefully.
+     */
+    protected function crewMobile(object $row, array $payload): string
+    {
+        $contact = $payload['contact'] ?? null;
+        $mobile = is_array($contact) ? trim((string) ($contact['mobile'] ?? '')) : '';
+        if ($mobile === '') {
+            $mobile = trim((string) ($payload['mobile'] ?? ''));
+        }
+        if ($mobile === '') {
+            $mobile = trim((string) DB::table('crew_members')->where('record_id', $row->record_id)->value('phone'));
+        }
+
+        return $mobile;
     }
 
     protected function resolveDepotIdentifiers(string $depot): array

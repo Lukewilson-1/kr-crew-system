@@ -770,6 +770,85 @@ class RunningRoomController extends Controller
         }
     }
 
+    /**
+     * Crew-caused cancellation of a Booked assignment (no-show / late / sick
+     * without cover). Unlike a normal checkout (which marks the crew Standby,
+     * as if actively working), this records ABS or NTB on the crew's day and
+     * clears any scheduled pendingBooking so the crew report shows the
+     * cancellation rather than inflating Standby.
+     */
+    protected function syncCrewFromCancellation(string $staffNo, object $record, string $departureDate, string $departureTime, string $reason): void
+    {
+        if (! Schema::hasTable('crew_members') || ! Schema::hasTable('crew_records')) {
+            return;
+        }
+
+        $member = DB::table('crew_members')->where('staff_number', $staffNo)->first();
+        if (! $member || ! ($member->record_id ?? null)) {
+            return;
+        }
+
+        $row = DB::table('crew_records')->where('record_id', $member->record_id)->first();
+        if (! $row) {
+            return;
+        }
+
+        $payload = json_decode($row->payload ?? '{}', true);
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+
+        $code = match ($reason) {
+            'no-show' => 'ABS',
+            'late', 'sick', 'no_cover' => 'NTB',
+            default => 'ABS',
+        };
+
+        $note = match ($reason) {
+            'no-show' => 'No-show for scheduled booking - Absent',
+            'late' => 'Late for scheduled booking - Not to board',
+            'sick', 'no_cover' => 'Sick without cover - Not to board',
+            default => 'Crew-caused cancellation',
+        };
+
+        $day = (int) substr($departureDate, 8, 2);
+        $monthKey = substr($departureDate, 0, 7);
+
+        $monthly = $payload['monthly'] ?? [];
+        if (! is_array($monthly)) {
+            $monthly = [];
+        }
+        $monthly['d'.$day] = $code;
+
+        $payload = array_merge($payload, [
+            'status' => $code,
+            'since' => $departureTime,
+            'bookTime' => $departureTime,
+            'restStarted' => null,
+            'awayDepot' => null,
+            'monthly' => $monthly,
+            'rrCheckedOut' => true,
+            'rrCheckedOutAt' => $this->combineDateTime($departureDate, $departureTime),
+            'cancellationReason' => $reason,
+            'notes' => trim((string) ($payload['notes'] ?? '')) === ''
+                ? $note
+                : trim((string) ($payload['notes'] ?? '')).'; '.$note,
+            'lastUpdated' => now()->toIso8601String(),
+            'updatedBy' => 'running-room-cancel',
+        ]);
+        unset($payload['pendingBooking']);
+
+        DB::table('crew_records')->where('record_id', $member->record_id)->update([
+            'payload' => json_encode($payload),
+            'updated_at' => now(),
+        ]);
+
+        // The crew was absent / not-to-board for the whole day, so the segment
+        // covers 00:00 rather than starting at the checkout time.
+        $this->closeOpenSegment($member->record_id, $monthKey, $day, '00:00');
+        $this->upsertRoomRestSegment($member->record_id, $monthKey, $day, $code, '00:00', null, $note);
+    }
+
     /** Close a still-open (default 23:59) trailing segment at the given time. */
     protected function closeOpenSegment(string $recordId, string $monthKey, int $day, string $time): void
     {
@@ -889,6 +968,7 @@ class RunningRoomController extends Controller
         $v = Validator::make($request->all(), [
             'departure_date' => 'nullable|date',
             'departure_time' => 'nullable|string|max:8',
+            'cancellation' => 'nullable|string|in:no-show,late,sick,no_cover',
         ]);
 
         if ($v->fails()) {
@@ -900,7 +980,15 @@ class RunningRoomController extends Controller
         $departureTime = $data['departure_time'] ?? now()->format('H:i');
         $record->checkOut($departureDate, $departureTime);
 
-        $this->syncCrewFromCheckOut($record->staff_no, $record, $departureDate, $departureTime);
+        $cancellation = trim((string) ($data['cancellation'] ?? ''));
+        if ($cancellation !== '') {
+            // Crew-caused cancellation (no-show / late / sick without cover):
+            // record ABS/NTB so the daily status does not inflate Standby as if
+            // the crew was actively working.
+            $this->syncCrewFromCancellation($record->staff_no, $record, $departureDate, $departureTime, $cancellation);
+        } else {
+            $this->syncCrewFromCheckOut($record->staff_no, $record, $departureDate, $departureTime);
+        }
 
         return response()->json($record);
     }

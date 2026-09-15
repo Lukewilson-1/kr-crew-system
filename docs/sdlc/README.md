@@ -1,8 +1,9 @@
 # KR Crew System — SDLC Document Pack
 
-**Project:** KR Crew & Running-Room Management System (Kenya Railways)
+**Project:** MGR Crew Management System (CMS) — KR Crew & Running-Room Management System (Kenya Railways)
 **Repo:** `github.com/Lukewilson-1/kr-crew-system` — branch `master`
 **Pack created:** 2026-09-11 · Based on codebase state (docs v1.6, `d86c4a5b`)
+**URD v1.0 added:** 2026-09-14 (business review draft)
 
 This folder contains the official SDLC process documents. Documents whose content
 could be drafted from the codebase are marked **"Drafted from codebase"** in their
@@ -13,8 +14,8 @@ header. Documents requiring business input contain section-level placeholders ma
 
 | # | Document | Status | Source of truth in repo |
 |---|----------|--------|-------------------------|
-| 01 | [User Request](01-User-Request.md) | Draft skeleton | — (business) |
-| 02 | [Terms of Reference](02-Terms-of-Reference.md) | Draft | User request + System Analysis |
+| 01 | [User Requirements (MGR-CMS)](01-MGR-CMS%20User%20Requirements%20Document.md) | **Draft for Review** (v1.0) | URD — business (challenges, objectives, UR/OR requirements) |
+| 02 | [Terms of Reference](02-Terms-of-Reference.md) | Draft | User Requirements + System Analysis |
 | 03 | [System Analysis](03-System-Analysis.md) | **Drafted from codebase** | `app/`, `routes/`, migrations, SYSTEM_DOCUMENTATION.md |
 | 04 | [Project Charter](04-Project-Charter.md) | Template | — (business) |
 | 05 | [Blueprint & Process Flows](05-Blueprint-Process-Flows.md) | **Drafted from codebase** | Controllers, Kernel schedule, observers |

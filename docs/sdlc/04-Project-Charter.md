@@ -21,7 +21,7 @@
 
 ## 2. Justification & business case
 
-**TO BE COMPLETED BY BUSINESS** — reference `01-User-Request.md` and `02-Terms-of-Reference.md`.
+**TO BE COMPLETED BY BUSINESS** — reference the [URD v1.0](01-MGR-CMS%20User%20Requirements%20Document.md) and `02-Terms-of-Reference.md`.
 
 ## 3. Objectives & success criteria
 

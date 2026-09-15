@@ -1,36 +1,47 @@
 # SDLC 02 — Terms of Reference (ToR)
 
-**Project:** KR Crew & Running-Room Management System
-**Prepared by:** **Date:** **Version:** 0.1 (draft)
+**Project:** MGR Crew Management System (CMS) — KR Crew & Running-Room Management System
+**Prepared by:** **Date:** **Version:** 0.2 (updated — aligned with URD v1.0)
 
 > Status: **PARTIALLY DRAFTED** — objectives and scope below are drafted from the
-> delivered system; business-approval fields are **TO BE COMPLETED BY BUSINESS**.
+> delivered system and aligned to URD v1.0 (§5 UR/OR requirements); business-approval
+> fields are **TO BE COMPLETED BY BUSINESS**.
 
 ---
 
 ## 1. Background
 
 Kenya Railways staff (crew) booking, running-room occupancy and matters-arising
-processes are being consolidated into a single secure web platform: **KR Crew System**
-(CM & RM System). The system is delivered as a Laravel 11 / Filament 4 application and
-currently supports crew records, daily statuses, running rooms, matters, reports,
+processes are being consolidated into a single secure web platform. The business
+requirements are defined in the **URD v1.0** — see
+[`01-MGR-CMS User Requirements Document.md`](01-MGR-CMS%20User%20Requirements%20Document.md).
+The system is delivered as a Laravel 11 / Filament 4 application and currently
+supports crew records, daily statuses, running rooms, matters, reports,
 notifications, audit logging, break-glass and maintenance-mode access.
 
 ## 2. Objectives (drafted)
 
-1. Single, role-based system for crew and running-room operations across depots.
+The business objectives in this ToR map to §3 of the [URD v1.0](01-MGR-CMS%20User%20Requirements%20Document.md):
+
+1. Digitise crew on/off-duty booking (UR-1) into a single, role-based system.
 2. Reliable rest tracking (10 h away / 12 h at home depot) with automatic check-out
-   and notifications.
-3. Complete audit trail for user, crew, access and maintenance events.
-4. Secure, recoverable access: break-glass, maintenance lockdown, credential rotation.
-5. Decision-support reporting across Operations, Workforce, Matters and Governance.
+   and notifications (UR-3, OR-4).
+3. Real-time crew status visibility for supervisors and controllers (UR-2, OR-3).
+4. Complete audit trail for user, crew, access and maintenance events (UR-6, OR-7).
+5. Secure, recoverable access: break-glass, maintenance lockdown, credential rotation.
+6. Decision-support reporting across Operations, Workforce, Matters and Governance
+   (UR-8, UR-11).
 
 **TO BE COMPLETED BY BUSINESS** — add management objectives, e.g. target adoption
 dates, reduction targets for paper/Excel processes, defined KPIs.
 
 ## 3. Scope summary
 
-- **In scope (delivered):** see §3 "Requested scope" of `01-User-Request.md`.
+- **Requirements baseline:** the UR-1…UR-12 and OR-1…OR-8 requirements in §5 of the
+  [URD v1.0](01-MGR-CMS%20User%20Requirements%20Document.md).
+- **In scope (delivered):** crew database & status registers, rosters/shifts,
+  running rooms & rest countdown, matters register, reports, users/roles/permissions,
+  audit trail, secure access (SSO-ready, break-glass, maintenance mode).
 - **Out of scope (explicitly):** AD/Entra ID SSO, SMS notifications, driver train
   schedules, automated status changes from schedules, training-gap analysis — tracked
   as V2 roadmap in SYSTEM_DOCUMENTATION.md §10.

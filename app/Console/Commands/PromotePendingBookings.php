@@ -40,7 +40,10 @@ class PromotePendingBookings extends Command
             }
 
             $pb = $payload['pendingBooking'];
-            $depart = $this->parseDepartureTime((string) ($pb['departureTime'] ?? ''));
+            $depart = $this->parseDepartureTime(
+                (string) ($pb['departureTime'] ?? ''),
+                array_key_exists('departureDate', $pb) ? (string) ($pb['departureDate'] ?? '') : null,
+            );
             if (! $depart) {
                 continue;
             }
@@ -68,25 +71,34 @@ class PromotePendingBookings extends Command
         return self::SUCCESS;
     }
 
-    protected function parseDepartureTime(string $time): ?\DateTimeImmutable
+    protected function parseDepartureTime(string $time, ?string $departureDate = null): ?\DateTimeImmutable
     {
         if (! preg_match('/^(\d{1,2}):(\d{2})$/', trim($time), $m)) {
             return null;
         }
 
-        $today = now();
+        // Option A: honor an explicit departureDate (YYYY-MM-DD) written by the
+        // weekly generator so a next-week booking is NOT promoted today. Legacy
+        // time-only payloads fall back to anchoring on today, preserving the
+        // Phase 1 / app.js behaviour exactly.
+        if (is_string($departureDate) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', trim($departureDate), $d)
+            && checkdate((int) $d[2], (int) $d[3], (int) $d[1])) {
+            $anchor = now()->setDate((int) $d[1], (int) $d[2], (int) $d[3]);
+        } else {
+            $anchor = now();
+        }
 
         return \DateTimeImmutable::createFromFormat(
             'Y-m-d H:i',
             sprintf(
                 '%04d-%02d-%02d %02d:%02d',
-                $today->year,
-                $today->month,
-                $today->day,
+                $anchor->year,
+                $anchor->month,
+                $anchor->day,
                 (int) $m[1],
                 (int) $m[2],
             ),
-            $today->getTimezone(),
+            $anchor->getTimezone(),
         ) ?: null;
     }
 

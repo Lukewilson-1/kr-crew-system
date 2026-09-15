@@ -53,6 +53,27 @@
     } catch (e) { /* ignore */ }
   }
 
+  // Check the crew member out of the running room right from the bell. Mirrors the
+  // room-desks checkout action; attendance_id is the attendance record to close out.
+  async function bellCheckout(attendanceId) {
+    if (!attendanceId) return;
+    try {
+      await fetch('/running-rooms/api/records/' + Number(attendanceId) + '/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrf(),
+        },
+        body: JSON.stringify({}),
+      });
+    } catch (e) {
+      alert('Checkout failed. Please use the running room desk.');
+      return;
+    }
+    await markAllRead();
+    await render();
+  }
+
   async function render() {
     let data;
     try {
@@ -81,6 +102,9 @@
         <div class="kr-bell-item-body">
           <div class="kr-bell-item-title">${esc(n.title)}</div>
           ${n.body ? `<div class="kr-bell-item-text">${esc(n.body)}</div>` : ''}
+          ${n.data && n.data.action === 'checkout' && n.data.attendance_id
+            ? `<button class="kr-bell-action" onclick="bellCheckout(${Number(n.data.attendance_id)})">Check out crew</button>`
+            : ''}
           <div class="kr-bell-item-time">${esc(timeAgo(n.created_at))}</div>
         </div>
       </div>`).join('');

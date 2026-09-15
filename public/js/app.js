@@ -742,7 +742,8 @@ async function restoreSession(){
   updateClock();
   if(cdInterval)clearInterval(cdInterval);
   goPage(currentPage);
-  cdInterval=setInterval(()=>{checkRestExpirations();if(currentPage==='rest')renderRest();else updateCountdownsInTable();},10000);
+  checkPendingBookings();
+  cdInterval=setInterval(()=>{checkRestExpirations();checkPendingBookings();if(currentPage==='rest')renderRest();else updateCountdownsInTable();},10000);
   setLog(`Restored session - ${currentUser.name}`);
   return true;
 }
@@ -774,6 +775,99 @@ async function checkRestExpirations(){
         }
       }
     }
+  }
+}
+
+/* ════════ SCHEDULED (PENDING) BOOKINGS ════════════════════════════════════ */
+
+// True when a Booked status + departure time point to later today. In that
+// case the save schedules a pending booking instead of setting Booked now.
+function isFutureBookTime(time){
+  if(!time)return false;
+  const parts=String(time).split(':').map(Number);
+  if(parts.length!==2||isNaN(parts[0])||isNaN(parts[1]))return false;
+  return new Date(CY,CM,CD,parts[0],parts[1],0,0)>new Date();
+}
+
+// True when the crew member carries a scheduled (future) booking pendingBooking.
+function isPendingScheduled(c){
+  try{return !!(c&&c.pendingBooking&&(c.pendingBooking.departureTime||c.pendingBooking.departureDate));}catch(e){return false;}
+}
+
+// Cancel a scheduled Booking so the crew stays on their current status until booked.
+async function cancelPendingBooking(depot,id){
+  if(!canWrite()){setLog('View-only (Control Desk) accounts cannot modify crew bookings.');return;}
+  const c=Object.values(state[depot]||{}).find(x=>x.id===id);
+  if(!c)return;
+  if(c.pendingBooking&&c.status==='BK'){
+    // Already promoted at the desk — Booked is a live status; clear the pending marker only when status isn't Booked.
+    const upd={...c,pendingBooking:null};
+    try{
+      await writeCrewDoc(depot,id,upd);
+    }catch(err){
+      const message=(err&&err.message?err.message:String(err||'Cancel failed')).replace(/^Error:\s*/,'');
+      alert(message);
+      return;
+    }
+    setLog(`${c.name}: scheduled booking cleared.`);
+    refreshPage();
+    return;
+  }
+  if(!c.pendingBooking){setLog(`${c.name} has no scheduled booking to cancel.`);return;}
+  const updFields={
+    pendingBooking:null,
+    monthly:c.monthly||{},
+    status_segments:c.status_segments||[],
+    trainType:c.trainType||'',
+    bookTime:c.bookTime||'',
+    route:c.route||'',
+    staff_number:c.staff_number||'',
+    shift:c.shift||'',
+    notes:c.notes||'',
+    since:c.since||fmtTime(new Date()),
+    updatedBy:currentUser.username,
+  };
+  try{
+    await writeCrewDoc(depot,id,updFields);
+  }catch(err){
+    const message=(err&&err.message?err.message:String(err||'Cancel failed')).replace(/^Error:\s*/,'');
+    alert(message);
+    return;
+  }
+  setLog(`${c.name}: scheduled booking cancelled.`);
+  refreshPage();
+}
+
+let bookingPromoteRunning=false;
+// Auto-promote scheduled bookings to Booked once the departure time is reached
+// (mirrors the server cron crew:promote-pending-bookings for live desks).
+async function checkPendingBookings(){
+  bookingPromoteRunning=true;
+  try{
+    for(const depot of getActiveDepots()){
+      const crew=Object.values(state[depot]||{});
+      for(const c of crew){
+        const pb=c.pendingBooking;
+        if(!pb||!pb.departureTime)continue;
+        const [hh,mm]=String(pb.departureTime).split(':').map(Number);
+        if(isNaN(hh)||isNaN(mm))continue;
+        const dep=new Date(CY,CM,CD,hh,mm,0,0);
+        if(dep>new Date())continue;
+        const monthly={...(c.monthly||{})};monthly[`d${CD}`]='BK';
+        const status_segments=buildStatusSegmentsForDay({...c,trainType:pb.trainType||c.trainType||'',bookTime:pb.departureTime},CD,'BK',{now:dep,note:`Booked at ${pb.departureTime} (scheduled)`});
+        const notes=(c.notes?c.notes+'; ':'')+`Auto-booked for ${pb.departureTime}${pb.trainType?' ('+pb.trainType+')':''}`;
+        const upd={
+          status:'BK',bookTime:pb.departureTime,trainType:pb.trainType||c.trainType||'',
+          route:pb.route||c.route||'',staff_number:c.staff_number||'',shift:c.shift||'',
+          notes,since:pb.departureTime,updatedBy:'Auto-system',
+          restStarted:null,awayDepot:null,monthly,status_segments,pendingBooking:null,period:null,
+        };
+        await writeCrewDoc(depot,c.id,upd);
+        setLog(`${c.name} (${depot}) auto-booked - scheduled departure ${pb.departureTime} reached`);
+      }
+    }
+  }finally{
+    bookingPromoteRunning=false;
   }
 }
 
@@ -1553,7 +1647,8 @@ async function doLogin(){
   goPage('monthly');
   setInterval(updateClock,1000);updateClock();
   if(cdInterval)clearInterval(cdInterval);
-  cdInterval=setInterval(()=>{checkRestExpirations();if(currentPage==='rest')renderRest();else updateCountdownsInTable();},10000);
+  checkPendingBookings();
+  cdInterval=setInterval(()=>{checkRestExpirations();checkPendingBookings();if(currentPage==='rest')renderRest();else updateCountdownsInTable();},10000);
   setLog(`Signed in - ${currentUser.name}`);
 }
 
@@ -1771,9 +1866,9 @@ function crewTableHtml(depotOrAll,showDepotCol,editable){
       <td style="font-size:11px;color:${c.awayDepot?'var(--kr-red)':'var(--text3)'}">${c.awayDepot?`${c.awayDepot} (away)`:'Home'}${c.rrRoomName?` · <span style="font-size:10px;color:${c.rrCheckedOut?'var(--standby)':'var(--kr-red)'}">${c.rrRoomName}${c.rrRoomDepot&&c.rrRoomDepot!==c.depot?` (${c.rrRoomDepot})`:''} ${c.rrCheckedOut?'· out':'· in'}</span>`:''}</td>
       <td style="font-size:11px">${c.route||'-'}</td>
       <td style="color:var(--text3);font-size:10px">${getCrewShiftLabel(c)}</td>
-      <td><span class="badge bd-${c.status}">${m.label}</span></td>
-      <td>${c.status==='BK'&&c.trainType?`<span style="${getTrainTypeBadgeStyle(c.trainType)}">${getTrainTypeLabel(c.trainType)}</span>`:'-'}</td>
-      <td style="font-size:11px;font-family:var(--mono);color:${c.status==='BK'&&c.bookTime?'var(--booked)':'var(--text3)'};font-weight:${c.status==='BK'&&c.bookTime?'700':'400'}">${c.status==='BK'&&c.bookTime?c.bookTime:'-'}</td>
+      <td><span class="badge bd-${c.status}">${m.label}</span>${c.pendingBooking&&c.pendingBooking.departureTime?` <span class="badge bd-bk-p" title="Scheduled booking — departs ${c.pendingBooking.departureTime}${c.pendingBooking.trainType?`, ${getTrainTypeLabel(c.pendingBooking.trainType)}`:''}. Auto-set to Booked at departure.">◷ ${c.pendingBooking.departureTime}</span>`:''}</td>
+      <td>${c.status==='BK'&&c.trainType?`<span style="${getTrainTypeBadgeStyle(c.trainType)}">${getTrainTypeLabel(c.trainType)}</span>`:`${c.pendingBooking&&c.pendingBooking.trainType?`<span style="${getTrainTypeBadgeStyle(c.pendingBooking.trainType)}">${getTrainTypeLabel(c.pendingBooking.trainType)}</span>`:'-'}`}</td>
+      <td style="font-size:11px;font-family:var(--mono);color:${c.status==='BK'&&c.bookTime?'var(--booked)' : (c.pendingBooking&&c.pendingBooking.departureTime?'var(--pending)':'var(--text3)')};font-weight:${c.status==='BK'&&c.bookTime?'700' : (c.pendingBooking?'700':'400')}">${c.status==='BK'&&c.bookTime?c.bookTime:(c.pendingBooking&&c.pendingBooking.departureTime?c.pendingBooking.departureTime:'-')}</td>
       <td>${cdHtml}</td>
       <td style="color:var(--text3);font-size:11px">${c.since||'-'}</td>
       <td style="font-size:11px;color:var(--text2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.notes||''}">${c.notes||'-'}</td>
@@ -3646,6 +3741,18 @@ function openCrewDetails(depot,id,allowStatusEdit=true){
       <div class="crew-chip"><span>Since</span><strong>${c.since||'-'}</strong></div>
       <div class="crew-chip"><span>Notes</span><strong>${c.notes||'-'}</strong></div>
     </div>
+    ${isPendingScheduled(c)?`
+      <div class="pending-booking-block">
+        <div class="pending-booking-head">
+          <span class="pending-booking-pin">&#9723;</span>
+          <div class="pending-booking-body">
+            <div class="pending-booking-title">Scheduled booking</div>
+            <div class="pending-booking-meta">Departs at <strong>${c.pendingBooking.departureTime}</strong>${c.pendingBooking.trainType?` · ${getTrainTypeLabel(c.pendingBooking.trainType)}`:''}${c.pendingBooking.route||c.route?` · ${c.pendingBooking.route||c.route}`:''}${c.pendingBooking.bookedBy?` · by ${c.pendingBooking.bookedBy}`:''}</div>
+            <div class="pending-booking-hint">Auto-set to Booked at departure — crew stays on current status until then.</div>
+          </div>
+        </div>
+        ${canWrite()&&editKey.depot&&editKey.id?`<button class="qa qa-cancel-pending" onclick="cancelPendingBooking('${editKey.depot}','${editKey.id}')">Cancel scheduled booking</button>`:''}
+      </div>`:''}
     <div class="crew-detail-actions">${quickActions}</div>
     <div class="crew-detail-section">
       <div class="crew-detail-title">Today's timeline <span class="cd-dow">${DAY_NAMES[new Date(CY,CM,CD).getDay()]} ${CD} ${MONTH_NAME.split(' ')[0]}</span>${restCd}</div>
@@ -3801,7 +3908,10 @@ async function saveModal(){
       alert('Please select a train type when setting status to Booked.');
       return;
     }
-    if(currentModalInRoom && newStatus!=='R'){
+    const scheduleBooking = newStatus==='BK' && isFutureBookTime(bookTime)
+      ? {trainType,departureTime:bookTime,route:document.getElementById('mRoute').value||'',bookedBy:currentUser.username,scheduledAt:new Date().toISOString()}
+      : null;
+    if(currentModalInRoom && newStatus!=='R' && !scheduleBooking){
       alert('This crew member is checked into a running room and must remain on Resting. Check them out of the room before changing status.');
       return;
     }
@@ -3853,28 +3963,51 @@ async function saveModal(){
         alert('Please enter the training period start date.');
         return;
       }
-      let monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
-      if(statusUsesPeriod(newStatus) && period){
-        monthly = applyPeriodToDays(c, newStatus, period, MONTH_KEY);
-        if(CD < new Date(period.from+'T00:00:00') || CD > new Date((period.to||period.from)+'T00:00:00')){
-          // today outside the period window: keep the period but also set today
-          monthly[`d${CD}`]=newStatus;
+      if(scheduleBooking){
+        // Scheduled future departure — the crew stays on their current status
+        // (e.g. Standby / Resting) until the departure time, then auto-promotes
+        // to Booked (client ticker + server cron).
+        const monthly={...(c.monthly||{})};
+        const status_segments = buildStatusSegmentsForDay({...c,restStarted:c.restStarted||null}, CD, c.status||'SB');
+        const mtv=document.getElementById('mRoute').value;
+        const upd={
+          pendingBooking:{...scheduleBooking,route:(mtv||c.route||'')},
+          bookTime,trainType,
+          route:(mtv||c.route),
+          staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',
+          shift:document.getElementById('mShift').value,
+          notes:document.getElementById('mNotes').value,
+          since:fmtTime(new Date()),updatedBy:currentUser.username,
+          restStarted:c.restStarted||null,
+          awayDepot:c.awayDepot||null,
+          monthly,status_segments,period:null,
+        };
+        await writeCrewDoc(editKey.depot,editKey.id,upd);
+        setLog(`${c.name}: scheduled for ${bookTime}${trainType?` (${trainType})`:''} — will auto-set to Booked at departure`);
+      } else {
+        let monthly={...(c.monthly||{})};monthly[`d${CD}`]=newStatus;
+        if(statusUsesPeriod(newStatus) && period){
+          monthly = applyPeriodToDays(c, newStatus, period, MONTH_KEY);
+          if(CD < new Date(period.from+'T00:00:00') || CD > new Date((period.to||period.from)+'T00:00:00')){
+            // today outside the period window: keep the period but also set today
+            monthly[`d${CD}`]=newStatus;
+          }
         }
+        const persistPeriod = statusUsesPeriod(newStatus) ? period : null;
+        let restStarted=c.restStarted||null;
+        if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);restStarted=rs.toISOString();}
+        else if(newStatus!=='R')restStarted=null;
+        const status_segments = buildStatusSegmentsForDay({...c,restStarted}, CD, newStatus);
+        const restLocation=document.getElementById('mRestLocation').value;
+        const awayDepot = newStatus==='R' && restLocation==='away' ? (normalizeCrewDepot(document.getElementById('mAwayDepot')?.value)||null) : null;
+        const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,status_segments,awayDepot: newStatus==='R'?awayDepot:null,period:persistPeriod,pendingBooking:null};
+        await writeCrewDoc(editKey.depot,editKey.id,upd);
+        let periodSnippet = '';
+        if(persistPeriod){
+          periodSnippet = ' (' + persistPeriod.from + (persistPeriod.to!==persistPeriod.from ? '→'+persistPeriod.to : '') + (persistPeriod.dayType!=='full' ? ', '+persistPeriod.dayType : '') + (persistPeriod.countWeekends ? '' : ', excl. weekends') + ')';
+        }
+        setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${periodSnippet}`);
       }
-      const persistPeriod = statusUsesPeriod(newStatus) ? period : null;
-      let restStarted=c.restStarted||null;
-      if(newStatus==='R'&&restStartInput){const[hh,mm]=restStartInput.split(':');const rs=new Date();rs.setHours(parseInt(hh),parseInt(mm),0,0);restStarted=rs.toISOString();}
-      else if(newStatus!=='R')restStarted=null;
-      const status_segments = buildStatusSegmentsForDay({...c,restStarted}, CD, newStatus);
-      const restLocation=document.getElementById('mRestLocation').value;
-      const awayDepot = newStatus==='R' && restLocation==='away' ? (normalizeCrewDepot(document.getElementById('mAwayDepot')?.value)||null) : null;
-      const upd={status:newStatus,trainType,bookTime,route:document.getElementById('mRoute').value||c.route,staff_number:document.getElementById('mStaffNumber')?.value||c.staff_number||'',shift:document.getElementById('mShift').value,notes:document.getElementById('mNotes').value,since:fmtTime(new Date()),updatedBy:currentUser.username,restStarted,monthly,status_segments,awayDepot: newStatus==='R'?awayDepot:null,period:persistPeriod};
-      await writeCrewDoc(editKey.depot,editKey.id,upd);
-      let periodSnippet = '';
-      if(persistPeriod){
-        periodSnippet = ' (' + persistPeriod.from + (persistPeriod.to!==persistPeriod.from ? '→'+persistPeriod.to : '') + (persistPeriod.dayType!=='full' ? ', '+persistPeriod.dayType : '') + (persistPeriod.countWeekends ? '' : ', excl. weekends') + ')';
-      }
-      setLog(`${c.name}: ${STATUS_META[c.status]?.label} → ${STATUS_META[newStatus]?.label}${periodSnippet}`);
     }
     setSyncStatus('ok','Saved');
   }catch(err){
@@ -3917,6 +4050,7 @@ async function applyQuickStatus(depot,id,status,opts={}){
     monthly,
     status_segments,
     awayDepot:status==='R'?(opts.awayDepot?normalizeCrewDepot(opts.awayDepot):null):null,
+    pendingBooking:null,
   };
   setSyncStatus('spin','Saving…');
   try{

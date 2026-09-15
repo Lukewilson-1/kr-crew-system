@@ -1165,6 +1165,10 @@ class RunningRoomController extends Controller
         try {
             Artisan::call('running-rooms:auto-checkout-rested');
 
+            // Promote scheduled crew bookings whose departure time has arrived
+            // (and deliver the T-1hr booking notices) on the same cron webhook.
+            Artisan::call('crew:promote-pending-bookings');
+
             // Also respect any scheduled end time for maintenance mode, so the
             // cron webhook covers shared hosts without a real scheduler.
             Artisan::call('maintenance:auto-deactivate');

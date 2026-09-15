@@ -2,6 +2,7 @@
 :root{
   --kr-red:#B71C1C;--kr-red-d:#7F0000;--kr-red-lt:#FFEBEE;
   --booked:#1B5E20;--booked-lt:#E8F5E9;
+  --pending:#B45309;--pending-lt:#FFF7ED;
   --standby:#0D47A1;--standby-lt:#E3F2FD;
   --rest:#4A148C;--rest-lt:#F3E5F5;
   --leave:#E65100;--leave-lt:#FFF3E0;
